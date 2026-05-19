@@ -1,0 +1,103 @@
+name: monorepo-template
+
+x-app: &app
+  build:
+    context: .
+  image: monorepo-template-app
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: monorepo-template-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: monorepo_template
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d monorepo_template"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: monorepo-template-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    <<: *app
+    container_name: monorepo-template-api
+    restart: unless-stopped
+    environment:
+      API_PORT: "${API_PORT:-8000}"
+      AUTH_COOKIE_SECURE: "${AUTH_COOKIE_SECURE:-false}"
+      AUTH_SECRET: "${AUTH_SECRET:-dev-change-me}"
+      CLIENT_ORIGINS: "${CLIENT_ORIGINS:-http://localhost:3000,http://localhost:4000}"
+      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/monorepo_template?schema=public}"
+      REDIS_URL: "${DOCKER_REDIS_URL:-redis://redis:6379}"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: sh -c "pnpm db:push && pnpm --filter @repo/api start"
+
+  platform:
+    <<: *app
+    image: monorepo-template-app
+    container_name: monorepo-template-platform
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: "${VITE_API_URL:-http://localhost:8000}"
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_started
+    command: pnpm --filter @repo/platform dev
+
+  admin:
+    <<: *app
+    image: monorepo-template-app
+    container_name: monorepo-template-admin
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: "${VITE_API_URL:-http://localhost:8000}"
+    ports:
+      - "4000:4000"
+    depends_on:
+      api:
+        condition: service_started
+    command: pnpm --filter @repo/admin dev
+
+  worker:
+    <<: *app
+    image: monorepo-template-app
+    container_name: monorepo-template-worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/monorepo_template?schema=public}"
+      REDIS_URL: "${DOCKER_REDIS_URL:-redis://redis:6379}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: pnpm --filter @repo/worker start
+
+volumes:
+  postgres_data:
+  redis_data:

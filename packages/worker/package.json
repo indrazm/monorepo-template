@@ -1,0 +1,29 @@
+{
+  "name": "@repo/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "dev": "node ../../scripts/with-env.mjs tsx watch src/index.ts",
+    "start": "node ../../scripts/with-env.mjs tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "bullmq": "^5.76.10",
+    "ioredis": "^5.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}

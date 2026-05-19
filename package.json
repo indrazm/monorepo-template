@@ -1,0 +1,35 @@
+{
+  "name": "monorepo-template",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "dev": "pnpm --parallel --filter './apps/*' dev",
+    "build": "pnpm --filter './apps/*' build",
+    "typecheck": "pnpm -r typecheck",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "createsuperuser": "node scripts/with-env.mjs tsx scripts/createsuperuser.ts",
+    "db:generate": "pnpm --filter @repo/api db:generate",
+    "db:migrate": "pnpm --filter @repo/api db:migrate",
+    "db:push": "pnpm --filter @repo/api db:push",
+    "db:studio": "pnpm --filter @repo/api db:studio"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.15",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "msgpackr-extract",
+      "prisma"
+    ]
+  }
+}

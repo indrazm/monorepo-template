@@ -1,0 +1,32 @@
+{
+  "name": "@repo/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ../../scripts/with-env.mjs tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "db:generate": "node ../../scripts/with-env.mjs prisma generate",
+    "db:migrate": "node ../../scripts/with-env.mjs prisma migrate dev",
+    "db:push": "node ../../scripts/with-env.mjs prisma db push",
+    "db:studio": "node ../../scripts/with-env.mjs prisma studio",
+    "start": "node ../../scripts/with-env.mjs tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.3",
+    "@hono/zod-validator": "^0.8.0",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "7.8.0",
+    "hono": "^4.12.21",
+    "pg": "^8.21.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.0",
+    "@types/pg": "^8.20.0",
+    "prisma": "7.8.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
