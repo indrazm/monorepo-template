@@ -14,19 +14,19 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@hono/node-server": "^2.0.3",
+    "@hono/node-server": "^2.0.5",
     "@hono/zod-validator": "^0.8.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "7.8.0",
-    "hono": "^4.12.21",
-    "pg": "^8.21.0",
+    "hono": "^4.12.26",
+    "pg": "^8.22.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^25.9.0",
+    "@types/node": "^26.0.0",
     "@types/pg": "^8.20.0",
     "prisma": "7.8.0",
-    "tsx": "^4.21.0",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
   "assist": {
     "enabled": false
   },
@@ -29,7 +29,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "a11y": {
         "useSemanticElements": "off"
       },

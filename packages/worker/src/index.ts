@@ -1,11 +1,11 @@
-import { Queue, QueueEvents, Worker } from "bullmq";
-import IORedis from "ioredis";
+import { Queue, QueueEvents, Worker, type ConnectionOptions } from "bullmq";
 
 export const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6379";
 
-export const connection = new IORedis(redisUrl, {
+export const connection: ConnectionOptions = {
+  url: redisUrl,
   maxRetriesPerRequest: null,
-});
+};
 
 export type ExampleJob = {
   message: string;

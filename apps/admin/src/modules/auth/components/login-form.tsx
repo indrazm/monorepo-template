@@ -1,3 +1,4 @@
+import { useTranslation } from "@repo/i18n";
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { Input } from "@repo/ui/components/input";
@@ -6,6 +7,7 @@ import { useState } from "react";
 import { useLoginMutation } from "../hooks/use-auth";
 
 export function LoginForm() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -14,7 +16,7 @@ export function LoginForm() {
   return (
     <Card className="max-w-md">
       <CardHeader>
-        <CardTitle>Admin login</CardTitle>
+        <CardTitle>{t("auth.login.title")}</CardTitle>
       </CardHeader>
       <CardContent>
         <form
@@ -26,14 +28,14 @@ export function LoginForm() {
               { email, password },
               {
                 onError: (error) => {
-                  setError(error instanceof Error ? error.message : "Authentication failed.");
+                  setError(error instanceof Error ? error.message : t("auth.login.fallbackError"));
                 },
               },
             );
           }}
         >
           <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{t("auth.login.email")}</Label>
             <Input
               id="email"
               type="email"
@@ -43,7 +45,7 @@ export function LoginForm() {
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t("auth.login.password")}</Label>
             <Input
               id="password"
               type="password"
@@ -54,7 +56,7 @@ export function LoginForm() {
           </div>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <Button type="submit" disabled={loginMutation.isPending}>
-            {loginMutation.isPending ? "Logging in..." : "Login"}
+            {loginMutation.isPending ? t("auth.login.pending") : t("auth.login.submit")}
           </Button>
         </form>
       </CardContent>

@@ -1,3 +1,4 @@
+import { useTranslation } from "@repo/i18n";
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { Input } from "@repo/ui/components/input";
@@ -7,6 +8,7 @@ import { useState } from "react";
 import { useRegisterMutation } from "../hooks/use-auth";
 
 export function RegisterForm() {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,7 +18,7 @@ export function RegisterForm() {
   return (
     <Card className="max-w-md">
       <CardHeader>
-        <CardTitle>Create user account</CardTitle>
+        <CardTitle>{t("auth.register.title")}</CardTitle>
       </CardHeader>
       <CardContent>
         <form
@@ -28,14 +30,16 @@ export function RegisterForm() {
               { name, email, password },
               {
                 onError: (error) => {
-                  setError(error instanceof Error ? error.message : "Registration failed.");
+                  setError(
+                    error instanceof Error ? error.message : t("auth.register.fallbackError"),
+                  );
                 },
               },
             );
           }}
         >
           <div className="grid gap-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">{t("auth.register.name")}</Label>
             <Input
               id="name"
               autoComplete="name"
@@ -44,7 +48,7 @@ export function RegisterForm() {
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{t("auth.register.email")}</Label>
             <Input
               id="email"
               type="email"
@@ -54,7 +58,7 @@ export function RegisterForm() {
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t("auth.register.password")}</Label>
             <Input
               id="password"
               type="password"
@@ -65,10 +69,10 @@ export function RegisterForm() {
           </div>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <Button type="submit" disabled={registerMutation.isPending}>
-            {registerMutation.isPending ? "Creating..." : "Register"}
+            {registerMutation.isPending ? t("auth.register.pending") : t("auth.register.submit")}
           </Button>
           <Button asChild type="button" variant="link">
-            <Link to="/login">Already have an account?</Link>
+            <Link to="/login">{t("auth.register.loginLink")}</Link>
           </Button>
         </form>
       </CardContent>

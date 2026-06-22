@@ -1,10 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { AppI18nProvider } from "@repo/i18n";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "@repo/ui/styles.css";
 import "./styles.css";
+import { i18n } from "./i18n";
 import { routeTree } from "./routeTree.gen";
 
 const rootElement = document.getElementById("root");
@@ -30,9 +32,11 @@ declare module "@tanstack/react-router" {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-      <ReactQueryDevtools buttonPosition="bottom-left" />
-    </QueryClientProvider>
+    <AppI18nProvider i18n={i18n}>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+        <ReactQueryDevtools buttonPosition="bottom-left" />
+      </QueryClientProvider>
+    </AppI18nProvider>
   </StrictMode>,
 );
