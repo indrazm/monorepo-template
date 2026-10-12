@@ -17,6 +17,19 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: tacto-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api:
     build:
       context: .
@@ -30,10 +43,13 @@ services:
       BETTER_AUTH_URL: "${BETTER_AUTH_URL:-http://localhost:8000}"
       CLIENT_ORIGINS: "${CLIENT_ORIGINS:-http://localhost:3000}"
       DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/tacto}"
+      REDIS_URL: "${DOCKER_REDIS_URL:-redis://redis:6379}"
     ports:
       - "${API_HOST_PORT:-8000}:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test:
@@ -49,5 +65,39 @@ services:
       start_period: 20s
     command: sh -c "pnpm db:deploy && pnpm --filter @repo/api start"
 
+  worker:
+    image: tacto-api
+    container_name: tacto-worker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: "production"
+      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/tacto}"
+      REDIS_URL: "${DOCKER_REDIS_URL:-redis://redis:6379}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["pnpm", "--filter", "@repo/worker", "start"]
+
+  proxy:
+    image: caddy:2-alpine
+    container_name: tacto-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./apps/web/dist:/srv/web:ro
+      - ./apps/widget/dist:/srv/widget:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
 volumes:
   postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

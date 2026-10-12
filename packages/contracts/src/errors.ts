@@ -11,6 +11,7 @@ export const apiErrorSchema = z.object({
     "notification_not_found",
     "conflict",
     "plan_limit_reached",
+    "rate_limited",
   ]),
 });
 export type ApiErrorCode = z.output<typeof apiErrorSchema>["error"];

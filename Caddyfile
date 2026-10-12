@@ -1,0 +1,36 @@
+# Tacto reverse proxy. Serves the pixel (t.js) and SPA statically and proxies
+# the API surfaces. Build the static assets first:
+#   pnpm --filter @repo/widget build && pnpm --filter @repo/web build
+#
+# Replace :80 with your domain (e.g. app.tacto.io) for automatic HTTPS.
+:80 {
+	encode gzip
+
+	# Pixel bundle served from the widget build.
+	handle /t.js {
+		root * /srv/widget
+		rewrite * /t.js
+		file_server
+	}
+
+	# Public + authenticated API surfaces.
+	handle /widget/* {
+		reverse_proxy api:8000
+	}
+	handle /ingest/* {
+		reverse_proxy api:8000
+	}
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+	handle /health {
+		reverse_proxy api:8000
+	}
+
+	# Dashboard SPA (client-side routing fallback to index.html).
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+}

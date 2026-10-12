@@ -279,7 +279,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 > **File:** `apps/api/src/modules/widget/router.ts` (`/widget/v1/capture`). **Kerjakan:** URL match → `event(form_submit, pixel)`.
 > **Cek:** submit host → event. **FR:** FR-ING-01/05.
 
-## Fase 41 — Rate-limit ingest
+## Fase 41 — Rate-limit ingest ✅ (in-memory; Redis multi-instance menyusul)
 
 > **File:** `apps/api/src/modules/ingest/rate-limit.ts` (Redis). **Cek:** flood → 429. **FR:** NFR-SEC-04, FR-VER-03.
 
@@ -366,7 +366,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 > **File:** `apps/web/src/features/onboarding/`. **Kerjakan:** buat Site → pasang pixel → verifikasi → notifikasi pertama (state dari data nyata).
 > **Cek:** user baru dibimbing. **FR:** PRD §3.2/§3.3.
 
-## Fase 55 — Verified label + anti-abuse
+## Fase 55 — Verified label + anti-abuse ✅
 
 > **File:** widget badge verified + rate-limit (F41). **Kerjakan:** hanya event terverifikasi ber-✓.
 > **Cek:** event non-verified tak ber-✓. **FR:** FR-VER-03.
@@ -376,7 +376,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 > **File:** `apps/web/e2e/*` / skrip integrasi. **Kerjakan:** sign-up → Site → snippet → verifikasi → 4 tipe notifikasi tampil hanya di domain terdaftar & sesuai URL → capture + webhook → loop/order/close → analytics → batas Free + badge.
 > **Cek:** skenario hijau. **FR:** SRS §9.
 
-## Fase 57 — Verifikasi deployment
+## Fase 57 — Konfigurasi deployment ✅ (compose redis/worker/proxy + Caddyfile; belum diuji-runtime)
 
 > **File:** `docker-compose.yaml`, `Dockerfile`. **Kerjakan:** `docker compose up` (postgres/redis/api/worker/proxy); proxy serve `t.js` + SPA; migrasi saat start api.
 > **Cek:** 9 kriteria MVP SRS §9 terpenuhi. **FR:** SRS §8/§9.
