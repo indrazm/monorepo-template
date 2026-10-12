@@ -12,6 +12,8 @@ import { createNotificationsRouter } from "./modules/notifications/router";
 import { createNotificationsService } from "./modules/notifications/services";
 import { createAnalyticsRouter } from "./modules/analytics/router";
 import { createAnalyticsService } from "./modules/analytics/services";
+import { createBillingRouter } from "./modules/billing/router";
+import { createBillingService } from "./modules/billing/services";
 import { createIngestRouter } from "./modules/ingest/router";
 import { createIngestService } from "./modules/ingest/services";
 import { createWidgetRouter } from "./modules/widget/router";
@@ -63,6 +65,7 @@ export function createApp({
     .use("/api/v1/notifications", loadSession)
     .use("/api/v1/notifications/*", loadSession)
     .use("/api/v1/analytics/*", loadSession)
+    .use("/api/v1/billing", loadSession)
     .get("/session", (c) => {
       const user = c.get("user");
       const session = c.get("session");
@@ -71,9 +74,10 @@ export function createApp({
     })
     .route("/profile", createProfileRouter(createProfileService(db)))
     .route("/users", createUsersRouter(createUsersService(db)))
-    .route("/api/v1/sites", createSitesRouter(createSitesService(db)))
+    .route("/api/v1/sites", createSitesRouter(createSitesService(db), createBillingService(db)))
     .route("/api/v1/notifications", createNotificationsRouter(createNotificationsService(db)))
     .route("/api/v1/analytics", createAnalyticsRouter(createAnalyticsService(db)))
+    .route("/api/v1/billing", createBillingRouter(createBillingService(db)))
     .route("/widget", createWidgetRouter(createWidgetService(db)))
     .route("/ingest", createIngestRouter(createIngestService(db)));
 }

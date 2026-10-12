@@ -342,17 +342,17 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 > **File:** `packages/contracts/src/billing.ts`. **Kerjakan:** map plan → `{trafficQuota,maxSites,removeBadge,notificationTypes}` + helper. **FR:** FR-BIL-01.
 
-## Fase 51 — Penegakan batas (middleware)
+## Fase 51 — Penegakan batas (maxSites) ✅
 
 > **File:** `apps/api/src/modules/billing/guard.ts`. **Kerjakan:** cek `maxSites` saat buat Site; visitor bulan (Redis) vs `trafficQuota` → batasi payload + ajakan upgrade.
 > **Cek:** Free Site ke-2 ditolak. **FR:** FR-BIL-03.
 
-## Fase 52 — Badge "Powered by Tacto"
+## Fase 52 — Badge "Powered by Tacto" ✅
 
 > **File:** payload (`showBadge`) + `apps/widget/src/render/badge.ts`. **Kerjakan:** `showBadge = plan==="free"`.
 > **Cek:** Free tampil badge. **FR:** FR-BIL-04.
 
-## Fase 53 — Halaman billing (status plan)
+## Fase 53 — Halaman billing (status plan) ✅
 
 > **File:** `apps/web/src/features/billing/`. **Kerjakan:** plan, kuota terpakai, batas; CTA upgrade (Stripe di Fase 2).
 > **Cek:** status akurat. **FR:** FR-BIL-01/03.

@@ -3,9 +3,13 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { createSiteSchema, updateSiteSchema } from "@repo/contracts/sites";
 import { type AuthVariables, requireOrg } from "../auth/middleware";
+import type { createBillingService } from "../billing/services";
 import type { createSitesService } from "./services";
 
-export function createSitesRouter(service: ReturnType<typeof createSitesService>) {
+export function createSitesRouter(
+  service: ReturnType<typeof createSitesService>,
+  billing: ReturnType<typeof createBillingService>,
+) {
   return new Hono<{ Variables: AuthVariables }>()
     .get("/", async (c) => {
       const organizationId = requireOrg(c);
@@ -20,6 +24,9 @@ export function createSitesRouter(service: ReturnType<typeof createSitesService>
       async (c) => {
         const organizationId = requireOrg(c);
         if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        if (!(await billing.canCreateSite(organizationId))) {
+          return c.json(apiError("plan_limit_reached"), 403);
+        }
         const site = await service.create(organizationId, c.req.valid("json"));
         return c.json({ site }, 201);
       },

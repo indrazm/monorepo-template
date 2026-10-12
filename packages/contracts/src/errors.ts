@@ -10,6 +10,7 @@ export const apiErrorSchema = z.object({
     "site_not_found",
     "notification_not_found",
     "conflict",
+    "plan_limit_reached",
   ]),
 });
 export type ApiErrorCode = z.output<typeof apiErrorSchema>["error"];
