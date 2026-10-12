@@ -180,31 +180,31 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 # EPIK D — Widget runtime (`apps/widget` → `t.js`)
 
-## Fase 22 — Scaffold `apps/widget` (Vite lib, no React)
+## Fase 22 — Scaffold `apps/widget` (Vite lib, no React) ✅
 
 > **File:** `apps/widget/{package.json,vite.config.ts,tsconfig.json,src/index.ts}`.
 > **Kerjakan:** Vite `lib` IIFE → `t.js`; depend hanya `@repo/contracts`. **Cek:** build → `dist/t.js`. **FR:** NFR-PERF-01.
 
-## Fase 23 — Loader: baca `data-site` + fetch payload (fail-safe)
+## Fase 23 — Loader: baca `data-site` + fetch payload (fail-safe) ✅
 
 > **File:** `apps/widget/src/{index.ts,loader.ts}`. **Kerjakan:** fetch `/widget/v1/payload` dibungkus try/catch.
 > **Cek:** API mati → situs host normal. **FR:** NFR-REL-02.
 
-## Fase 24 — Shadow DOM host + CSS terisolasi
+## Fase 24 — Shadow DOM host + CSS terisolasi ✅
 
 > **File:** `apps/widget/src/shadow.ts`. **Cek:** style tidak bocor. **FR:** SRS §3.4, NFR-A11Y-01.
 
-## Fase 25 — Render kartu notifikasi
+## Fase 25 — Render kartu notifikasi ✅
 
 > **File:** `apps/widget/src/render/notification.ts`. **Kerjakan:** kartu ikon/fakta/timeAgo + baris Verified; meniru `.livecard` style guide.
 > **Cek:** payload dummy → kartu sesuai posisi/accent. **FR:** FR-NOT-01..04.
 
-## Fase 26 — Scheduler: delay/durasi/interval/loop/urutan/close
+## Fase 26 — Scheduler: delay/durasi/interval/loop/urutan/close ✅
 
 > **File:** `apps/widget/src/scheduler.ts`. **Kerjakan:** timing + loop + urutan + close (localStorage jeda X hari); hormati `prefers-reduced-motion`.
 > **Cek:** urutan/loop/close sesuai. **FR:** FR-NED-09, FR-NGS-01/02/03.
 
-## Fase 27 — Beacon track + auto-capture form
+## Fase 27 — Beacon track + auto-capture form ✅ (endpoint track/capture menyusul di EPIK F/H)
 
 > **File:** `apps/widget/src/{track.ts,capture.ts}`. **Kerjakan:** `sendBeacon` view/click; listener submit → `/widget/v1/capture` (URL match).
 > **Cek:** klik→click; submit→capture. Bundle `t.js` < 30 KB gzip. **FR:** FR-ANL-01, FR-ING-01/05.
