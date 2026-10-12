@@ -10,6 +10,8 @@ import {
 } from "./modules/auth/middleware";
 import { createNotificationsRouter } from "./modules/notifications/router";
 import { createNotificationsService } from "./modules/notifications/services";
+import { createAnalyticsRouter } from "./modules/analytics/router";
+import { createAnalyticsService } from "./modules/analytics/services";
 import { createIngestRouter } from "./modules/ingest/router";
 import { createIngestService } from "./modules/ingest/services";
 import { createWidgetRouter } from "./modules/widget/router";
@@ -60,6 +62,7 @@ export function createApp({
     .use("/api/v1/sites/*", loadSession)
     .use("/api/v1/notifications", loadSession)
     .use("/api/v1/notifications/*", loadSession)
+    .use("/api/v1/analytics/*", loadSession)
     .get("/session", (c) => {
       const user = c.get("user");
       const session = c.get("session");
@@ -70,6 +73,7 @@ export function createApp({
     .route("/users", createUsersRouter(createUsersService(db)))
     .route("/api/v1/sites", createSitesRouter(createSitesService(db)))
     .route("/api/v1/notifications", createNotificationsRouter(createNotificationsService(db)))
+    .route("/api/v1/analytics", createAnalyticsRouter(createAnalyticsService(db)))
     .route("/widget", createWidgetRouter(createWidgetService(db)))
     .route("/ingest", createIngestRouter(createIngestService(db)));
 }

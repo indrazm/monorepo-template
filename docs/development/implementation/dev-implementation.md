@@ -324,12 +324,12 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 > **Kerjakan:** flush buffer Redis → `impression` + rollup. Tambah tabel `goal` (dipakai penuh di Fase 2).
 > **Cek:** impression muncul di Postgres. **FR:** FR-ANL-05 (+ANL-03 dasar).
 
-## Fase 48 — Endpoint ringkasan analytics
+## Fase 48 — Endpoint ringkasan analytics ✅
 
 > **File:** `apps/api/src/modules/analytics/{services.ts,router.ts}`. **Kerjakan:** `GET /api/v1/analytics?from&to` → impression/klik/CTR (tenant-filtered).
 > **Cek:** angka cocok. **FR:** FR-ANL-02.
 
-## Fase 49 — Dashboard analytics + Events Feed
+## Fase 49 — Dashboard analytics + Events Feed ✅
 
 > **File:** `apps/web/src/features/analytics/`. **Kerjakan:** stat tile (tabular) + grafik (skill `dataviz`) + Events Feed (log event masuk).
 > **Cek:** laporan 7 hari; dark/light. **FR:** FR-ANL-02, FR-ING-11.
