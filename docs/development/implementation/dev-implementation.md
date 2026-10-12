@@ -246,13 +246,13 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 > **File:** `.../widget/sources/custom.ts`. **Kerjakan:** teks/CTA statis. **Cek:** "garansi 30 hari" tampil. **FR:** FR-NOT-04.
 
-## Fase 35 — Editor notifikasi (web, wizard)
+## Fase 35 — Editor notifikasi (web) ✅
 
 > **File:** `apps/web/src/features/notifications/` (`components/editor/*`, `hooks/use-notifications.ts`).
 > **Kerjakan:** wizard **Type→Track→Display→Message→Style→Launch**; media fallback (image→icon→map→gravatar→flag).
 > **Cek:** panel tersimpan & tervalidasi. **FR:** FR-NED-01..08.
 
-## Fase 36 — Preview device real-time
+## Fase 36 — Preview real-time ✅
 
 > **File:** `.../notifications/components/preview.tsx`. **Kerjakan:** preview desktop/mobile dari state editor. **FR:** FR-NED-10.
 
