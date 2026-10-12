@@ -164,7 +164,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 > **File:** `apps/web/src/features/sites/`, route `routes/sites.tsx`.
 > **Kerjakan:** daftar + form (TanStack Query, `@repo/ui`, token style guide). **Cek:** buat Site dari UI. **FR:** FR-SITE-01.
 
-## Fase 20 — Panel Install snippet + origin guard (origin guard ✅)
+## Fase 20 — Panel Install snippet + origin guard ✅
 
 > **File:** `apps/web/src/features/sites/components/install-panel.tsx`; `apps/api/src/modules/widget/` (`assertAllowedOrigin`).
 > **Kerjakan:** snippet `<script src="{WIDGET_CDN_URL}/t.js" data-site>` + GTM; origin check domain.

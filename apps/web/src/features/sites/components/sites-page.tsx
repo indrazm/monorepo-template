@@ -25,8 +25,9 @@ import { Input } from "@repo/ui/components/input";
 import { Label } from "@repo/ui/components/label";
 import { toast } from "@repo/ui/components/sonner";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2Icon, Globe2Icon, PlusIcon } from "lucide-react";
+import { CheckCircle2Icon, CopyIcon, Globe2Icon, PlusIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { env } from "../../../api";
 import { AppShell } from "../../app-shell/app-shell";
 import {
   sitesQueryOptions,
@@ -77,7 +78,10 @@ export function SitesPage() {
                   ) : (
                     <Badge variant="secondary">Pixel not detected</Badge>
                   )}
-                  <DeleteSiteButton id={site.id} name={site.name} />
+                  <div className="flex items-center gap-1">
+                    <InstallSiteButton siteKey={site.siteKey} />
+                    <DeleteSiteButton id={site.id} name={site.name} />
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -202,5 +206,43 @@ function DeleteSiteButton({ id, name }: { id: string; name: string }) {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+function InstallSiteButton({ siteKey }: { siteKey: string }) {
+  const snippet = `<script src="${env.VITE_WIDGET_CDN_URL}/t.js" data-site="${siteKey}" async></script>`;
+
+  function copy() {
+    navigator.clipboard
+      .writeText(snippet)
+      .then(() => toast.success("Snippet copied"))
+      .catch(() => toast.error("Could not copy snippet"));
+  }
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm">
+          Install
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Install the Tacto pixel</DialogTitle>
+          <DialogDescription>
+            Paste this snippet before the closing &lt;/body&gt; tag on every page — or add it as a
+            Custom HTML tag in Google Tag Manager.
+          </DialogDescription>
+        </DialogHeader>
+        <pre className="overflow-x-auto rounded-lg border bg-muted/60 p-4 text-xs">
+          <code>{snippet}</code>
+        </pre>
+        <DialogFooter>
+          <Button type="button" onClick={copy}>
+            <CopyIcon className="size-4" /> Copy snippet
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
