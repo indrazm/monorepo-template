@@ -1,34 +1,30 @@
 # Rencana Implementasi (Code-Level) — Tacto
 
 **Development Implementation Plan — langkah coding berscope kecil**
-Versi: 2.0 · Tanggal: 12 Oktober 2026 · Status: Draft
-Acuan: [prd.md](../prd.md) · [srs.md](../srs.md) · [style-guide.md](../style-guide.md) · [structure-folder.md](../structure-folder.md)
+Versi: 3.0 (notifications-only, monorepo) · Tanggal: 12 Oktober 2026 · Status: Draft
+Acuan: [prd.md](../prd.md) (v4) · [srs.md](../srs.md) (v4) · [style-guide.md](../style-guide.md) · [structure-folder.md](../structure-folder.md)
+
+> **Perubahan v3.0:** scope dipersempit ke **notifications-only** (mesin testimonial/Wall of Love dihapus — produk terpisah). Stack tetap monorepo (Hono + Drizzle + Better Auth + BullMQ/Redis). EPIK testimonial & Studio dibuang; ditambah **EPIK Integrasi (framework)** dan **Goals** di analytics. Tabel `testimonial*`/`asset` yang terlanjur ada di DB disimpan sebagai _reserved/unused_ (tak merusak migrasi).
 
 ---
 
 ## Cara pakai dokumen ini
 
-Dokumen ini adalah **urutan fase kecil**. Satu fase = satu task yang bisa dikerjakan & di-commit sekali duduk (≈½–1 hari). Kerjakan berurutan; tiap fase berdiri di atas fase sebelumnya.
+Satu fase = satu task berscope kecil yang bisa dikerjakan & di-commit sekali duduk. Kerjakan berurutan.
 
-Format tiap fase:
+Format: **Hasil · File · Kerjakan · Cek · FR**.
 
-> **Hasil** — apa yang jadi setelah fase ini.
-> **File** — path persis yang dibuat/diubah.
-> **Kerjakan** — langkah + kode konkret (ikuti pola repo).
-> **Cek** — perintah/aksi untuk memverifikasi.
-> **FR** — kebutuhan [srs.md](../srs.md) yang tersentuh.
+### Konvensi repo (WAJIB)
 
-### Konvensi repo yang WAJIB diikuti (dari kode eksisting)
-
-- **Modul API:** tiap domain punya folder `apps/api/src/modules/<x>/` dengan `router.ts` (export `create<X>Router(service)`) + `services.ts` (export `create<X>Service(db)`). Di-wire di `apps/api/src/app.ts` lewat `.route()` + `.use("/path", loadSession)`.
-- **Kontrak:** semua skema di `packages/contracts/src/<x>.ts`, pakai `zod`, export tipe via `z.output<...>`. Import: `@repo/contracts/<x>`.
-- **Error:** balas error pakai `apiError("code")` dari `@repo/contracts/errors`; **tambahkan code baru ke enum** `apiErrorSchema` sebelum dipakai.
-- **Validasi:** `zValidator("json"|"query"|"param", schema, onError)` dari `@hono/zod-validator`.
-- **DB:** tabel domain baru pakai `snake_case` (sesuai SRS §5) di `packages/db/src/schema.ts`; id `cuid2`. Jangan `db:push` ke prod — selalu `db:generate` → review SQL → `db:deploy`.
-- **RPC:** web memanggil API hanya via `@repo/api-client` (`hc<AppType>`). `AppType` diekspor `apps/api` (`@repo/api/types`).
-- **Batas modul:** browser (`web`, `ui`, `contracts`, `api-client`, `widget`) **tak boleh** import `db`/`queue`/`storage`/`config`. Dijaga `pnpm check:boundaries`.
+- **Modul API:** `apps/api/src/modules/<x>/` → `router.ts` (export `create<X>Router(service)`) + `services.ts` (export `create<X>Service(db)`); di-wire di `app.ts` via `.route()` + `.use("/path", loadSession)`.
+- **Kontrak:** skema Zod di `packages/contracts/src/<x>.ts`, tipe via `z.output<...>`, import `@repo/contracts/<x>`.
+- **Error:** `apiError("code")` dari `@repo/contracts/errors`; tambahkan code ke enum `apiErrorSchema` dulu.
+- **Validasi:** `zValidator(...)` dari `@hono/zod-validator`.
+- **DB:** tabel snake_case, id cuid2; `db:generate` → review SQL → `db:deploy` (jangan `db:push` ke prod).
+- **RPC:** web → API hanya via `@repo/api-client` (`hc<AppType>`; `AppType` dari `@repo/api/types`).
+- **Batas modul:** browser (`web`,`ui`,`contracts`,`api-client`,`widget`) tak boleh import `db`/`queue`/`storage`/`config`.
 - **Tenant:** tiap query domain difilter `organizationId`/`siteId`.
-- **Gate selesai:** `pnpm check && pnpm typecheck` hijau + test terkait lulus.
+- **Gate:** `pnpm check && pnpm typecheck` hijau + test terkait lulus.
 
 ### Indeks fase
 
@@ -37,321 +33,89 @@ Format tiap fase:
 | EPIK A  | Fondasi                     | F1–F12  |
 | EPIK B  | Auth & Org multi-tenant     | F13–F16 |
 | EPIK C  | Site & Pixel                | F17–F21 |
-| EPIK D  | Widget runtime (`t.js`)     | F22–F28 |
-| EPIK E  | Mesin notifikasi            | F29–F38 |
-| EPIK F  | Ingestion event             | F39–F44 |
-| EPIK G  | Mesin testimonial           | F45–F52 |
-| EPIK H  | Studio (aset)               | F53–F57 |
-| EPIK I  | Analytics                   | F58–F61 |
-| EPIK J  | Billing freemium            | F62–F65 |
-| EPIK K  | Onboarding & Acceptance MVP | F66–F69 |
-| EPIK L+ | Fase 2–4 (ringkas)          | F70+    |
+| EPIK D  | Widget runtime (`t.js`)     | F22–F27 |
+| EPIK E  | Mesin notifikasi            | F28–F37 |
+| EPIK F  | Ingestion event             | F38–F43 |
+| EPIK G  | Integrasi (framework)       | F44–F45 |
+| EPIK H  | Analytics & Goals           | F46–F49 |
+| EPIK I  | Billing freemium            | F50–F53 |
+| EPIK J  | Onboarding & Acceptance MVP | F54–F57 |
+| EPIK K+ | Fase 2–4 (ringkas)          | F58+    |
+
+### Status progres
+
+- ✅ **F1** rebrand repo · ✅ **F2–F3** env & config · ✅ **F4–F8** skema domain + migrasi (migrasi _applied_ menunggu Postgres hidup).
+- 🔜 **F9–F12** kontrak Zod + queue registry (sedang dikerjakan).
+- Prasyarat (di luar penomoran): perbaikan tooling lintas-OS + `.gitattributes` (commit `chore`), dokumen dev (commit `docs`).
 
 ---
 
 # EPIK A — Fondasi
 
-## Fase 1 — Rename identitas repo
+## Fase 1 — Rename identitas repo ✅
 
-> **Hasil:** repo bernama `tacto`, bukan `monorepo-template`.
-> **File:** `package.json` (root), `apps/api/src/modules/auth/auth.ts`, `README.md`.
-> **Kerjakan:**
->
-> 1. `package.json` root: `"name": "tacto"`.
-> 2. `auth.ts`: `appName: "Tacto"`.
-> 3. `README.md`: ganti judul & deskripsi 1 paragraf.
->    **Cek:** `pnpm install` bersih; `git grep -n "monorepo-template"` kosong (kecuali lockfile).
+> **Hasil:** repo bernama `tacto`. **File:** `package.json`, `auth.ts`, `README.md`, compose, wrangler.
+> **Cek:** `git grep monorepo-template` kosong (kecuali lockfile).
 
-## Fase 2 — Env matrix di `.env.example`
+## Fase 2 — Env matrix ✅
 
-> **Hasil:** semua env Tacto tercatat.
-> **File:** `.env.example`.
-> **Kerjakan:** tambahkan:
->
-> ```sh
-> DATABASE_URL=postgresql://tacto:tacto@localhost:5432/tacto
-> REDIS_URL=redis://localhost:6379
-> BETTER_AUTH_SECRET=change-me
-> BETTER_AUTH_URL=http://localhost:3000
-> CLIENT_ORIGINS=http://localhost:5173
-> API_URL=http://localhost:3000
-> WIDGET_CDN_URL=http://localhost:8080
-> # Fase 2+
-> STRIPE_SECRET_KEY=
-> STRIPE_WEBHOOK_SECRET=
-> GOOGLE_CLIENT_ID=
-> GOOGLE_CLIENT_SECRET=
-> S3_ENDPOINT=
-> S3_BUCKET=
-> S3_ACCESS_KEY_ID=
-> S3_SECRET_ACCESS_KEY=
-> ```
->
-> **Cek:** `cp .env.example .env` lalu isi lokal.
+> **Hasil:** env Tacto tercatat. **File:** `.env.example`, `.env`.
+> **Kerjakan:** `REDIS_URL`, `VITE_WIDGET_CDN_URL` (Stripe/Google/S3 ditunda ke fasenya). **Cek:** `pnpm check:env`.
 
-## Fase 3 — Config runtime: Redis + widget origins
+## Fase 3 — Config runtime ✅
 
-> **Hasil:** `@repo/config` memvalidasi env baru.
-> **File:** `packages/config/src/runtime.ts`, `scripts/check-env.ts`.
-> **Kerjakan:** tambah field skema untuk `REDIS_URL`, `WIDGET_CDN_URL`, `API_URL`; pecah subset `api` (butuh DB+Redis), `worker` (butuh DB+Redis), `web` (hanya `API_URL`/publik).
-> **Cek:** `pnpm check:env` gagal bila `REDIS_URL` dihapus, lulus saat lengkap.
+> **File:** `apps/api/src/config.ts` (+`REDIS_URL`), `apps/worker/src/config.ts` (+`DATABASE_URL`), `apps/web/src/config.ts` (+`VITE_WIDGET_CDN_URL`). **Cek:** `pnpm check:env`.
 
-## Fase 4 — Enum Drizzle domain
+## Fase 4 — Enum Drizzle domain ✅
 
-> **Hasil:** semua enum domain ada di schema.
-> **File:** `packages/db/src/schema.ts`.
-> **Kerjakan:** tambah di bawah import:
->
-> ```ts
-> import { pgEnum } from "drizzle-orm/pg-core";
-> export const planEnum = pgEnum("plan", ["free", "starter", "growth", "agency"]);
-> export const notificationTypeEnum = pgEnum("notification_type", [
->   "recent_sales",
->   "counter",
->   "live_visitors",
->   "review",
->   "custom",
->   "combo",
->   "social_counter",
->   "youtube",
->   "low_stock",
->   "countdown",
-> ]);
-> export const eventTypeEnum = pgEnum("event_type", [
->   "purchase",
->   "signup",
->   "visit",
->   "form_submit",
->   "custom",
-> ]);
-> export const formPageKindEnum = pgEnum("form_page_kind", [
->   "rating",
->   "negative_feedback",
->   "welcome",
->   "question",
->   "consent",
->   "about_you",
->   "about_company",
->   "thank_you",
-> ]);
-> export const testimonialStatusEnum = pgEnum("testimonial_status", [
->   "pending",
->   "approved",
->   "rejected",
->   "hidden",
-> ]);
-> export const assetKindEnum = pgEnum("asset_kind", [
->   "board",
->   "widget",
->   "image",
->   "video",
->   "case_study",
->   "rich_snippet",
-> ]);
-> ```
->
-> **Cek:** `pnpm --filter @repo/db typecheck`.
+> **File:** `packages/db/src/schema.ts`. Enum: `plan`, `notification_type`, `event_type` (+`form_page_kind`/`testimonial_status`/`asset_kind` reserved). **Cek:** `pnpm --filter @repo/db typecheck`.
 
-## Fase 5 — Tabel fondasi: `site`, `subscription`, `integration`
+## Fase 5 — Tabel fondasi ✅
 
-> **Hasil:** tabel inti multi-tenant ada.
-> **File:** `packages/db/src/schema.ts`.
-> **Kerjakan:** (ikuti SRS §5; id cuid2 via `@paralleldrive/cuid2`)
->
-> ```ts
-> import { createId } from "@paralleldrive/cuid2";
-> import { index, integer, jsonb } from "drizzle-orm/pg-core";
->
-> export const site = pgTable(
->   "site",
->   {
->     id: text("id")
->       .primaryKey()
->       .$defaultFn(() => createId()),
->     organizationId: text("organization_id").notNull(),
->     name: text("name").notNull(),
->     domain: text("domain").notNull(),
->     siteKey: text("site_key")
->       .notNull()
->       .unique()
->       .$defaultFn(() => createId()),
->     pixelVerifiedAt: timestamp("pixel_verified_at"),
->     createdAt: timestamp("created_at").notNull().defaultNow(),
->   },
->   (t) => [index("site_org_idx").on(t.organizationId)],
-> );
->
-> export const subscription = pgTable("subscription", {
->   id: text("id")
->     .primaryKey()
->     .$defaultFn(() => createId()),
->   organizationId: text("organization_id").notNull().unique(),
->   plan: planEnum("plan").notNull().default("free"),
->   status: text("status").notNull().default("active"),
->   trafficQuota: integer("traffic_quota").notNull().default(2000),
->   provider: text("provider"),
->   renewsAt: timestamp("renews_at"),
-> });
->
-> export const integration = pgTable(
->   "integration",
->   {
->     id: text("id")
->       .primaryKey()
->       .$defaultFn(() => createId()),
->     organizationId: text("organization_id").notNull(),
->     provider: text("provider").notNull(),
->     config: jsonb("config").notNull(),
->     status: text("status").notNull().default("active"),
->     createdAt: timestamp("created_at").notNull().defaultNow(),
->   },
->   (t) => [index("integration_org_idx").on(t.organizationId)],
-> );
-> ```
->
-> **Cek:** `pnpm add -w -F @repo/db @paralleldrive/cuid2` bila belum ada; typecheck hijau.
+> **File:** `schema.ts`. Tabel `site`, `subscription`, `integration` (tenant via `organization_id`, index). **Cek:** typecheck.
 
-## Fase 6 — Tabel notifikasi: `notification`, `domain_setting`, `event`
+## Fase 6 — Tabel notifikasi ✅
 
-> **Hasil:** tabel mesin notifikasi ada.
-> **File:** `packages/db/src/schema.ts`.
-> **Kerjakan:** salin dari SRS §5 (`notification`, `domain_setting`, `event`) — kolom `jsonb` untuk message/style/display/dataSource/timing/loop/privacy; index `notification_site_idx`, `event_site_occurred_idx`; `event.dedupeKey` unique.
-> **Cek:** typecheck hijau.
+> **File:** `schema.ts`. `notification`, `domain_setting`, `event` (jsonb message/style/display/dataSource/timing/loop/privacy; index; `event.dedupeKey` unique). **Cek:** typecheck.
 
-## Fase 7 — Tabel testimonial: `testimonial_form`, `form_page`, `testimonial`, `asset`, `impression`
+## Fase 7 — Tabel shared ✅
 
-> **Hasil:** tabel mesin testimonial + shared ada.
-> **File:** `packages/db/src/schema.ts`.
-> **Kerjakan:** salin dari SRS §5; index `testimonial_site_status_idx`, `impression_site_created_idx`; FK ke `site`/`testimonial_form`.
-> **Cek:** typecheck hijau.
+> **File:** `schema.ts`. `impression` (index `impression_site_created_idx`). Tabel `testimonial*`/`asset` ada sebagai _reserved/unused_. Tabel `goal` ditambah di F47 (Goals, Fase 2). **Cek:** typecheck.
 
-## Fase 8 — Migrasi awal domain
+## Fase 8 — Migrasi awal domain ✅
 
-> **Hasil:** semua tabel domain ter-apply ke DB.
-> **File:** `packages/db/drizzle/*` (generated).
-> **Kerjakan:** `pnpm db:generate` → **baca file SQL**, pastikan enum & index benar → `pnpm db:deploy`.
-> **Cek:** `pnpm db:studio` menampilkan 11 tabel domain + tabel auth.
+> **File:** `packages/db/drizzle/0001_*.sql`. **Kerjakan:** `db:generate` → review (additive, no drop) → `db:deploy` saat Postgres hidup. **Cek:** `db:studio` menampilkan tabel.
 
-## Fase 9 — Kontrak Zod: bentuk `jsonb` notifikasi
+## Fase 9 — Kontrak notifikasi
 
-> **Hasil:** satu sumber kebenaran untuk message/style/display/dataSource/timing.
-> **File:** `packages/contracts/src/notifications.ts`.
-> **Kerjakan:**
->
-> ```ts
-> import { z } from "zod";
-> export const notificationMessageSchema = z.object({
->   template: z.string().min(1), // "{{first_name}} dari {{city}} baru beli {{product}}"
->   fallbacks: z.record(z.string(), z.string()).default({}),
->   hideTimeAgoAfterDays: z.number().int().positive().optional(),
-> });
-> export const notificationStyleSchema = z.object({
->   position: z.enum(["bottom-left", "bottom-right", "top-left", "top-right"]),
->   accent: z.string().regex(/^#([0-9a-f]{6})$/i),
->   shape: z.enum(["rounded", "square"]).default("rounded"),
->   size: z.enum(["sm", "md"]).default("md"),
->   animation: z.enum(["slide", "fade"]).default("slide"),
-> });
-> export const urlMatchSchema = z.object({
->   mode: z.enum(["all", "simple", "contains", "regex"]),
->   value: z.string().optional(),
-> });
-> export const notificationDisplaySchema = z.object({
->   url: urlMatchSchema,
->   countries: z.array(z.string()).optional(),
->   utm: z.record(z.string(), z.string()).optional(),
->   referrer: z.string().optional(),
-> });
-> export const notificationDataSourceSchema = z.object({
->   eventTypes: z.array(z.enum(["purchase", "signup", "visit", "form_submit", "custom"])),
->   filter: z.record(z.string(), z.unknown()).optional(),
-> });
-> export const notificationTimingSchema = z.object({
->   delayMs: z.number().int().min(0).default(0),
->   durationMs: z.number().int().min(1000).default(5000),
->   intervalMs: z.number().int().min(0).default(8000),
-> });
-> export const notificationConfigSchema = z.object({
->   message: notificationMessageSchema,
->   style: notificationStyleSchema,
->   display: notificationDisplaySchema,
->   dataSource: notificationDataSourceSchema,
->   timing: notificationTimingSchema,
-> });
-> export type NotificationConfig = z.output<typeof notificationConfigSchema>;
-> ```
->
-> **Cek:** tambah `notifications.test.ts` (parse happy + invalid hex) → `pnpm --filter @repo/contracts test`.
+> **Hasil:** sumber kebenaran message/style/display/dataSource/timing + create/update/response.
+> **File:** `packages/contracts/src/notifications.ts` (+ `notifications.test.ts`).
+> **Kerjakan:** `notificationConfigSchema` (message, style hex, urlMatch, display, dataSource eventTypes, timing) + `createNotificationSchema`/`updateNotificationSchema`/`notificationSchema`.
+> **Cek:** `pnpm --filter @repo/contracts test`.
+> **FR:** FR-NED-01..09.
 
-## Fase 10 — Kontrak Zod: payload widget publik
+## Fase 10 — Kontrak payload widget
 
-> **Hasil:** bentuk respons `/widget/v1/payload` & track/capture terkunci.
 > **File:** `packages/contracts/src/widget.ts`.
-> **Kerjakan:** (lihat contoh SRS §6.5)
->
-> ```ts
-> import { z } from "zod";
-> export const widgetNotificationSchema = z.object({
->   id: z.string(),
->   type: z.string(),
->   verified: z.boolean(),
->   message: z.string(),
->   timeAgo: z.string().optional(),
->   style: z.object({ position: z.string(), accent: z.string() }).passthrough(),
-> });
-> export const widgetPayloadResponseSchema = z.object({
->   notifications: z.array(widgetNotificationSchema),
->   settings: z.object({
->     loopAfter: z.number(),
->     order: z.enum(["random", "manual"]),
->     showClose: z.boolean(),
->     showBadge: z.boolean(),
->   }),
->   ttl: z.number().int().positive(),
-> });
-> export const trackEventSchema = z.object({
->   refId: z.string(),
->   siteKey: z.string(),
->   kind: z.enum(["view", "click"]),
-> });
-> export const captureEventSchema = z.object({
->   siteKey: z.string(),
->   url: z.string(),
->   fields: z.record(z.string(), z.string()),
-> });
-> export type WidgetPayloadResponse = z.output<typeof widgetPayloadResponseSchema>;
-> ```
->
-> **Cek:** test parse.
+> **Kerjakan:** `widgetPayloadResponseSchema` (notifications + settings{loopAfter,order,showClose,closeForDays,showBadge,requireConsent} + ttl), `widgetPayloadQuerySchema`, `trackEventSchema`, `captureEventSchema`.
+> **Cek:** typecheck. **FR:** SRS §6.4.
 
-## Fase 11 — Kontrak Zod: sites, events, forms, testimonials, assets, billing
+## Fase 11 — Kontrak sites, events, billing
 
-> **Hasil:** sisa kontrak domain ada (buat skeleton, isi field saat modulnya digarap).
-> **File:** `packages/contracts/src/{sites,events,forms,testimonials,assets,billing}.ts`.
-> **Kerjakan:** minimal `createXSchema`/`updateXSchema` + response; detail menyusul di fase epiknya.
-> **Cek:** typecheck + `pnpm check:boundaries`.
+> **File:** `packages/contracts/src/{sites,events,billing}.ts`.
+> **Kerjakan:** sites (create/update/site + domainSetting{loop,privacy,customCss}); events (ingest + feed); billing (plan limits map + `planAllowsNotificationType`).
+> **Cek:** typecheck + `pnpm check:boundaries`. **FR:** FR-SITE, FR-ING, FR-BIL-01.
 
 ## Fase 12 — Queue registry + processor skeleton
 
-> **Hasil:** 4 queue Tacto terdaftar; worker jalan.
-> **File:** `packages/contracts/src/jobs.ts`, `packages/queue/src/index.ts`, `apps/worker/src/worker.ts`, `apps/worker/src/processors/{webhook,analytics-aggregate,counter-recompute,automation}.ts`.
+> **File:** `packages/contracts/src/jobs.ts`, `packages/queue/src/index.ts`, `apps/worker/src/worker.ts`, `apps/worker/src/processors/{webhook,analytics-aggregate,counter-recompute}.ts`.
 > **Kerjakan:**
 >
-> 1. `jobs.ts`: nama + skema payload tiap queue:
->    ```ts
->    export const webhookQueueName = "webhook";
->    export const webhookJobSchema = z.object({
->      provider: z.string(),
->      siteId: z.string(),
->      raw: z.record(z.string(), z.unknown()),
->    });
->    export const analyticsQueueName = "analytics-aggregate";
->    export const counterQueueName = "counter-recompute";
->    export const automationQueueName = "automation";
->    ```
+> 1. `jobs.ts`: `webhookQueueName`+`webhookJobSchema`, `analyticsQueueName`, `counterQueueName` (+payload Zod).
 > 2. `queue/index.ts`: `createQueue(name)` + `createQueueEvents(name)` pakai `REDIS_URL`.
-> 3. `worker.ts`: registrasi `Worker` per queue → processor (no-op `console.log` dulu).
->    **Cek:** `pnpm --filter @repo/worker dev` log "listening" tiap queue; enqueue manual diterima.
+> 3. `worker.ts`: registrasi `Worker` per queue → processor (no-op dulu).
+>    **Cek:** `pnpm --filter @repo/worker dev` log "listening" tiap queue.
+>    **FR:** NFR-SCALE-02, FR-ANL-05.
 
 ---
 
@@ -359,42 +123,24 @@ Format tiap fase:
 
 ## Fase 13 — Aktifkan organization plugin
 
-> **Hasil:** Better Auth punya Org, member, invitation, role.
 > **File:** `apps/api/src/modules/auth/auth.ts`, `packages/db/src/schema.ts`.
-> **Kerjakan:**
->
-> 1. `auth.ts`:
->    ```ts
->    import { admin, organization } from "better-auth/plugins";
->    // plugins: [admin({...}), organization({ allowUserToCreateOrganization: true })]
->    ```
-> 2. Tambah tabel `organization`, `member`, `invitation` ke `schema.ts` (ikuti bentuk tabel Better Auth yang ada; penamaan konsisten).
-> 3. `pnpm db:generate` → review → `pnpm db:deploy`.
->    **Cek:** `auth.$Infer` memunculkan tipe organization; migrasi apply.
->    **FR:** FR-AUTH-05.
+> **Kerjakan:** tambah plugin `organization()`; tabel `organization`/`member`/`invitation`; `db:generate`→review→deploy.
+> **Cek:** `auth.$Infer` memunculkan tipe org; migrasi apply. **FR:** FR-AUTH-05.
 
-## Fase 14 — Buat Org default saat sign-up
+## Fase 14 — Org default saat sign-up
 
-> **Hasil:** tiap user baru langsung punya 1 Org (`owner`).
-> **File:** `apps/api/src/modules/auth/auth.ts`.
-> **Kerjakan:** pakai `databaseHooks.user.create.after` (atau hook organization) → buat organization + member(owner) + baris `subscription(plan=free)`.
-> **Cek:** register user baru → ada baris `organization`, `member(owner)`, `subscription`.
-> **FR:** FR-AUTH-03, FR-BIL-01 (default free).
+> **File:** `auth.ts`. **Kerjakan:** hook after-create user → buat organization + member(owner) + `subscription(plan=free)`.
+> **Cek:** register → baris organization/member/subscription. **FR:** FR-AUTH-03, FR-BIL-01.
 
-## Fase 15 — Middleware: inject `organizationId`
+## Fase 15 — Middleware inject `organizationId`
 
-> **Hasil:** context request membawa Org aktif.
-> **File:** `apps/api/src/modules/auth/middleware.ts`.
-> **Kerjakan:** perluas `AuthVariables` → `organizationId: string | null`; di `createSessionMiddleware`, resolve Org aktif user (dari `member`) → `c.set("organizationId", ...)`. Tambah helper `requireOrg(c)`.
-> **Cek:** endpoint ter-proteksi bisa baca `c.get("organizationId")`.
-> **FR:** NFR-SEC-03.
+> **File:** `apps/api/src/modules/auth/middleware.ts`. **Kerjakan:** `AuthVariables.organizationId`; resolve org aktif; helper `requireOrg(c)`.
+> **Cek:** endpoint terproteksi baca `c.get("organizationId")`. **FR:** NFR-SEC-03.
 
 ## Fase 16 — UI undang anggota (opsional MVP)
 
-> **Hasil:** owner bisa undang member via email.
-> **File:** `apps/web/src/features/team/`, panggil endpoint organization Better Auth.
-> **Cek:** undangan terkirim & member join masuk Org.
-> **FR:** FR-AUTH-05.
+> **File:** `apps/web/src/features/team/`. **Kerjakan:** panggil endpoint organization Better Auth.
+> **Cek:** undangan terkirim. **FR:** FR-AUTH-05.
 
 ---
 
@@ -402,87 +148,30 @@ Format tiap fase:
 
 ## Fase 17 — Kontrak sites final
 
-> **File:** `packages/contracts/src/sites.ts`.
-> **Kerjakan:**
->
-> ```ts
-> export const createSiteSchema = z.object({
->   name: z.string().trim().min(1),
->   domain: z.string().trim().min(1),
-> });
-> export const updateSiteSchema = createSiteSchema.partial();
-> export const siteSchema = z.object({
->   id: z.string(),
->   name: z.string(),
->   domain: z.string(),
->   siteKey: z.string(),
->   pixelVerifiedAt: z.iso.datetime().nullable(),
->   createdAt: z.iso.datetime(),
-> });
-> ```
->
-> **Cek:** test parse.
+> **File:** `packages/contracts/src/sites.ts` (sudah di F11). **Cek:** test parse. **FR:** FR-SITE-01.
 
 ## Fase 18 — Service + Router Sites (CRUD, tenant-filtered)
 
-> **Hasil:** CRUD `/api/v1/sites`.
-> **File:** `apps/api/src/modules/sites/{services.ts,router.ts}`, wire di `app.ts`.
-> **Kerjakan:**
->
-> 1. `services.ts` (ikuti pola `users/services.ts`):
->    ```ts
->    export function createSitesService(
->      db: Pick<Database, "select" | "insert" | "update" | "delete">,
->    ) {
->      return { list, create, update, remove };
->      async function create(orgId: string, input: CreateSiteInput) {
->        const [row] = await db
->          .insert(site)
->          .values({ organizationId: orgId, ...input })
->          .returning();
->        return row;
->      }
->      async function list(orgId: string) {
->        return db
->          .select()
->          .from(site)
->          .where(eq(site.organizationId, orgId))
->          .orderBy(desc(site.createdAt));
->      }
->      // update/remove: filter eq(site.id,id) AND eq(site.organizationId,orgId)
->    }
->    ```
-> 2. `router.ts`: `createSitesRouter(service)` dengan `.get("/")`, `.post("/", zValidator("json", createSiteSchema))`, `.patch("/:id")`, `.delete("/:id")`; ambil `orgId = requireOrg(c)`.
-> 3. `app.ts`: `.use("/api/v1/sites", loadSession).route("/api/v1/sites", createSitesRouter(createSitesService(db)))`.
->    **Cek:** curl/RPC: user Org A tak bisa lihat Site Org B (dapat 403/kosong).
->    **FR:** FR-SITE-01/04.
+> **File:** `apps/api/src/modules/sites/{services.ts,router.ts}`, wire `app.ts`.
+> **Kerjakan:** CRUD `/api/v1/sites` per `organizationId`; `siteKey` auto; validasi `createSiteSchema`.
+> **Cek:** Org A tak lihat Site Org B. **FR:** FR-SITE-01/04.
 
 ## Fase 19 — Web: halaman Sites
 
-> **Hasil:** daftar + form buat/edit Site di dashboard.
-> **File:** `apps/web/src/features/sites/` (`services.ts`, `hooks/use-sites.ts`, `components/sites-page.tsx`), route `apps/web/src/routes/sites.tsx`.
-> **Kerjakan:** TanStack Query (`queryKey: ["sites"]`) + mutation via `apiClient["api/v1/sites"].$post`; komponen pakai `@repo/ui` + token style guide.
-> **Cek:** buat Site dari UI → muncul di daftar; dark/light ok.
-> **FR:** FR-SITE-01.
+> **File:** `apps/web/src/features/sites/`, route `routes/sites.tsx`.
+> **Kerjakan:** daftar + form (TanStack Query, `@repo/ui`, token style guide). **Cek:** buat Site dari UI. **FR:** FR-SITE-01.
 
 ## Fase 20 — Panel Install snippet + origin guard
 
-> **Hasil:** snippet pixel ditampilkan; endpoint widget cek Origin.
-> **File:** `apps/web/src/features/sites/components/install-panel.tsx`; `apps/api/src/modules/widget/` (helper `assertAllowedOrigin`).
-> **Kerjakan:**
->
-> 1. Tampilkan `<script src="{WIDGET_CDN_URL}/t.js" data-site="{siteKey}" async></script>` + tombol copy + instruksi GTM.
-> 2. `assertAllowedOrigin(c, site.domain)` membandingkan `Origin`/`Referer`; tolak bila beda.
->    **Cek:** request payload dari domain asing ditolak.
->    **FR:** FR-SITE-02/03/06, NFR-SEC-05.
+> **File:** `apps/web/src/features/sites/components/install-panel.tsx`; `apps/api/src/modules/widget/` (`assertAllowedOrigin`).
+> **Kerjakan:** snippet `<script src="{WIDGET_CDN_URL}/t.js" data-site>` + GTM; origin check domain.
+> **Cek:** domain asing ditolak. **FR:** FR-SITE-02/03/06, NFR-SEC-05.
 
 ## Fase 21 — Verifikasi pixel terpasang
 
-> **Hasil:** `pixelVerifiedAt` ter-set & status tampil.
-> **File:** `apps/api/src/modules/widget/services.ts`; `apps/web/src/features/sites/`.
-> **Kerjakan:** saat payload pertama terlayani utk Site dari domainnya & `pixelVerifiedAt` null → set `now()`. UI badge Verified + tombol "Cek ulang".
-> **Cek:** pasang snippet di halaman uji → status jadi Verified.
-> **FR:** FR-SITE-05.
+> **File:** `apps/api/src/modules/widget/services.ts`, web.
+> **Kerjakan:** set `pixelVerifiedAt` saat payload pertama; badge status + "Cek ulang".
+> **Cek:** pasang snippet → Verified. **FR:** FR-SITE-05.
 
 ---
 
@@ -490,444 +179,232 @@ Format tiap fase:
 
 ## Fase 22 — Scaffold `apps/widget` (Vite lib, no React)
 
-> **Hasil:** build pipeline `t.js`.
 > **File:** `apps/widget/{package.json,vite.config.ts,tsconfig.json,src/index.ts}`.
-> **Kerjakan:**
->
-> ```ts
-> // vite.config.ts
-> import { defineConfig } from "vite";
-> export default defineConfig({
->   build: {
->     lib: { entry: "src/index.ts", name: "Tacto", fileName: () => "t.js", formats: ["iife"] },
->     minify: "esbuild",
->     target: "es2018",
->   },
-> });
-> ```
->
-> `package.json` name `@repo/widget`, depend hanya `@repo/contracts`.
-> **Cek:** `pnpm --filter @repo/widget build` → `dist/t.js`.
-> **FR:** NFR-PERF-01.
+> **Kerjakan:** Vite `lib` IIFE → `t.js`; depend hanya `@repo/contracts`. **Cek:** build → `dist/t.js`. **FR:** NFR-PERF-01.
 
 ## Fase 23 — Loader: baca `data-site` + fetch payload (fail-safe)
 
-> **File:** `apps/widget/src/{index.ts,loader.ts}`.
-> **Kerjakan:**
->
-> ```ts
-> // loader.ts
-> export async function loadPayload(apiBase: string, siteKey: string, url: string) {
->   try {
->     const res = await fetch(
->       `${apiBase}/widget/v1/payload?site=${siteKey}&url=${encodeURIComponent(url)}`,
->       { credentials: "omit" },
->     );
->     if (!res.ok) return null;
->     return await res.json();
->   } catch {
->     return null;
->   } // fail-safe: jangan rusak situs host
-> }
-> ```
->
-> `index.ts`: ambil `document.currentScript?.getAttribute("data-site")`, panggil loader; semua dibungkus `try/catch`.
-> **Cek:** matikan API → situs host tetap normal, tanpa error ke console host.
-> **FR:** NFR-REL-02.
+> **File:** `apps/widget/src/{index.ts,loader.ts}`. **Kerjakan:** fetch `/widget/v1/payload` dibungkus try/catch.
+> **Cek:** API mati → situs host normal. **FR:** NFR-REL-02.
 
 ## Fase 24 — Shadow DOM host + CSS terisolasi
 
-> **File:** `apps/widget/src/shadow.ts`.
-> **Kerjakan:** buat `<div>` + `attachShadow({mode:"open"})`; inject `<style>` token (warna style guide, inline minified). Semua render di dalam shadow root.
-> **Cek:** style situs host tidak bocor ke widget & sebaliknya.
-> **FR:** SRS §3.4, NFR-A11Y-01.
+> **File:** `apps/widget/src/shadow.ts`. **Cek:** style tidak bocor. **FR:** SRS §3.4, NFR-A11Y-01.
 
-## Fase 25 — Render kartu notifikasi (signature component)
+## Fase 25 — Render kartu notifikasi
 
-> **File:** `apps/widget/src/render/notification.ts`.
-> **Kerjakan:** render kartu: ikon/foto, 1 fakta (`message`), `timeAgo`, baris "Verified by Tacto" bila `verified`. Markup & kelas meniru `.livecard` style guide.
-> **Cek:** payload dummy → kartu tampil sesuai `style.position`/`accent`.
-> **FR:** FR-NOT-01..05 (tampilan).
+> **File:** `apps/widget/src/render/notification.ts`. **Kerjakan:** kartu ikon/fakta/timeAgo + baris Verified; meniru `.livecard` style guide.
+> **Cek:** payload dummy → kartu sesuai posisi/accent. **FR:** FR-NOT-01..04.
 
 ## Fase 26 — Scheduler: delay/durasi/interval/loop/urutan/close
 
-> **File:** `apps/widget/src/scheduler.ts`.
-> **Kerjakan:** antrikan notifikasi; terapkan `timing`; loop setelah `settings.loopAfter`; urutan `random`/`manual`; tombol close → simpan `localStorage` jeda X hari. Hormati `prefers-reduced-motion`.
-> **Cek:** urutan & loop sesuai; close menyembunyikan sesuai durasi.
-> **FR:** FR-NED-09, FR-NGS-01/02/03.
+> **File:** `apps/widget/src/scheduler.ts`. **Kerjakan:** timing + loop + urutan + close (localStorage jeda X hari); hormati `prefers-reduced-motion`.
+> **Cek:** urutan/loop/close sesuai. **FR:** FR-NED-09, FR-NGS-01/02/03.
 
 ## Fase 27 — Beacon track + auto-capture form
 
-> **File:** `apps/widget/src/{track.ts,capture.ts}`.
-> **Kerjakan:**
->
-> ```ts
-> // track.ts
-> export function track(apiBase: string, body: unknown) {
->   try {
->     navigator.sendBeacon(`${apiBase}/widget/v1/track`, JSON.stringify(body));
->   } catch {}
-> }
-> ```
->
-> `capture.ts`: `document.addEventListener("submit", ...)` → sesuai URL match kirim ke `/widget/v1/capture`.
-> **Cek:** klik notifikasi → `click` terkirim; submit form host → capture terkirim.
-> **FR:** FR-ANL-01, FR-ING-01/10.
-
-## Fase 28 — Render Testimonial Board / embed
-
-> **File:** `apps/widget/src/render/testimonials.ts`.
-> **Kerjakan:** untuk elemen `[data-tacto-asset]`, fetch `/widget/v1/testimonials?site=&asset=` → render grid/carousel/badge di shadow DOM.
-> **Cek:** bundle total `t.js` tetap < 30 KB gzip (`gzip -c dist/t.js | wc -c`).
-> **FR:** FR-TAS-01/02, NFR-PERF-01.
+> **File:** `apps/widget/src/{track.ts,capture.ts}`. **Kerjakan:** `sendBeacon` view/click; listener submit → `/widget/v1/capture` (URL match).
+> **Cek:** klik→click; submit→capture. Bundle `t.js` < 30 KB gzip. **FR:** FR-ANL-01, FR-ING-01/05.
 
 ---
 
 # EPIK E — Mesin notifikasi
 
-## Fase 29 — Service + Router Notifications (CRUD)
+## Fase 28 — Service + Router Notifications (CRUD)
 
 > **File:** `apps/api/src/modules/notifications/{services.ts,router.ts}`, `app.ts`.
-> **Kerjakan:** CRUD `/api/v1/notifications` per `siteId`; body `message/style/display/dataSource/timing` divalidasi `notificationConfigSchema`; tenant guard (site milik org). Toggle `isActive` via `PATCH`.
-> **Cek:** buat notifikasi tersimpan; `isActive=false` tak ikut payload.
-> **FR:** FR-NED-11.
+> **Kerjakan:** CRUD `/api/v1/notifications` per `siteId`; body `notificationConfigSchema`; tenant guard; toggle `isActive`.
+> **Cek:** buat tersimpan; inactive tak ikut payload. **FR:** FR-NED-11.
 
-## Fase 30 — Endpoint payload publik + cache Redis
+## Fase 29 — Endpoint payload publik + cache Redis
 
 > **File:** `apps/api/src/modules/widget/{router.ts,services.ts}`.
-> **Kerjakan:** `GET /widget/v1/payload`: validasi origin → ambil notifikasi `isActive` cocok `url` → bentuk `widgetPayloadResponseSchema` → `ttl` + simpan cache Redis (key `payload:{siteKey}:{urlHash}`).
-> **Cek:** panggilan kedua dilayani dari cache; p95 < 150 ms lokal.
-> **FR:** NFR-PERF-02/03.
+> **Kerjakan:** pilih notifikasi aktif cocok `url` → `widgetPayloadResponseSchema` + `ttl` + cache Redis.
+> **Cek:** panggilan kedua dari cache; p95 < 150 ms. **FR:** NFR-PERF-02/03.
 
-## Fase 31 — Resolver template variabel + fallback (server)
+## Fase 30 — Resolver template variabel + fallback
 
-> **File:** `apps/api/src/modules/widget/template.ts`.
-> **Kerjakan:** fungsi `renderMessage(template, vars, fallbacks)` → ganti `{{first_name}}`,`{{city}}`,`{{product}}`,`{{time_ago}}`,`{{count}}`; trim + kapitalisasi; `time_ago > N hari → "recently"`. Hanya tampilkan nama depan + kota (GDPR).
-> **Cek:** unit test resolver (var kosong → fallback; >N hari → recently).
-> **FR:** FR-NED-01/02/04, NFR-PRIV-01.
+> **File:** `apps/api/src/modules/widget/template.ts`. **Kerjakan:** `renderMessage(template,vars,fallbacks)` + trim/kapitalisasi + time-ago>N→recently; nama depan + kota saja.
+> **Cek:** unit test. **FR:** FR-NED-01/02/04, NFR-PRIV-01.
 
-## Fase 32 — Tipe: Recent Sales
+## Fase 31 — Tipe: Recent Sales
 
-> **File:** `apps/api/src/modules/widget/sources/recent-sales.ts`.
-> **Kerjakan:** ambil `event` terbaru sesuai `dataSource.eventTypes` + filter → map ke `widgetNotification`.
-> **Cek:** event purchase baru → muncul sebagai sales pop.
-> **FR:** FR-NOT-01.
+> **File:** `.../widget/sources/recent-sales.ts`. **Kerjakan:** `event` terbaru sesuai dataSource → widgetNotification. **FR:** FR-NOT-01.
 
-## Fase 33 — Tipe: Review
+## Fase 32 — Tipe: Counter (worker)
 
-> **File:** `apps/api/src/modules/widget/sources/review.ts`.
-> **Kerjakan:** ambil `testimonial(status=approved, rating>=X)` → kartu review.
-> **Cek:** testimonial approved tampil sebagai notifikasi review.
-> **FR:** FR-NOT-04.
+> **File:** `apps/worker/src/processors/counter-recompute.ts` + Redis. **Kerjakan:** agregat event/periode → Redis `counter:{notificationId}`. **FR:** FR-NOT-02, FR-ANL-05.
 
-## Fase 34 — Tipe: Counter (worker)
+## Fase 33 — Tipe: Live Visitors (Redis)
 
-> **File:** `apps/worker/src/processors/counter-recompute.ts`, Redis cache.
-> **Kerjakan:** job hitung agregat event per periode → simpan Redis `counter:{notificationId}`; payload baca dari Redis.
-> **Cek:** counter naik saat event bertambah (via job terjadwal).
-> **FR:** FR-NOT-02, FR-ANL-05.
+> **File:** `.../widget/sources/live-visitors.ts`. **Kerjakan:** beacon view → `ZADD visitors:{siteId}`; window 5 menit. **Cek:** 2 tab → ≥2. **FR:** FR-NOT-03.
 
-## Fase 35 — Tipe: Live Visitors (Redis)
+## Fase 34 — Tipe: Custom/Informational
 
-> **File:** `apps/api/src/modules/widget/sources/live-visitors.ts`.
-> **Kerjakan:** beacon `view` → `ZADD visitors:{siteId} now member`; hitung window 5 menit (`ZREMRANGEBYSCORE` + `ZCARD`).
-> **Cek:** buka 2 tab → counter live ≥ 2.
-> **FR:** FR-NOT-03.
+> **File:** `.../widget/sources/custom.ts`. **Kerjakan:** teks/CTA statis. **Cek:** "garansi 30 hari" tampil. **FR:** FR-NOT-04.
 
-## Fase 36 — Tipe: Custom/Informational
-
-> **File:** `apps/api/src/modules/widget/sources/custom.ts`.
-> **Kerjakan:** teks/CTA statis dari `message` (tanpa data source).
-> **Cek:** notifikasi "garansi 30 hari" tampil.
-> **FR:** FR-NOT-05.
-
-## Fase 37 — Editor notifikasi (web, wizard)
+## Fase 35 — Editor notifikasi (web, wizard)
 
 > **File:** `apps/web/src/features/notifications/` (`components/editor/*`, `hooks/use-notifications.ts`).
-> **Kerjakan:** wizard panel **Type→Track→Display→Message→Style→Launch** (lihat FR-NED). Tiap panel menyetel bagian `notificationConfig`; simpan via RPC. Media fallback (image→icon→map→gravatar→flag).
-> **Cek:** semua panel tersimpan & valid (ditolak bila hex salah, dll).
-> **FR:** FR-NED-01..08.
+> **Kerjakan:** wizard **Type→Track→Display→Message→Style→Launch**; media fallback (image→icon→map→gravatar→flag).
+> **Cek:** panel tersimpan & tervalidasi. **FR:** FR-NED-01..08.
 
-## Fase 38 — Preview device real-time
+## Fase 36 — Preview device real-time
 
-> **File:** `apps/web/src/features/notifications/components/preview.tsx`.
-> **Kerjakan:** render preview kartu (komponen React semantiknya sama dgn widget) toggle desktop/mobile dari state editor.
-> **Cek:** ubah accent/posisi → preview langsung berubah.
-> **FR:** FR-NED-10.
+> **File:** `.../notifications/components/preview.tsx`. **Kerjakan:** preview desktop/mobile dari state editor. **FR:** FR-NED-10.
+
+## Fase 37 — Tipe: Review (Should → Fase 2)
+
+> **File:** `.../widget/sources/review.ts`. **Kerjakan:** sumber review dari **event review / integrasi import** (bukan testimonial engine). **FR:** FR-NOT-05 (S).
 
 ---
 
 # EPIK F — Ingestion event
 
-## Fase 39 — API key per site
+## Fase 38 — API key per site
 
-> **File:** `packages/db/src/schema.ts` (kolom/ tabel `site_api_key` atau field di `integration`), `apps/api/src/modules/ingest/auth.ts`.
-> **Kerjakan:** generate & verifikasi API key per site untuk endpoint ingest.
-> **Cek:** request tanpa key valid → 401.
-> **FR:** FR-ING-02 (dasar).
+> **File:** `schema.ts` (field/tabel key), `apps/api/src/modules/ingest/auth.ts`. **Cek:** tanpa key → 401. **FR:** FR-ING-02.
 
-## Fase 40 — Ingest manual + idempotency + anonimisasi
+## Fase 39 — Ingest manual + idempotency + anonimisasi
 
-> **File:** `apps/api/src/modules/ingest/{router.ts,services.ts}`, `packages/contracts/src/events.ts`.
-> **Kerjakan:** `POST /ingest/v1/event` → simpan `event`; tolak duplikat via `dedupeKey` (unique → tangkap error → 409); simpan hanya `displayName` (nama depan) + `city`.
-> **Cek:** kirim 2x dedupeKey sama → 1 tersimpan, 1 ditolak.
-> **FR:** FR-ING-02/08/09.
+> **File:** `apps/api/src/modules/ingest/{router.ts,services.ts}`, `contracts/events.ts`.
+> **Kerjakan:** `POST /ingest/v1/event` → `event`; dedupeKey unique → 409; simpan displayName(nama depan)+city.
+> **Cek:** 2× dedupe → 1 tersimpan. **FR:** FR-ING-02/06/07.
 
-## Fase 41 — Endpoint capture (auto form submit)
+## Fase 40 — Endpoint capture (auto form submit)
 
-> **File:** `apps/api/src/modules/widget/router.ts` (`/widget/v1/capture`).
-> **Kerjakan:** terima `captureEventSchema` → terapkan URL match All/Simple/Contains/Regex → `event(type=form_submit, source=pixel)`.
-> **Cek:** submit form host → event form_submit.
-> **FR:** FR-ING-01/10.
+> **File:** `apps/api/src/modules/widget/router.ts` (`/widget/v1/capture`). **Kerjakan:** URL match → `event(form_submit, pixel)`.
+> **Cek:** submit host → event. **FR:** FR-ING-01/05.
 
-## Fase 42 — Rate-limit ingest
+## Fase 41 — Rate-limit ingest
 
-> **File:** `apps/api/src/modules/ingest/rate-limit.ts` (Redis token bucket).
-> **Kerjakan:** batasi per siteKey/IP.
-> **Cek:** flood → 429.
-> **FR:** NFR-SEC-04, FR-VER-03 (anti-abuse).
+> **File:** `apps/api/src/modules/ingest/rate-limit.ts` (Redis). **Cek:** flood → 429. **FR:** NFR-SEC-04, FR-VER-03.
 
-## Fase 43 — Webhook masuk + verifikasi signature → enqueue
+## Fase 42 — Webhook + signature → enqueue
 
-> **File:** `apps/api/src/modules/ingest/webhook.ts`.
-> **Kerjakan:** `POST /ingest/v1/webhook/:provider` → verifikasi signature (secret integration) → `webhookQueue.add(...)`. Balas 202.
-> **Cek:** signature salah → 401; benar → job masuk queue.
-> **FR:** FR-ING-03/04.
+> **File:** `apps/api/src/modules/ingest/webhook.ts`. **Kerjakan:** verifikasi signature → `webhookQueue.add` → 202.
+> **Cek:** signature salah → 401. **FR:** FR-ING-03/04.
 
-## Fase 44 — Worker webhook → normalisasi → event
+## Fase 43 — Worker webhook → event
 
-> **File:** `apps/worker/src/processors/webhook.ts`.
-> **Kerjakan:** map payload provider → `event`; dari sumber tepercaya set `verified=true`.
-> **Cek:** job webhook → `event(verified=true)` → notifikasi.
-> **FR:** FR-ING-03, FR-VER-01.
+> **File:** `apps/worker/src/processors/webhook.ts`. **Kerjakan:** map payload → `event`; sumber tepercaya `verified=true`.
+> **Cek:** job → event → notifikasi. **FR:** FR-ING-03, FR-VER-01.
 
 ---
 
-# EPIK G — Mesin testimonial
+# EPIK G — Integrasi (framework)
 
-## Fase 45 — Kontrak forms + konfigurasi langkah
+## Fase 44 — Framework konektor generik
 
-> **File:** `packages/contracts/src/forms.ts`.
-> **Kerjakan:** `formPageConfigSchema` discriminated union per `kind` (rating skala, question teks/video, consent, about_you, about_company, welcome, thank_you); `testimonialFormSchema` (design, reward opsional).
-> **Cek:** test parse per kind.
-> **FR:** FR-TST-01/02/04/05/06/07.
+> **Hasil:** satu abstraksi konektor: `auth → poll/webhook → map ke Event`.
+> **File:** `apps/api/src/modules/integrations/{services.ts,router.ts}`, `packages/contracts/src/integrations.ts`.
+> **Kerjakan:** definisikan interface konektor (`id`, `verifySignature?`, `mapToEvent(raw)→IngestEvent`); registry provider; CRUD `integration` per org; webhook (F42) & manual (F39) memakai konektor sesuai `provider`. Webhook generik ("custom") sebagai konektor default.
+> **Cek:** integrasi "custom webhook" terdaftar → event masuk via konektornya. **FR:** FR-INT-01 (MVP).
 
-## Fase 46 — Service + Router Forms (CRUD + pages)
+## Fase 45 — Katalog integrasi (UI, Should)
 
-> **File:** `apps/api/src/modules/forms/{services.ts,router.ts}`, `app.ts`.
-> **Kerjakan:** CRUD `testimonial_form` + `form_page` (urut `order`) per site; slug unik.
-> **Cek:** buat form multi-langkah tersimpan berurut.
-> **FR:** FR-TST-01.
-
-## Fase 47 — Route form publik `GET /form/:slug`
-
-> **File:** `apps/api/src/modules/forms/public.ts` (atau route SPA publik).
-> **Kerjakan:** kembalikan konfig funnel publik (tanpa data sensitif).
-> **Cek:** buka `/form/:slug` → konfig langkah termuat.
-> **FR:** FR-TST-01.
-
-## Fase 48 — Web: form builder
-
-> **File:** `apps/web/src/features/forms/`.
-> **Kerjakan:** builder tambah/urut/hapus langkah; setel desain (warna/logo/branding).
-> **Cek:** urutan langkah tersimpan & tampil di form publik.
-> **FR:** FR-TST-04/08.
-
-## Fase 49 — Form publik (UI) multi-langkah
-
-> **File:** `apps/web/src/features/forms/public/*` + route publik.
-> **Kerjakan:** render langkah berurut: welcome → rating → question → consent → about you (+upload foto) → about company → thank-you (opsi share).
-> **Cek:** isi form ujung-ke-ujung di browser.
-> **FR:** FR-TST-02/05/06/07.
-
-## Fase 50 — Submit + sentiment routing + anti-XSS
-
-> **File:** `apps/api/src/modules/forms/submit.ts`.
-> **Kerjakan:** `POST /form/:slug/submit`: rating < ambang → `testimonial(isPrivateFeedback=true)` (tak publik); tinggi → lanjut consent → publik. Simpan `consentGiven`; sanitasi semua input. Upload foto via `@repo/storage` signed URL.
-> **Cek:** rating rendah tak pernah publik; XSS string tersanitasi.
-> **FR:** FR-TST-03, FR-TMG-02, NFR-SEC-06.
-
-## Fase 51 — Moderasi testimonial
-
-> **File:** `apps/api/src/modules/testimonials/{services.ts,router.ts}`, `apps/web/src/features/testimonials/`.
-> **Kerjakan:** list by status; approve/reject/hide; tag; tab feedback privat terpisah.
-> **Cek:** hanya `approved` tampil di aset; privat terisolasi.
-> **FR:** FR-TMG-01/02.
-
-## Fase 52 — Metrik form
-
-> **File:** `apps/api/src/modules/forms/metrics.ts`, UI.
-> **Kerjakan:** catat unique visit + submit; hitung response rate; tampilkan invites/visits/testimonials/rate.
-> **Cek:** metrik akurat untuk form uji.
-> **FR:** FR-TST-11.
+> **File:** `apps/web/src/features/integrations/`. **Kerjakan:** daftar provider, connect/disconnect, status.
+> **Cek:** connect custom webhook dari UI. **FR:** FR-INT-02/03/04 (Fase 2).
 
 ---
 
-# EPIK H — Studio (aset)
+# EPIK H — Analytics & Goals
 
-## Fase 53 — Kontrak + CRUD asset
+## Fase 46 — Tulis impression (hot-path Redis)
 
-> **File:** `packages/contracts/src/assets.ts`, `apps/api/src/modules/assets/`.
-> **Kerjakan:** CRUD `asset` per site; `publicSlug` unik untuk aset publik.
-> **Cek:** buat aset per kind.
-> **FR:** FR-TAS-*.
+> **File:** `apps/api/src/modules/widget/router.ts` (`/widget/v1/track`). **Kerjakan:** validasi `trackEventSchema` → buffer Redis.
+> **Cek:** track cepat; buffer bertambah. **FR:** FR-ANL-01.
 
-## Fase 54 — Endpoint data testimonials untuk aset
+## Fase 47 — Worker agregasi → Postgres (+ tabel `goal`)
 
-> **File:** `apps/api/src/modules/widget/router.ts` (`/widget/v1/testimonials`).
-> **Kerjakan:** kembalikan testimonial approved sesuai `asset.config`.
-> **Cek:** data benar untuk `asset=board`.
-> **FR:** FR-TAS-01/02.
+> **File:** `apps/worker/src/processors/analytics-aggregate.ts`; `schema.ts` (+`goal`, migrasi).
+> **Kerjakan:** flush buffer Redis → `impression` + rollup. Tambah tabel `goal` (dipakai penuh di Fase 2).
+> **Cek:** impression muncul di Postgres. **FR:** FR-ANL-05 (+ANL-03 dasar).
 
-## Fase 55 — Testimonial Board hosted page
+## Fase 48 — Endpoint ringkasan analytics
 
-> **File:** route publik `/board/:publicSlug` (SPA atau API).
-> **Kerjakan:** halaman publik render Testimonial Board.
-> **Cek:** URL publik menampilkan Testimonial Board.
-> **FR:** FR-TAS-01.
+> **File:** `apps/api/src/modules/analytics/{services.ts,router.ts}`. **Kerjakan:** `GET /api/v1/analytics?from&to` → impression/klik/CTR (tenant-filtered).
+> **Cek:** angka cocok. **FR:** FR-ANL-02.
 
-## Fase 56 — Widget embed (grid/carousel/badge)
+## Fase 49 — Dashboard analytics + Events Feed
 
-> **File:** `apps/widget/src/render/testimonials.ts` (perluas), UI generator embed.
-> **Kerjakan:** 3 layout dari `asset.config`.
-> **Cek:** embed tiap layout tampil.
-> **FR:** FR-TAS-02.
-
-## Fase 57 — Image kartu siap-posting
-
-> **File:** `apps/worker/src/processors/asset-image.ts` (render), `@repo/storage`.
-> **Kerjakan:** render kartu gambar testimonial (mis. satori/SVG→PNG) → simpan storage → URL unduh.
-> **Cek:** unduh kartu gambar valid.
-> **FR:** FR-TAS-03.
+> **File:** `apps/web/src/features/analytics/`. **Kerjakan:** stat tile (tabular) + grafik (skill `dataviz`) + Events Feed (log event masuk).
+> **Cek:** laporan 7 hari; dark/light. **FR:** FR-ANL-02, FR-ING-11.
 
 ---
 
-# EPIK I — Analytics
+# EPIK I — Billing freemium
 
-## Fase 58 — Tulis impression (hot-path Redis)
+## Fase 50 — Definisi plan & limit ✅ (kontrak di F11)
 
-> **File:** `apps/api/src/modules/widget/router.ts` (`/widget/v1/track`).
-> **Kerjakan:** validasi `trackEventSchema` → push ke buffer Redis (list/stream) alih-alih langsung Postgres.
-> **Cek:** track cepat; buffer bertambah.
-> **FR:** FR-ANL-01.
+> **File:** `packages/contracts/src/billing.ts`. **Kerjakan:** map plan → `{trafficQuota,maxSites,removeBadge,notificationTypes}` + helper. **FR:** FR-BIL-01.
 
-## Fase 59 — Worker agregasi → Postgres
+## Fase 51 — Penegakan batas (middleware)
 
-> **File:** `apps/worker/src/processors/analytics-aggregate.ts`.
-> **Kerjakan:** flush buffer Redis → insert `impression` + rollup (per notif/site/periode).
-> **Cek:** data impression muncul di Postgres setelah job.
-> **FR:** FR-ANL-05.
+> **File:** `apps/api/src/modules/billing/guard.ts`. **Kerjakan:** cek `maxSites` saat buat Site; visitor bulan (Redis) vs `trafficQuota` → batasi payload + ajakan upgrade.
+> **Cek:** Free Site ke-2 ditolak. **FR:** FR-BIL-03.
 
-## Fase 60 — Endpoint ringkasan analytics
+## Fase 52 — Badge "Powered by Tacto"
 
-> **File:** `apps/api/src/modules/analytics/{services.ts,router.ts}`.
-> **Kerjakan:** `GET /api/v1/analytics?from&to` → impression, klik, CTR per periode (tenant-filtered).
-> **Cek:** angka cocok dengan data.
-> **FR:** FR-ANL-02.
+> **File:** payload (`showBadge`) + `apps/widget/src/render/badge.ts`. **Kerjakan:** `showBadge = plan==="free"`.
+> **Cek:** Free tampil badge. **FR:** FR-BIL-04.
 
-## Fase 61 — Dashboard analytics + Events Feed
+## Fase 53 — Halaman billing (status plan)
 
-> **File:** `apps/web/src/features/analytics/`.
-> **Kerjakan:** stat tile (tabular figures) + grafik (pakai skill `dataviz`) + Events Feed (log event).
-> **Cek:** laporan 7 hari tampil; dark/light ok.
-> **FR:** FR-ANL-02/06.
+> **File:** `apps/web/src/features/billing/`. **Kerjakan:** plan, kuota terpakai, batas; CTA upgrade (Stripe di Fase 2).
+> **Cek:** status akurat. **FR:** FR-BIL-01/03.
 
 ---
 
-# EPIK J — Billing freemium
+# EPIK J — Onboarding & Acceptance MVP
 
-## Fase 62 — Definisi plan & limit (konstanta + kontrak)
+## Fase 54 — Onboarding checklist
 
-> **File:** `packages/contracts/src/billing.ts`.
-> **Kerjakan:** map plan → `{ trafficQuota, maxSites, removeBadge, notificationTypes }` (Free/Starter/Growth/Agency, lihat PRD §7.2).
-> **Cek:** test map lengkap 4 plan.
-> **FR:** FR-BIL-01.
+> **File:** `apps/web/src/features/onboarding/`. **Kerjakan:** buat Site → pasang pixel → verifikasi → notifikasi pertama (state dari data nyata).
+> **Cek:** user baru dibimbing. **FR:** PRD §3.2/§3.3.
 
-## Fase 63 — Penegakan batas (middleware)
+## Fase 55 — Verified label + anti-abuse
 
-> **File:** `apps/api/src/modules/billing/guard.ts`.
-> **Kerjakan:** cek `maxSites` saat buat Site; hitung visitor bulan (Redis) vs `trafficQuota` → batasi payload bila lewat (pesan + ajakan upgrade).
-> **Cek:** Free buat Site ke-2 ditolak; kuota lewat → dibatasi.
-> **FR:** FR-BIL-03.
+> **File:** widget badge verified + rate-limit (F41). **Kerjakan:** hanya event terverifikasi ber-✓.
+> **Cek:** event non-verified tak ber-✓. **FR:** FR-VER-03.
 
-## Fase 64 — Badge "Powered by Tacto"
+## Fase 56 — E2E test alur MVP
 
-> **File:** payload (`showBadge`) + `apps/widget/src/render/badge.ts`.
-> **Kerjakan:** `showBadge = plan === "free"`; widget render badge.
-> **Cek:** Free tampil badge; berbayar tidak.
-> **FR:** FR-BIL-04.
+> **File:** `apps/web/e2e/*` / skrip integrasi. **Kerjakan:** sign-up → Site → snippet → verifikasi → 4 tipe notifikasi tampil hanya di domain terdaftar & sesuai URL → capture + webhook → loop/order/close → analytics → batas Free + badge.
+> **Cek:** skenario hijau. **FR:** SRS §9.
 
-## Fase 65 — Halaman billing (status plan)
+## Fase 57 — Verifikasi deployment
 
-> **File:** `apps/web/src/features/billing/`.
-> **Kerjakan:** tampilkan plan, kuota terpakai, batas; CTA upgrade (Stripe menyusul F72).
-> **Cek:** status akurat.
-> **FR:** FR-BIL-01/03.
+> **File:** `docker-compose.yaml`, `Dockerfile`. **Kerjakan:** `docker compose up` (postgres/redis/api/worker/proxy); proxy serve `t.js` + SPA; migrasi saat start api.
+> **Cek:** 9 kriteria MVP SRS §9 terpenuhi. **FR:** SRS §8/§9.
+
+**→ Exit MVP: bisa dipasang & dijual (PRD §10).**
 
 ---
 
-# EPIK K — Onboarding & Acceptance MVP
+# EPIK K+ — Fase 2–4 (ringkas, code-level per task)
 
-## Fase 66 — Onboarding checklist
+### Fase 2 — transaksi nyata & konversi
 
-> **File:** `apps/web/src/features/onboarding/`.
-> **Kerjakan:** langkah: buat Site → pasang pixel → verifikasi → notifikasi pertama → (opsi) form. State dari data nyata (site, pixelVerifiedAt, count notifikasi).
-> **Cek:** user baru dibimbing hingga notifikasi pertama.
-> **FR:** PRD §3.2/§3.3.
-
-## Fase 67 — Verified label + anti-abuse
-
-> **File:** widget badge verified + ingest rate-limit (F42).
-> **Kerjakan:** hanya event terverifikasi menampilkan ✓.
-> **Cek:** event manual non-verified tak ber-✓.
-> **FR:** FR-VER-03 (dasar VER-01/02).
-
-## Fase 68 — E2E test alur MVP
-
-> **File:** `apps/web/e2e/*` atau skrip integrasi.
-> **Kerjakan:** skenario sign-up → Site → snippet → verifikasi → notifikasi (4 tipe) tampil hanya di domain terdaftar → capture + webhook → form funnel + routing + consent + moderasi → Board/widget/image → analytics → batas Free + badge.
-> **Cek:** skenario hijau.
-> **FR:** SRS §9.
-
-## Fase 69 — Verifikasi deployment
-
-> **File:** `docker-compose.yaml`, `Dockerfile`.
-> **Kerjakan:** `docker compose up` menyalakan postgres/redis/api/worker/proxy; proxy serve `t.js` + SPA; migrasi jalan saat start api.
-> **Cek:** 10 kriteria MVP SRS §9 terpenuhi end-to-end di satu box.
-> **FR:** SRS §8/§9.
-
-**→ Exit MVP: siap dijual ke pelanggan pertama (PRD §10).**
-
----
-
-# EPIK L+ — Fase 2–4 (ringkas, code-level per task)
-
-> Tiap item di bawah dipecah lebih detail (pola fase di atas) saat epiknya mulai digarap.
-
-### Fase 2 — integrasi & konversi
-
-- **F70** OAuth Google + reset password (`auth.ts` provider, web). — FR-AUTH-04/06
-- **F71** Stripe checkout + webhook status langganan (`modules/billing`, worker). — FR-BIL-02/05
-- **F72** Konektor Stripe/Shopify/WooCommerce (purchase→`event verified`). — FR-ING-06, FR-VER-01/02
-- **F73** Zapier/Make (endpoint + dokumentasi key). — FR-ING-05
-- **F74** Import review Google/Facebook (worker). — FR-ING-07, FR-TST-10
-- **F75** A/B testing varian + Goals + dampak. — FR-ANL-03/04
-- **F76** Reward/insentif (global/spin-wheel) di thank-you. — FR-TST-09
-- **F77** Automasi auto-minta testimonial (trigger event → email). — FR-AUT-01/02
-- **F78** Rich Snippet SEO + Custom CSS/JS + passthrough GA/GTM/Mixpanel/FB. — FR-TAS-06, FR-NGS-04/06
+- **F58** OAuth Google + reset password. — FR-AUTH-04/06
+- **F59** Stripe checkout + webhook status langganan. — FR-BIL-02/05
+- **F60** Konektor Stripe/Shopify/WooCommerce (purchase→`event verified`) via framework F44. — FR-ING-09, FR-VER-01/02
+- **F61** Zapier/Make (endpoint + key). — FR-ING-08, FR-INT-04
+- **F62** Import review Google/Facebook → review notifications. — FR-ING-10, FR-NOT-05
+- **F63** Goals penuh + A/B testing varian. — FR-ANL-03/04
+- **F64** Katalog integrasi UI lengkap + data filtering. — FR-INT-02/03
+- **F65** Verified label lengkap + Custom CSS/JS + passthrough GA/GTM/Mixpanel/FB. — FR-VER-01/02, FR-NGS-04/06
 
 ### Fase 3 — suite lengkap
 
-- **F79** Tipe: Combo, Social Counter, YouTube, Low stock, Countdown. — FR-NOT-06/07
-- **F80** Aset: Video embed, Case study. — FR-TAS-04/05
-- **F81** Conversion widgets (popup, spin-to-win, bar, countdown).
-- **F82** Privacy lanjut: profanity filter, block IP, country display, cegah duplikat; terjemahan template. — FR-NGS-07, FR-NED-12
-- **F83** Katalog integrasi diperluas (Make/Pabbly/CRM/course).
+- **F66** Tipe: Combo, Social Counter, YouTube, Low stock, Countdown. — FR-NOT-06/07
+- **F67** Privacy lanjut: profanity filter, block IP, country display, cegah duplikat; terjemahan template. — FR-NGS-07, FR-NED-12
+- **F68** Katalog integrasi diperluas (BigCommerce/Wix/HubSpot/Typeform/Kajabi).
 
-### Fase 4 — ekspansi & AI
+### Fase 4 — ekspansi
 
-- **F84** "Use with AI" (draf pesan/ringkas review/saran copy).
-- **F85** Katalog integrasi luas + optimisasi performa/biaya + penyempurnaan onboarding berbasis data.
+- **F69** Conversion widgets (popup, spin-to-win, bar) — arah "Boost".
+- **F70** Optimisasi performa/biaya + penyempurnaan onboarding berbasis data aktivasi.
 
 ---
 
