@@ -20,10 +20,20 @@ import {
 import { toast } from "@repo/ui/components/sonner";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
-import { LayoutDashboardIcon, LogOutIcon, MonitorIcon, UserRoundIcon } from "lucide-react";
+import {
+  BarChart3Icon,
+  BellIcon,
+  CreditCardIcon,
+  Globe2Icon,
+  LayoutDashboardIcon,
+  LogOutIcon,
+  PlugIcon,
+  UserRoundIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { meQueryOptions, useLogoutMutation } from "../auth/hooks/use-auth";
 import { ThemeSelector } from "@repo/ui/components/theme-selector";
+import { TactoLogo } from "./tacto-logo";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -44,8 +54,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const navItems = [
-    { icon: LayoutDashboardIcon, label: "Dashboard", to: "/" },
-    { icon: UserRoundIcon, label: "Edit profile", to: "/profile" },
+    { icon: LayoutDashboardIcon, label: "Overview", to: "/" },
+    { icon: Globe2Icon, label: "Sites", to: "/sites" },
+    { icon: BellIcon, label: "Notifications", to: "/notifications" },
+    { icon: PlugIcon, label: "Integrations", to: "/integrations" },
+    { icon: BarChart3Icon, label: "Analytics", to: "/analytics" },
+    { icon: CreditCardIcon, label: "Billing", to: "/billing" },
+    { icon: UserRoundIcon, label: "Profile", to: "/profile" },
   ] as const;
 
   return (
@@ -54,13 +69,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton size="lg" asChild tooltip="Platform">
+              <SidebarMenuButton size="lg" asChild tooltip="Tacto">
                 <Link to="/">
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
-                    <MonitorIcon className="size-4" />
-                  </span>
-                  <span className="font-semibold group-data-[collapsible=icon]:hidden">
-                    Platform
+                  <TactoLogo className="size-8 shrink-0 rounded-md" />
+                  <span className="text-base font-extrabold tracking-tight group-data-[collapsible=icon]:hidden">
+                    Tacto
                   </span>
                 </Link>
               </SidebarMenuButton>
@@ -133,7 +146,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
           <div className="flex items-center gap-2">
             <SidebarTrigger />
-            <span className="text-sm font-medium text-muted-foreground">Platform</span>
+            <span className="text-sm font-medium text-muted-foreground">Tacto</span>
           </div>
           <ThemeSelector />
         </header>

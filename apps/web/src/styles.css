@@ -1,3 +1,46 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+
+/*
+ * Tacto brand theme. Loaded after @repo/ui/styles.css (see main.tsx), so these
+ * :root / .dark overrides win. Palette from docs/development/style-guide.md:
+ * Blue #3B82F6 (brand/primary), Cyan #22D3EE (single accent), Plus Jakarta Sans.
+ */
+
+:root {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+
+  --primary: oklch(0.62 0.19 260); /* #3B82F6 */
+  --primary-foreground: oklch(0.985 0 0);
+  --ring: oklch(0.62 0.19 260 / 0.45);
+  --sidebar-primary: oklch(0.62 0.19 260);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-ring: oklch(0.62 0.19 260 / 0.45);
+
+  --chart-1: oklch(0.62 0.19 260); /* blue */
+  --chart-2: oklch(0.79 0.135 207); /* cyan #22D3EE */
+  --chart-3: oklch(0.62 0.2 300); /* violet */
+  --chart-4: oklch(0.72 0.17 70); /* amber */
+  --chart-5: oklch(0.65 0.18 150); /* green */
+}
+
+.dark {
+  --primary: oklch(0.65 0.18 260);
+  --primary-foreground: oklch(0.985 0 0);
+  --ring: oklch(0.72 0.17 262 / 0.5);
+  --sidebar-primary: oklch(0.65 0.18 260);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-ring: oklch(0.72 0.17 262 / 0.5);
+
+  --chart-1: oklch(0.65 0.18 260);
+  --chart-2: oklch(0.79 0.135 207);
+}
+
+body {
+  font-family: var(--font-sans);
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+}
+
 #root {
   min-height: 100vh;
 }
