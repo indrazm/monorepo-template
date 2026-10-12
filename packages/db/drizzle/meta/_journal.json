@@ -15,6 +15,13 @@
       "when": 1791794784992,
       "tag": "0001_bored_white_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791796053185,
+      "tag": "0002_strange_supreme_intelligence",
+      "breakpoints": true
     }
   ]
 }

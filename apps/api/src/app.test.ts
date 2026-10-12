@@ -296,6 +296,7 @@ describe("api app", () => {
 function createAuthSession(role: string) {
   return {
     session: {
+      activeOrganizationId: "org-auth-user-id",
       createdAt: baseDate,
       expiresAt: baseDate,
       id: "session-id",

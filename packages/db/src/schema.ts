@@ -46,6 +46,7 @@ export const session = pgTable(
     userAgent: text("userAgent"),
     userId: text("userId").notNull(),
     impersonatedBy: text("impersonatedBy"),
+    activeOrganizationId: text("activeOrganizationId"),
   },
   (table) => [
     uniqueIndex("Session_token_key").on(table.token),
@@ -97,6 +98,76 @@ export const verification = pgTable("Verification", {
   createdAt: timestamp("createdAt", { precision: 3 }).defaultNow(),
   updatedAt: timestamp("updatedAt", { precision: 3 }).$onUpdate(() => new Date()),
 });
+
+// ---------------------------------------------------------------------------
+// Better Auth organization plugin (tenancy). Column names match the plugin's
+// field names; the plugin resolves each model by the export key below.
+// ---------------------------------------------------------------------------
+export const organization = pgTable("Organization", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  logo: text("logo"),
+  metadata: text("metadata"),
+  createdAt: timestamp("createdAt", { precision: 3 }).defaultNow().notNull(),
+});
+
+export const member = pgTable(
+  "Member",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    userId: text("userId").notNull(),
+    role: text("role").notNull().default("member"),
+    createdAt: timestamp("createdAt", { precision: 3 }).defaultNow().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "Member_organizationId_fkey",
+      columns: [table.organizationId],
+      foreignColumns: [organization.id],
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
+    foreignKey({
+      name: "Member_userId_fkey",
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
+  ],
+);
+
+export const invitation = pgTable(
+  "Invitation",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    email: text("email").notNull(),
+    role: text("role"),
+    status: text("status").notNull().default("pending"),
+    expiresAt: timestamp("expiresAt", { precision: 3 }).notNull(),
+    inviterId: text("inviterId").notNull(),
+    createdAt: timestamp("createdAt", { precision: 3 }).defaultNow().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "Invitation_organizationId_fkey",
+      columns: [table.organizationId],
+      foreignColumns: [organization.id],
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
+    foreignKey({
+      name: "Invitation_inviterId_fkey",
+      columns: [table.inviterId],
+      foreignColumns: [user.id],
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // Tacto domain

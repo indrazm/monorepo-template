@@ -22,7 +22,7 @@ export function createApp({
   db: Pick<Database, "select" | "update">;
   config: Pick<ReturnType<typeof createApiConfig>, "clientOrigins">;
 }) {
-  const loadSession = createSessionMiddleware(auth);
+  const loadSession = createSessionMiddleware(auth, db);
   return new Hono<{ Variables: AuthVariables }>()
     .use(
       "*",
