@@ -361,7 +361,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 # EPIK J — Onboarding & Acceptance MVP
 
-## Fase 54 — Onboarding checklist
+## Fase 54 — Onboarding checklist ✅
 
 > **File:** `apps/web/src/features/onboarding/`. **Kerjakan:** buat Site → pasang pixel → verifikasi → notifikasi pertama (state dari data nyata).
 > **Cek:** user baru dibimbing. **FR:** PRD §3.2/§3.3.
