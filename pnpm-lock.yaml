@@ -184,6 +184,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@repo/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@repo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

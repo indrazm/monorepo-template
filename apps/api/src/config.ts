@@ -22,6 +22,7 @@ export const apiEnvSchema = z
     BETTER_AUTH_URL: z.url({ protocol: /^https?$/ }).default("http://localhost:8000"),
     CLIENT_ORIGINS: originsSchema.default(["http://localhost:3000"]),
     DATABASE_URL: databaseUrlSchema,
+    REDIS_URL: z.url({ protocol: /^rediss?$/ }).default("redis://localhost:16379"),
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== "production") return;
@@ -49,6 +50,7 @@ export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
     port: env.API_PORT,
     clientOrigins: env.CLIENT_ORIGINS,
     databaseUrl: env.DATABASE_URL,
+    redisUrl: env.REDIS_URL,
     auth: {
       secret: env.BETTER_AUTH_SECRET,
       trustedOrigins: env.CLIENT_ORIGINS,
