@@ -7,6 +7,9 @@ export const apiErrorSchema = z.object({
     "invalid_cursor",
     "validation_error",
     "user_not_found",
+    "site_not_found",
+    "notification_not_found",
+    "conflict",
   ]),
 });
 export type ApiErrorCode = z.output<typeof apiErrorSchema>["error"];

@@ -10,6 +10,8 @@ import {
 } from "./modules/auth/middleware";
 import { createProfileRouter } from "./modules/profile/router";
 import { createProfileService } from "./modules/profile/services";
+import { createSitesRouter } from "./modules/sites/router";
+import { createSitesService } from "./modules/sites/services";
 import { createUsersRouter } from "./modules/users/router";
 import { createUsersService } from "./modules/users/services";
 
@@ -19,7 +21,7 @@ export function createApp({
   config,
 }: {
   auth: AuthProvider;
-  db: Pick<Database, "select" | "update">;
+  db: Database;
   config: Pick<ReturnType<typeof createApiConfig>, "clientOrigins">;
 }) {
   const loadSession = createSessionMiddleware(auth, db);
@@ -38,6 +40,8 @@ export function createApp({
     .use("/session", loadSession)
     .use("/profile", loadSession)
     .use("/users", loadSession)
+    .use("/api/v1/sites", loadSession)
+    .use("/api/v1/sites/*", loadSession)
     .get("/session", (c) => {
       const user = c.get("user");
       const session = c.get("session");
@@ -45,6 +49,7 @@ export function createApp({
       return c.json({ session, user }, 200);
     })
     .route("/profile", createProfileRouter(createProfileService(db)))
-    .route("/users", createUsersRouter(createUsersService(db)));
+    .route("/users", createUsersRouter(createUsersService(db)))
+    .route("/api/v1/sites", createSitesRouter(createSitesService(db)));
 }
 export type AppType = ReturnType<typeof createApp>;
