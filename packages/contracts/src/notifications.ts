@@ -80,6 +80,10 @@ export const createNotificationSchema = z.object({
 });
 export const updateNotificationSchema = createNotificationSchema.partial().omit({ siteId: true });
 
+export const listNotificationsQuerySchema = z.object({
+  siteId: z.string().trim().min(1),
+});
+
 export const notificationSchema = z.object({
   id: z.string(),
   siteId: z.string(),

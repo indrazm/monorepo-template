@@ -44,8 +44,11 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 ### Status progres
 
-- ✅ **F1** rebrand repo · ✅ **F2–F3** env & config · ✅ **F4–F8** skema domain + migrasi (migrasi _applied_ menunggu Postgres hidup).
-- 🔜 **F9–F12** kontrak Zod + queue registry (sedang dikerjakan).
+- ✅ **EPIK A — Fondasi (F1–F12)** selesai: rebrand, env/config, skema domain + migrasi, kontrak Zod, queue registry + worker.
+- ✅ **EPIK B (F13–F15)** selesai: organization plugin, Org default saat sign-up, middleware `organizationId`. 🔜 **F16** (UI undang anggota) belum.
+- ✅ **EPIK C (F17–F19)** selesai: kontrak sites, CRUD Sites API (tenant-filtered, uji isolasi pglite), halaman Sites + shell/tema Tacto + nav semua menu.
+- ✅ **F28** (Notifications CRUD API) selesai. 🔜 **F20–F27, F29+** berikutnya.
+- Catatan: `db:deploy` ke Postgres nyata menunggu Docker hidup; migrasi sudah ter-generate & diuji lewat pglite di test.
 - Prasyarat (di luar penomoran): perbaikan tooling lintas-OS + `.gitattributes` (commit `chore`), dokumen dev (commit `docs`).
 
 ---
@@ -86,7 +89,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 > **File:** `packages/db/drizzle/0001_*.sql`. **Kerjakan:** `db:generate` → review (additive, no drop) → `db:deploy` saat Postgres hidup. **Cek:** `db:studio` menampilkan tabel.
 
-## Fase 9 — Kontrak notifikasi
+## Fase 9 — Kontrak notifikasi ✅
 
 > **Hasil:** sumber kebenaran message/style/display/dataSource/timing + create/update/response.
 > **File:** `packages/contracts/src/notifications.ts` (+ `notifications.test.ts`).
@@ -94,19 +97,19 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 > **Cek:** `pnpm --filter @repo/contracts test`.
 > **FR:** FR-NED-01..09.
 
-## Fase 10 — Kontrak payload widget
+## Fase 10 — Kontrak payload widget ✅
 
 > **File:** `packages/contracts/src/widget.ts`.
 > **Kerjakan:** `widgetPayloadResponseSchema` (notifications + settings{loopAfter,order,showClose,closeForDays,showBadge,requireConsent} + ttl), `widgetPayloadQuerySchema`, `trackEventSchema`, `captureEventSchema`.
 > **Cek:** typecheck. **FR:** SRS §6.4.
 
-## Fase 11 — Kontrak sites, events, billing
+## Fase 11 — Kontrak sites, events, billing ✅
 
 > **File:** `packages/contracts/src/{sites,events,billing}.ts`.
 > **Kerjakan:** sites (create/update/site + domainSetting{loop,privacy,customCss}); events (ingest + feed); billing (plan limits map + `planAllowsNotificationType`).
 > **Cek:** typecheck + `pnpm check:boundaries`. **FR:** FR-SITE, FR-ING, FR-BIL-01.
 
-## Fase 12 — Queue registry + processor skeleton
+## Fase 12 — Queue registry + processor skeleton ✅
 
 > **File:** `packages/contracts/src/jobs.ts`, `packages/queue/src/index.ts`, `apps/worker/src/worker.ts`, `apps/worker/src/processors/{webhook,analytics-aggregate,counter-recompute}.ts`.
 > **Kerjakan:**
@@ -121,18 +124,18 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 # EPIK B — Auth & Org multi-tenant
 
-## Fase 13 — Aktifkan organization plugin
+## Fase 13 — Aktifkan organization plugin ✅
 
 > **File:** `apps/api/src/modules/auth/auth.ts`, `packages/db/src/schema.ts`.
 > **Kerjakan:** tambah plugin `organization()`; tabel `organization`/`member`/`invitation`; `db:generate`→review→deploy.
 > **Cek:** `auth.$Infer` memunculkan tipe org; migrasi apply. **FR:** FR-AUTH-05.
 
-## Fase 14 — Org default saat sign-up
+## Fase 14 — Org default saat sign-up ✅
 
 > **File:** `auth.ts`. **Kerjakan:** hook after-create user → buat organization + member(owner) + `subscription(plan=free)`.
 > **Cek:** register → baris organization/member/subscription. **FR:** FR-AUTH-03, FR-BIL-01.
 
-## Fase 15 — Middleware inject `organizationId`
+## Fase 15 — Middleware inject `organizationId` ✅
 
 > **File:** `apps/api/src/modules/auth/middleware.ts`. **Kerjakan:** `AuthVariables.organizationId`; resolve org aktif; helper `requireOrg(c)`.
 > **Cek:** endpoint terproteksi baca `c.get("organizationId")`. **FR:** NFR-SEC-03.
@@ -146,17 +149,17 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 # EPIK C — Site & Pixel
 
-## Fase 17 — Kontrak sites final
+## Fase 17 — Kontrak sites final ✅
 
 > **File:** `packages/contracts/src/sites.ts` (sudah di F11). **Cek:** test parse. **FR:** FR-SITE-01.
 
-## Fase 18 — Service + Router Sites (CRUD, tenant-filtered)
+## Fase 18 — Service + Router Sites (CRUD, tenant-filtered) ✅
 
 > **File:** `apps/api/src/modules/sites/{services.ts,router.ts}`, wire `app.ts`.
 > **Kerjakan:** CRUD `/api/v1/sites` per `organizationId`; `siteKey` auto; validasi `createSiteSchema`.
 > **Cek:** Org A tak lihat Site Org B. **FR:** FR-SITE-01/04.
 
-## Fase 19 — Web: halaman Sites
+## Fase 19 — Web: halaman Sites ✅
 
 > **File:** `apps/web/src/features/sites/`, route `routes/sites.tsx`.
 > **Kerjakan:** daftar + form (TanStack Query, `@repo/ui`, token style guide). **Cek:** buat Site dari UI. **FR:** FR-SITE-01.
@@ -210,7 +213,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 # EPIK E — Mesin notifikasi
 
-## Fase 28 — Service + Router Notifications (CRUD)
+## Fase 28 — Service + Router Notifications (CRUD) ✅
 
 > **File:** `apps/api/src/modules/notifications/{services.ts,router.ts}`, `app.ts`.
 > **Kerjakan:** CRUD `/api/v1/notifications` per `siteId`; body `notificationConfigSchema`; tenant guard; toggle `isActive`.

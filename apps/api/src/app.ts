@@ -8,6 +8,8 @@ import {
   type AuthProvider,
   createSessionMiddleware,
 } from "./modules/auth/middleware";
+import { createNotificationsRouter } from "./modules/notifications/router";
+import { createNotificationsService } from "./modules/notifications/services";
 import { createProfileRouter } from "./modules/profile/router";
 import { createProfileService } from "./modules/profile/services";
 import { createSitesRouter } from "./modules/sites/router";
@@ -42,6 +44,8 @@ export function createApp({
     .use("/users", loadSession)
     .use("/api/v1/sites", loadSession)
     .use("/api/v1/sites/*", loadSession)
+    .use("/api/v1/notifications", loadSession)
+    .use("/api/v1/notifications/*", loadSession)
     .get("/session", (c) => {
       const user = c.get("user");
       const session = c.get("session");
@@ -50,6 +54,7 @@ export function createApp({
     })
     .route("/profile", createProfileRouter(createProfileService(db)))
     .route("/users", createUsersRouter(createUsersService(db)))
-    .route("/api/v1/sites", createSitesRouter(createSitesService(db)));
+    .route("/api/v1/sites", createSitesRouter(createSitesService(db)))
+    .route("/api/v1/notifications", createNotificationsRouter(createNotificationsService(db)));
 }
 export type AppType = ReturnType<typeof createApp>;
