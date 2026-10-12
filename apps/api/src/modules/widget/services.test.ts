@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { NotificationConfig } from "@repo/contracts/notifications";
-import { event, site } from "@repo/db/schema";
+import { event, impression, site } from "@repo/db/schema";
 import * as schema from "@repo/db/schema";
 import { createNotificationsService } from "../notifications/services";
 import { createSitesService } from "../sites/services";
@@ -132,5 +132,25 @@ describe("widget payload service", () => {
 
     expect(onHome.kind === "ok" && onHome.payload.notifications).toHaveLength(0);
     expect(onPricing.kind === "ok" && onPricing.payload.notifications).toHaveLength(1);
+  });
+
+  it("records impressions and captures form submissions (first name + city only)", async () => {
+    const created = await seedSite();
+
+    await widget.recordImpression({ site: created.siteKey, refId: "n1", kind: "view" });
+    await widget.recordImpression({ site: created.siteKey, refId: "n1", kind: "click" });
+    const impressions = await db.select().from(impression).where(eq(impression.siteId, created.id));
+    expect(impressions.map((i) => i.kind).sort()).toEqual(["click", "view"]);
+
+    await widget.capture({
+      site: created.siteKey,
+      url: "/signup",
+      fields: { name: "Jane Doe", city: "Berlin", email: "jane@example.com" },
+    });
+    const [captured] = await db.select().from(event).where(eq(event.siteId, created.id));
+    expect(captured?.type).toBe("form_submit");
+    expect(captured?.source).toBe("pixel");
+    expect(captured?.displayName).toBe("Jane"); // first name only
+    expect(captured?.city).toBe("Berlin");
   });
 });

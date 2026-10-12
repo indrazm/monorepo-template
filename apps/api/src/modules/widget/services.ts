@@ -1,6 +1,14 @@
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "@repo/db";
-import { domainSetting, event, notification, site, subscription } from "@repo/db/schema";
+import {
+  domainSetting,
+  event,
+  impression,
+  notification,
+  site,
+  subscription,
+} from "@repo/db/schema";
+import type { CaptureEventInput, TrackEventInput } from "@repo/contracts/widget";
 import { planLimits, type Plan } from "@repo/contracts/billing";
 import type { DomainLoopSettings, DomainPrivacy } from "@repo/contracts/sites";
 import type {
@@ -28,8 +36,47 @@ export type PayloadResult =
   | { kind: "not_found" }
   | { kind: "forbidden" };
 
-export function createWidgetService(db: Pick<Database, "select" | "update">) {
-  return { getPayload };
+export function createWidgetService(db: Pick<Database, "select" | "update" | "insert">) {
+  return { getPayload, recordImpression, capture };
+
+  // Records a view/click impression (SRS FR-ANL-01). Hot-path Redis buffering
+  // is a later optimization (F46/F47); for now we insert directly.
+  async function recordImpression(input: TrackEventInput): Promise<boolean> {
+    const [siteRow] = await db
+      .select({ id: site.id })
+      .from(site)
+      .where(eq(site.siteKey, input.site))
+      .limit(1);
+    if (!siteRow) return false;
+    await db
+      .insert(impression)
+      .values({ siteId: siteRow.id, refId: input.refId, kind: input.kind });
+    return true;
+  }
+
+  // Pixel auto-capture: turns a form submission into a form_submit event
+  // (SRS FR-ING-01). Only a first name + city are stored (NFR-PRIV-01).
+  async function capture(input: CaptureEventInput): Promise<boolean> {
+    const [siteRow] = await db
+      .select({ id: site.id })
+      .from(site)
+      .where(eq(site.siteKey, input.site))
+      .limit(1);
+    if (!siteRow) return false;
+    const rawName = input.fields.name ?? input.fields.first_name ?? input.fields.fullname;
+    const displayName = rawName ? rawName.trim().split(/\s+/)[0] : undefined;
+    await db.insert(event).values({
+      siteId: siteRow.id,
+      type: "form_submit",
+      source: "pixel",
+      verified: false,
+      displayName: displayName ?? null,
+      city: input.fields.city?.trim() ?? null,
+      payload: { url: input.url },
+      occurredAt: new Date(),
+    });
+    return true;
+  }
 
   async function getPayload(input: {
     siteKey: string;

@@ -204,7 +204,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 > **File:** `apps/widget/src/scheduler.ts`. **Kerjakan:** timing + loop + urutan + close (localStorage jeda X hari); hormati `prefers-reduced-motion`.
 > **Cek:** urutan/loop/close sesuai. **FR:** FR-NED-09, FR-NGS-01/02/03.
 
-## Fase 27 — Beacon track + auto-capture form ✅ (endpoint track/capture menyusul di EPIK F/H)
+## Fase 27 — Beacon track + auto-capture form ✅
 
 > **File:** `apps/widget/src/{track.ts,capture.ts}`. **Kerjakan:** `sendBeacon` view/click; listener submit → `/widget/v1/capture` (URL match).
 > **Cek:** klik→click; submit→capture. Bundle `t.js` < 30 KB gzip. **FR:** FR-ANL-01, FR-ING-01/05.
@@ -274,7 +274,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 > **Kerjakan:** `POST /ingest/v1/event` → `event`; dedupeKey unique → 409; simpan displayName(nama depan)+city.
 > **Cek:** 2× dedupe → 1 tersimpan. **FR:** FR-ING-02/06/07.
 
-## Fase 40 — Endpoint capture (auto form submit)
+## Fase 40 — Endpoint capture (auto form submit) ✅
 
 > **File:** `apps/api/src/modules/widget/router.ts` (`/widget/v1/capture`). **Kerjakan:** URL match → `event(form_submit, pixel)`.
 > **Cek:** submit host → event. **FR:** FR-ING-01/05.
