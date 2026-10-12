@@ -141,7 +141,7 @@ Format tiap fase:
 >   "hidden",
 > ]);
 > export const assetKindEnum = pgEnum("asset_kind", [
->   "wall",
+>   "board",
 >   "widget",
 >   "image",
 >   "video",
@@ -574,7 +574,7 @@ Format tiap fase:
 > **Cek:** klik notifikasi → `click` terkirim; submit form host → capture terkirim.
 > **FR:** FR-ANL-01, FR-ING-01/10.
 
-## Fase 28 — Render Wall of Love / embed
+## Fase 28 — Render Testimonial Board / embed
 
 > **File:** `apps/widget/src/render/testimonials.ts`.
 > **Kerjakan:** untuk elemen `[data-tacto-asset]`, fetch `/widget/v1/testimonials?site=&asset=` → render grid/carousel/badge di shadow DOM.
@@ -776,14 +776,14 @@ Format tiap fase:
 
 > **File:** `apps/api/src/modules/widget/router.ts` (`/widget/v1/testimonials`).
 > **Kerjakan:** kembalikan testimonial approved sesuai `asset.config`.
-> **Cek:** data benar untuk `asset=wall`.
+> **Cek:** data benar untuk `asset=board`.
 > **FR:** FR-TAS-01/02.
 
-## Fase 55 — Wall of Love hosted page
+## Fase 55 — Testimonial Board hosted page
 
-> **File:** route publik `/wall/:publicSlug` (SPA atau API).
-> **Kerjakan:** halaman publik render Wall.
-> **Cek:** URL publik menampilkan Wall.
+> **File:** route publik `/board/:publicSlug` (SPA atau API).
+> **Kerjakan:** halaman publik render Testimonial Board.
+> **Cek:** URL publik menampilkan Testimonial Board.
 > **FR:** FR-TAS-01.
 
 ## Fase 56 — Widget embed (grid/carousel/badge)
@@ -885,7 +885,7 @@ Format tiap fase:
 ## Fase 68 — E2E test alur MVP
 
 > **File:** `apps/web/e2e/*` atau skrip integrasi.
-> **Kerjakan:** skenario sign-up → Site → snippet → verifikasi → notifikasi (4 tipe) tampil hanya di domain terdaftar → capture + webhook → form funnel + routing + consent + moderasi → Wall/widget/image → analytics → batas Free + badge.
+> **Kerjakan:** skenario sign-up → Site → snippet → verifikasi → notifikasi (4 tipe) tampil hanya di domain terdaftar → capture + webhook → form funnel + routing + consent + moderasi → Board/widget/image → analytics → batas Free + badge.
 > **Cek:** skenario hijau.
 > **FR:** SRS §9.
 

@@ -1,25 +1,25 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: monorepo-template-dev-postgres
+    container_name: tacto-dev-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: monorepo_template
+      POSTGRES_DB: tacto
     ports:
       - "15432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d monorepo_template"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tacto"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   redis:
     image: redis:7-alpine
-    container_name: monorepo-template-dev-redis
+    container_name: tacto-dev-redis
     restart: unless-stopped
     ports:
       - "16379:6379"

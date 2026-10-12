@@ -7,7 +7,7 @@ import * as schema from "@repo/db/schema";
 
 export function createAuth(db: Database, config: ReturnType<typeof createApiConfig>["auth"]) {
   return betterAuth({
-    appName: "Monorepo Template",
+    appName: "Tacto",
     telemetry: { enabled: false },
     baseURL: config.url,
     database: drizzleAdapter(db, {

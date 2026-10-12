@@ -1,18 +1,18 @@
-name: monorepo-template
+name: tacto
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: monorepo-template-postgres
+    container_name: tacto-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: monorepo_template
+      POSTGRES_DB: tacto
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d monorepo_template"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tacto"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -20,8 +20,8 @@ services:
   api:
     build:
       context: .
-    image: monorepo-template-api
-    container_name: monorepo-template-api
+    image: tacto-api
+    container_name: tacto-api
     restart: unless-stopped
     environment:
       NODE_ENV: "production"
@@ -29,7 +29,7 @@ services:
       BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}"
       BETTER_AUTH_URL: "${BETTER_AUTH_URL:-http://localhost:8000}"
       CLIENT_ORIGINS: "${CLIENT_ORIGINS:-http://localhost:3000}"
-      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/monorepo_template}"
+      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/tacto}"
     ports:
       - "${API_HOST_PORT:-8000}:8000"
     depends_on:

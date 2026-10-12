@@ -1,11 +1,16 @@
-# Monorepo Template
+# Tacto
 
-A source-only pnpm workspace with a Hono API, React web app, and BullMQ worker.
+Tacto is an all-in-one social-proof platform: a real-time notification engine
+(sales pops, counters, live visitors, reviews) and a testimonial engine
+(collection funnel, moderation, embeddable assets) in one subscription.
+
+A pnpm workspace with a Hono API, React web dashboard, BullMQ worker, and a
+lightweight browser pixel.
 
 ```text
-apps/       api, web, worker
+apps/       api, web, worker, widget
 packages/   contracts, api-client, config, db, queue, storage, ui
-docs/       working guides and decision records
+docs/       working guides, decision records, and development specs
 ```
 
 Requires Node.js 24+ and the pnpm version declared in `package.json`.

@@ -27,7 +27,7 @@ pnpm --filter @repo/web preview:cloudflare
 VITE_API_URL="https://api.example.com" pnpm deploy:web
 ```
 
-`VITE_API_URL` is public and embedded at build time. The configured Worker name is `monorepo-template-web`. After configuring a custom domain, allow that origin in the API's `CLIENT_ORIGINS`.
+`VITE_API_URL` is public and embedded at build time. The configured Worker name is `tacto-web`. After configuring a custom domain, allow that origin in the API's `CLIENT_ORIGINS`.
 
 Validate the deployment bundle without publishing:
 
