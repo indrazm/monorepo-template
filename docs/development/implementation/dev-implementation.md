@@ -283,7 +283,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 > **File:** `apps/api/src/modules/ingest/rate-limit.ts` (Redis). **Cek:** flood → 429. **FR:** NFR-SEC-04, FR-VER-03.
 
-## Fase 42 — Webhook + signature → enqueue
+## Fase 42 — Webhook + signature ✅ (proses sinkron; enqueue BullMQ = F43 menyusul)
 
 > **File:** `apps/api/src/modules/ingest/webhook.ts`. **Kerjakan:** verifikasi signature → `webhookQueue.add` → 202.
 > **Cek:** signature salah → 401. **FR:** FR-ING-03/04.
@@ -297,7 +297,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 # EPIK G — Integrasi (framework)
 
-## Fase 44 — Framework konektor generik
+## Fase 44 — Framework konektor generik ✅
 
 > **Hasil:** satu abstraksi konektor: `auth → poll/webhook → map ke Event`.
 > **File:** `apps/api/src/modules/integrations/{services.ts,router.ts}`, `packages/contracts/src/integrations.ts`.

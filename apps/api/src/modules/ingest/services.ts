@@ -1,11 +1,20 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Database } from "@repo/db";
-import { event, site } from "@repo/db/schema";
+import { event, integration, site } from "@repo/db/schema";
+import type { IntegrationConfig } from "@repo/contracts/integrations";
 import type { IngestEventInput } from "@repo/contracts/events";
+import { getConnector } from "../integrations/connectors";
 
 const UNIQUE_VIOLATION = "23505";
 
 export type IngestResult = "created" | "duplicate";
+export type WebhookResult =
+  | "created"
+  | "duplicate"
+  | "unauthorized"
+  | "not_found"
+  | "no_connector"
+  | "invalid";
 
 function firstName(value: string | undefined): string | null {
   if (!value) return null;
@@ -13,7 +22,69 @@ function firstName(value: string | undefined): string | null {
 }
 
 export function createIngestService(db: Pick<Database, "select" | "insert">) {
-  return { resolveSiteByApiKey, ingestEvent };
+  return { resolveSiteByApiKey, ingestEvent, processWebhook };
+
+  // Handles an inbound provider webhook: resolve site, verify signature against
+  // the configured integration secret, map via the connector, and store a
+  // verified event (SRS FR-ING-03/04, FR-VER-01). Processed synchronously for
+  // now; can move to the BullMQ worker (F43) for durability without API change.
+  async function processWebhook(input: {
+    siteKey: string;
+    provider: string;
+    rawBody: string;
+    signature: string | null;
+  }): Promise<WebhookResult> {
+    const connector = getConnector(input.provider);
+    if (!connector) return "no_connector";
+
+    const [siteRow] = await db
+      .select({ id: site.id, organizationId: site.organizationId })
+      .from(site)
+      .where(eq(site.siteKey, input.siteKey))
+      .limit(1);
+    if (!siteRow) return "not_found";
+
+    const [integrationRow] = await db
+      .select({ config: integration.config })
+      .from(integration)
+      .where(
+        and(
+          eq(integration.organizationId, siteRow.organizationId),
+          eq(integration.provider, input.provider),
+        ),
+      )
+      .limit(1);
+    const secret = (integrationRow?.config as IntegrationConfig | undefined)?.secret;
+    if (!secret) return "unauthorized";
+    if (!connector.verifySignature(input.rawBody, input.signature, secret)) return "unauthorized";
+
+    let raw: unknown;
+    try {
+      raw = JSON.parse(input.rawBody);
+    } catch {
+      return "invalid";
+    }
+    const mapped = connector.mapToEvent(raw);
+    if (!mapped) return "invalid";
+
+    try {
+      await db.insert(event).values({
+        siteId: siteRow.id,
+        type: mapped.type,
+        source: input.provider,
+        verified: true,
+        displayName: mapped.displayName,
+        city: mapped.city,
+        payload: mapped.product ? { product: mapped.product } : {},
+        dedupeKey: mapped.dedupeKey,
+        occurredAt: mapped.occurredAt,
+      });
+      return "created";
+    } catch (error) {
+      if (isUniqueViolation(error)) return "duplicate";
+      throw error;
+    }
+  }
 
   async function resolveSiteByApiKey(apiKey: string): Promise<string | null> {
     const rows = await db
