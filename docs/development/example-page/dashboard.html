@@ -1,0 +1,2044 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tacto — Dashboard</title>
+    <meta
+      name="description"
+      content="Tacto social proof notification dashboard — design review mockup."
+    />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    />
+    <style>
+      :root {
+        /* brand */
+        --bg: #f4f5f7;
+        --surface: #ffffff;
+        --surface-2: #f3f4f8;
+        --surface-3: #eceef3;
+        --fg: #17181c;
+        --muted: #5b606e;
+        --faint: #8a90a0;
+        --line: #e7e9f0;
+        --line-soft: #eef0f5;
+        --link: #2563eb;
+        --accent: #3b82f6;
+        --accent-strong: #2f6fe0;
+        --accent-2: #22d3ee;
+        --tint: #e9f1fe;
+        --ok: #0e9f6e;
+        --ok-tint: #e3f5ee;
+        --warn: #d97706;
+        --danger: #e5484d;
+        --ring: rgba(59, 130, 246, 0.35);
+        --radius: 20px;
+        --radius-md: 14px;
+        --radius-sm: 11px;
+        /* cool-toned elevation */
+        --sh-xs: 0 1px 2px rgba(23, 30, 60, 0.05);
+        --sh-sm: 0 2px 10px -4px rgba(23, 30, 60, 0.1), 0 1px 2px rgba(23, 30, 60, 0.04);
+        --sh-md: 0 18px 40px -20px rgba(23, 30, 60, 0.28);
+        --f: "Plus Jakarta Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+        --sidebar: 272px;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #0d0e12;
+          --surface: #15171e;
+          --surface-2: #1a1d26;
+          --surface-3: #222633;
+          --fg: #f2f3f0;
+          --muted: #9ba1b0;
+          --faint: #6d7484;
+          --line: #262a35;
+          --line-soft: #20242e;
+          --link: #7fb0ff;
+          --accent: #3b82f6;
+          --accent-strong: #5a95f7;
+          --accent-2: #22d3ee;
+          --tint: #141e31;
+          --ok: #2bbe8a;
+          --ok-tint: #15291f;
+          --ring: rgba(123, 176, 255, 0.4);
+          --sh-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+          --sh-sm: 0 2px 12px -4px rgba(0, 0, 0, 0.5);
+          --sh-md: 0 20px 44px -20px rgba(0, 0, 0, 0.7);
+          color-scheme: dark;
+        }
+      }
+      :root[data-theme="dark"] {
+        --bg: #0d0e12;
+        --surface: #15171e;
+        --surface-2: #1a1d26;
+        --surface-3: #222633;
+        --fg: #f2f3f0;
+        --muted: #9ba1b0;
+        --faint: #6d7484;
+        --line: #262a35;
+        --line-soft: #20242e;
+        --link: #7fb0ff;
+        --accent: #3b82f6;
+        --accent-strong: #5a95f7;
+        --accent-2: #22d3ee;
+        --tint: #141e31;
+        --ok: #2bbe8a;
+        --ok-tint: #15291f;
+        --ring: rgba(123, 176, 255, 0.4);
+        --sh-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --sh-sm: 0 2px 12px -4px rgba(0, 0, 0, 0.5);
+        --sh-md: 0 20px 44px -20px rgba(0, 0, 0, 0.7);
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--f);
+        font-size: 15px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+        letter-spacing: -0.005em;
+      }
+      button {
+        font: inherit;
+      }
+      .tnum {
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0;
+      }
+
+      /* ===== shell ===== */
+      .app {
+        min-height: 100vh;
+      }
+
+      /* ===== sidebar ===== */
+      aside.side {
+        background: var(--surface);
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: var(--sidebar);
+        height: 100vh;
+        overflow-y: auto;
+        z-index: 30;
+      }
+      .side .brand {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 20px 20px 16px;
+        font-family: var(--f);
+        font-weight: 800;
+        font-size: 18.5px;
+        letter-spacing: -0.02em;
+      }
+      .side .brand svg {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        box-shadow: var(--sh-xs);
+      }
+      .side .brand .beta {
+        margin-left: -2px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 13%, transparent);
+        padding: 3px 8px;
+        border-radius: 999px;
+      }
+
+      .site-switch {
+        margin: 2px 14px 12px;
+        padding: 11px 13px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: var(--surface-2);
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        cursor: pointer;
+        font-size: 13.5px;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
+      }
+      .site-switch:hover {
+        border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+      }
+      .site-switch .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--ok);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent);
+      }
+      .site-switch .nm {
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .site-switch .url {
+        color: var(--faint);
+        font-size: 11.5px;
+      }
+      .site-switch .chev {
+        margin-left: auto;
+        color: var(--faint);
+        font-size: 15px;
+      }
+
+      nav.menu {
+        padding: 4px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      nav.menu .grp {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        color: var(--faint);
+        padding: 16px 12px 7px;
+      }
+      nav.menu a {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 9.5px 12px;
+        border-radius: 11px;
+        color: var(--muted);
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 14px;
+        transition:
+          background 0.14s,
+          color 0.14s;
+      }
+      nav.menu a svg {
+        width: 19px;
+        height: 19px;
+        flex: none;
+        opacity: 0.85;
+      }
+      nav.menu a .count {
+        margin-left: auto;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--muted);
+        background: var(--surface-3);
+        padding: 1px 8px;
+        border-radius: 999px;
+      }
+      nav.menu a:hover {
+        background: var(--surface-2);
+        color: var(--fg);
+      }
+      nav.menu a.active {
+        background: color-mix(in srgb, var(--accent) 11%, transparent);
+        color: var(--accent-strong);
+        font-weight: 700;
+      }
+      nav.menu a.active svg {
+        opacity: 1;
+      }
+      nav.menu a.active::before {
+        content: "";
+        position: absolute;
+        left: -12px;
+        top: 9px;
+        bottom: 9px;
+        width: 3px;
+        border-radius: 0 3px 3px 0;
+        background: var(--accent);
+      }
+      nav.menu a.active .count {
+        background: color-mix(in srgb, var(--accent) 16%, transparent);
+        color: var(--accent-strong);
+      }
+
+      .side .foot {
+        margin-top: auto;
+        padding: 14px;
+      }
+      .plan-card {
+        position: relative;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        padding: 15px;
+        overflow: hidden;
+        background:
+          radial-gradient(
+            120% 90% at 100% 0%,
+            color-mix(in srgb, var(--accent) 12%, transparent),
+            transparent 60%
+          ),
+          var(--surface);
+      }
+      .plan-card .t {
+        font-weight: 700;
+        font-size: 13.5px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .plan-card .t .b {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+        padding: 2px 7px;
+        border-radius: 999px;
+      }
+      .plan-card .bar {
+        height: 7px;
+        border-radius: 999px;
+        background: var(--surface-3);
+        margin: 11px 0 6px;
+        overflow: hidden;
+      }
+      .plan-card .bar i {
+        display: block;
+        height: 100%;
+        width: 62%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      }
+      .plan-card .q {
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .plan-card .up {
+        margin-top: 12px;
+        width: 100%;
+        border: 0;
+        border-radius: 10px;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+        font-size: 13px;
+        padding: 9px;
+        cursor: pointer;
+        box-shadow: var(--sh-xs);
+        transition: background 0.15s;
+      }
+      .plan-card .up:hover {
+        background: var(--accent-strong);
+      }
+      .userrow {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 14px 6px 2px;
+      }
+      .userrow .ava {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 12px;
+      }
+      .userrow .nm {
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: -0.01em;
+      }
+      .userrow .em {
+        color: var(--faint);
+        font-size: 11.5px;
+      }
+      .userrow .more {
+        margin-left: auto;
+        color: var(--faint);
+        background: none;
+        border: 0;
+        cursor: pointer;
+        font-size: 17px;
+      }
+
+      /* ===== main ===== */
+      main.main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        margin-left: var(--sidebar);
+      }
+      header.top {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: color-mix(in srgb, var(--bg) 78%, transparent);
+        backdrop-filter: saturate(1.3) blur(14px);
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 30px;
+      }
+      .burger {
+        display: none;
+        background: none;
+        border: 0;
+        color: var(--fg);
+        cursor: pointer;
+      }
+      .top .search {
+        flex: 1;
+        max-width: 400px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 9px 15px;
+        color: var(--faint);
+        font-size: 13.5px;
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s;
+      }
+      .top .search:focus-within {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--ring);
+      }
+      .top .search input {
+        border: 0;
+        background: none;
+        outline: none;
+        color: var(--fg);
+        font: inherit;
+        font-size: 13.5px;
+        width: 100%;
+      }
+      .top .search kbd {
+        font-family: var(--f);
+        font-size: 11px;
+        color: var(--faint);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 1px 6px;
+        background: var(--surface-2);
+      }
+      .top .spacer {
+        flex: 1;
+      }
+      .pixel-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--ok);
+        background: var(--ok-tint);
+        padding: 7px 13px;
+        border-radius: 999px;
+      }
+      .pixel-chip .d {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--ok);
+        animation: pulse 2.4s infinite;
+      }
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 55%, transparent);
+        }
+        70% {
+          box-shadow: 0 0 0 7px transparent;
+        }
+        100% {
+          box-shadow: 0 0 0 0 transparent;
+        }
+      }
+      .icon-btn {
+        position: relative;
+        width: 40px;
+        height: 40px;
+        border-radius: 11px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--muted);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        transition:
+          border-color 0.15s,
+          color 0.15s,
+          background 0.15s;
+      }
+      .icon-btn:hover {
+        border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+        color: var(--fg);
+      }
+      .icon-btn:focus-visible {
+        outline: 2px solid var(--ring);
+        outline-offset: 2px;
+      }
+      .icon-btn .badge {
+        position: absolute;
+        top: 7px;
+        right: 8px;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent-2);
+        border: 2px solid var(--surface);
+      }
+      .btn {
+        font-family: var(--f);
+        font-weight: 700;
+        font-size: 14px;
+        border-radius: 12px;
+        padding: 10px 17px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        letter-spacing: -0.01em;
+        transition:
+          transform 0.06s,
+          background 0.15s,
+          border-color 0.15s,
+          box-shadow 0.15s;
+      }
+      .btn:active {
+        transform: translateY(1px);
+      }
+      .btn:focus-visible {
+        outline: 2px solid var(--ring);
+        outline-offset: 2px;
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+        box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--accent) 80%, transparent);
+      }
+      .btn.primary:hover {
+        background: var(--accent-strong);
+      }
+      .btn.ghost {
+        background: var(--surface);
+        color: var(--fg);
+        border-color: var(--line);
+      }
+      .btn.ghost:hover {
+        border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+      }
+
+      .content {
+        padding: 28px 30px 48px;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        max-width: 1280px;
+        width: 100%;
+      }
+      @media (min-width: 1600px) {
+        .content {
+          margin-inline: auto;
+        }
+      }
+
+      /* page head */
+      .page-head {
+        display: flex;
+        align-items: flex-end;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .page-head h1 {
+        font-family: var(--f);
+        font-weight: 800;
+        font-size: 1.8rem;
+        margin: 0;
+        letter-spacing: -0.03em;
+      }
+      .page-head p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .page-head .spacer {
+        flex: 1;
+      }
+      .range {
+        display: inline-flex;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        padding: 3px;
+        gap: 2px;
+        box-shadow: var(--sh-xs);
+      }
+      .range button {
+        background: none;
+        border: 0;
+        padding: 7px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+        cursor: pointer;
+        border-radius: 8px;
+        transition:
+          background 0.14s,
+          color 0.14s;
+      }
+      .range button:hover {
+        color: var(--fg);
+      }
+      .range button.on {
+        background: var(--fg);
+        color: var(--bg);
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 22px;
+        box-shadow: var(--sh-sm);
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .card-head h3 {
+        font-family: var(--f);
+        font-weight: 700;
+        font-size: 1.08rem;
+        margin: 0;
+        letter-spacing: -0.02em;
+      }
+      .card-head .sub {
+        color: var(--faint);
+        font-size: 12.5px;
+        margin-top: 2px;
+      }
+      .card-head .spacer {
+        flex: 1;
+      }
+      .link {
+        color: var(--link);
+        font-weight: 700;
+        font-size: 13px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .link:hover {
+        color: var(--accent-strong);
+      }
+
+      /* setup banner */
+      .setup {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+        border-radius: var(--radius);
+        padding: 17px 20px;
+        flex-wrap: wrap;
+        overflow: hidden;
+        box-shadow: var(--sh-sm);
+        background:
+          radial-gradient(130% 160% at 0% 0%, var(--tint), transparent 55%), var(--surface);
+      }
+      .setup .ico {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: var(--accent);
+        display: grid;
+        place-items: center;
+        color: #fff;
+        flex: none;
+        box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--accent) 75%, transparent);
+      }
+      .setup .txt b {
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .setup .txt p {
+        margin: 2px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .setup .steps {
+        display: flex;
+        gap: 9px;
+        margin-left: auto;
+        flex-wrap: wrap;
+      }
+      .setup .step {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--faint);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .setup .step .b {
+        width: 17px;
+        height: 17px;
+        border-radius: 50%;
+        border: 1.5px solid var(--line);
+        display: grid;
+        place-items: center;
+        font-size: 10px;
+      }
+      .setup .step.done {
+        color: var(--ok);
+      }
+      .setup .step.done .b {
+        background: var(--ok);
+        border-color: var(--ok);
+        color: #fff;
+      }
+      .setup .cta {
+        margin-left: 4px;
+      }
+
+      /* stat tiles */
+      .tiles {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+      }
+      .tile {
+        position: relative;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 18px 18px 14px;
+        box-shadow: var(--sh-sm);
+        transition:
+          transform 0.12s,
+          box-shadow 0.15s,
+          border-color 0.15s;
+      }
+      .tile:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--sh-md);
+        border-color: color-mix(in srgb, var(--accent) 22%, var(--line));
+      }
+      .tile .lab {
+        font-size: 12.5px;
+        color: var(--muted);
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .tile .lab .ic {
+        width: 28px;
+        height: 28px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .tile .lab .ic svg {
+        width: 15px;
+        height: 15px;
+      }
+      .tile .val {
+        font-family: var(--f);
+        font-weight: 800;
+        font-size: 1.95rem;
+        letter-spacing: -0.03em;
+        margin: 12px 0 0;
+        line-height: 1;
+      }
+      .tile .foot {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-top: 9px;
+      }
+      .delta {
+        font-size: 11.5px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+      .delta.up {
+        color: var(--ok);
+        background: var(--ok-tint);
+      }
+      .delta.down {
+        color: var(--danger);
+        background: color-mix(in srgb, var(--danger) 12%, transparent);
+      }
+      .tile .vs {
+        font-size: 11.5px;
+        color: var(--faint);
+      }
+      .tile .spark {
+        position: absolute;
+        right: 16px;
+        bottom: 16px;
+        width: 76px;
+        height: 30px;
+        opacity: 0.9;
+      }
+      .ic.blue {
+        background: color-mix(in srgb, var(--accent) 13%, transparent);
+        color: var(--accent);
+      }
+      .ic.cyan {
+        background: color-mix(in srgb, var(--accent-2) 18%, transparent);
+        color: #0b8ca3;
+      }
+      .ic.green {
+        background: var(--ok-tint);
+        color: var(--ok);
+      }
+      .ic.violet {
+        background: color-mix(in srgb, #8b5cf6 15%, transparent);
+        color: #7c3aed;
+      }
+
+      /* chart row */
+      .row {
+        display: grid;
+        grid-template-columns: 1.85fr 1fr;
+        gap: 18px;
+        align-items: stretch;
+      }
+      .legend {
+        display: flex;
+        gap: 16px;
+        font-size: 12.5px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .legend .k {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .legend .k i {
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+      }
+      .chart-wrap {
+        position: relative;
+      }
+      .chart {
+        width: 100%;
+        height: 230px;
+        display: block;
+      }
+      .ylab {
+        position: absolute;
+        left: 0;
+        font-size: 10.5px;
+        color: var(--faint);
+        transform: translateY(-50%);
+      }
+      .callout {
+        position: absolute;
+        right: 3%;
+        top: 6px;
+        background: var(--fg);
+        color: var(--bg);
+        font-size: 12px;
+        font-weight: 700;
+        padding: 5px 10px;
+        border-radius: 9px;
+        box-shadow: var(--sh-md);
+        white-space: nowrap;
+      }
+      .callout::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: -5px;
+        transform: translateX(-50%) rotate(45deg);
+        width: 9px;
+        height: 9px;
+        background: var(--fg);
+        border-radius: 1px;
+      }
+      .xaxis {
+        display: flex;
+        justify-content: space-between;
+        color: var(--faint);
+        font-size: 11.5px;
+        margin-top: 10px;
+        font-weight: 500;
+      }
+
+      /* events */
+      .evt {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 0;
+        border-top: 1px solid var(--line-soft);
+      }
+      .evt:first-of-type {
+        border-top: 0;
+        padding-top: 2px;
+      }
+      .evt .av {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        font-size: 15px;
+        flex: none;
+      }
+      .evt .av.buy {
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+      }
+      .evt .av.signup {
+        background: color-mix(in srgb, #8b5cf6 13%, transparent);
+      }
+      .evt .av.review {
+        background: color-mix(in srgb, var(--warn) 15%, transparent);
+      }
+      .evt .main {
+        min-width: 0;
+        flex: 1;
+        font-size: 13.5px;
+      }
+      .evt .main b {
+        font-weight: 700;
+      }
+      .evt .main .m {
+        font-size: 11.5px;
+        color: var(--faint);
+        margin-top: 1px;
+      }
+      .evt .time {
+        font-size: 11.5px;
+        color: var(--faint);
+        white-space: nowrap;
+        font-weight: 600;
+      }
+
+      /* table */
+      table.tbl {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .tbl th {
+        text-align: left;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        color: var(--faint);
+        padding: 0 12px 14px;
+      }
+      .tbl th.num,
+      .tbl td.num {
+        text-align: right;
+      }
+      .tbl td {
+        padding: 14px 12px;
+        border-top: 1px solid var(--line-soft);
+        font-size: 14px;
+        vertical-align: middle;
+      }
+      .tbl tbody tr {
+        transition: background 0.12s;
+      }
+      .tbl tbody tr:hover td {
+        background: var(--surface-2);
+      }
+      .tbl tbody tr:hover td:first-child {
+        border-top-left-radius: 10px;
+        border-bottom-left-radius: 10px;
+      }
+      .tbl tbody tr:hover td:last-child {
+        border-top-right-radius: 10px;
+        border-bottom-right-radius: 10px;
+      }
+      .nname {
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        letter-spacing: -0.01em;
+      }
+      .nname .tico {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .nname .tico svg {
+        width: 17px;
+        height: 17px;
+      }
+      .tico.sales {
+        background: color-mix(in srgb, #3b82f6 13%, transparent);
+        color: #3b82f6;
+      }
+      .tico.counter {
+        background: color-mix(in srgb, #0891b2 14%, transparent);
+        color: #0891b2;
+      }
+      .tico.visitors {
+        background: color-mix(in srgb, #0e9f6e 14%, transparent);
+        color: #0e9f6e;
+      }
+      .tico.review {
+        background: color-mix(in srgb, #d97706 15%, transparent);
+        color: #d97706;
+      }
+      .tico.custom {
+        background: var(--surface-3);
+        color: var(--muted);
+      }
+      .pill {
+        font-size: 11.5px;
+        font-weight: 700;
+        padding: 4px 11px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+      .pill::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      .pill.sales {
+        color: #2563eb;
+        background: color-mix(in srgb, #2563eb 12%, transparent);
+      }
+      .pill.counter {
+        color: #0891b2;
+        background: color-mix(in srgb, #0891b2 13%, transparent);
+      }
+      .pill.visitors {
+        color: #0e9f6e;
+        background: color-mix(in srgb, #0e9f6e 13%, transparent);
+      }
+      .pill.review {
+        color: #c2690b;
+        background: color-mix(in srgb, #d97706 14%, transparent);
+      }
+      .pill.custom {
+        color: var(--muted);
+        background: var(--surface-3);
+      }
+      .sw {
+        position: relative;
+        width: 40px;
+        height: 23px;
+        flex: none;
+        cursor: pointer;
+      }
+      .sw input {
+        position: absolute;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        cursor: pointer;
+      }
+      .sw .track {
+        position: absolute;
+        inset: 0;
+        border-radius: 999px;
+        background: var(--surface-3);
+        border: 1px solid var(--line);
+        transition: 0.18s;
+      }
+      .sw .knob {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 17px;
+        height: 17px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+        transition: 0.18s;
+      }
+      .sw input:checked + .track {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .sw input:checked + .track + .knob {
+        left: 20px;
+      }
+      .st-wrap {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--muted);
+      }
+      .st-wrap.on {
+        color: var(--ok);
+      }
+      .num {
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+      }
+      .num.dim {
+        color: var(--faint);
+        font-weight: 500;
+      }
+
+      /* preview */
+      .preview-stage {
+        position: relative;
+        border-radius: var(--radius-md);
+        padding: 34px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background:
+          radial-gradient(
+            circle at 18% 22%,
+            color-mix(in srgb, var(--accent) 10%, transparent),
+            transparent 42%
+          ),
+          repeating-linear-gradient(
+            0deg,
+            transparent 0 23px,
+            color-mix(in srgb, var(--line) 55%, transparent) 23px 24px
+          ),
+          repeating-linear-gradient(
+            90deg,
+            transparent 0 23px,
+            color-mix(in srgb, var(--line) 55%, transparent) 23px 24px
+          ),
+          var(--surface-2);
+      }
+      .livecard {
+        position: relative;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        box-shadow: var(--sh-md);
+        max-width: 370px;
+        animation: rise 0.5s ease;
+      }
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .livecard .ph {
+        width: 48px;
+        height: 48px;
+        border-radius: 11px;
+        background: var(--surface-2);
+        display: grid;
+        place-items: center;
+        font-size: 22px;
+        flex: none;
+      }
+      .livecard .body {
+        min-width: 0;
+      }
+      .livecard .body .h {
+        font-weight: 700;
+        font-size: 13.5px;
+        letter-spacing: -0.01em;
+      }
+      .livecard .body .h b {
+        color: var(--accent);
+      }
+      .livecard .body .s {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .livecard .body .v {
+        font-size: 11px;
+        color: var(--ok);
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 5px;
+      }
+      .livecard .x {
+        position: absolute;
+        top: 9px;
+        right: 11px;
+        color: var(--faint);
+        font-size: 15px;
+        cursor: pointer;
+        line-height: 1;
+      }
+
+      /* entrance (one orchestrated moment) */
+      .content > * {
+        opacity: 0;
+        transform: translateY(8px);
+        animation: in 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+      }
+      .content > *:nth-child(1) {
+        animation-delay: 0.02s;
+      }
+      .content > *:nth-child(2) {
+        animation-delay: 0.07s;
+      }
+      .content > *:nth-child(3) {
+        animation-delay: 0.12s;
+      }
+      .content > *:nth-child(4) {
+        animation-delay: 0.17s;
+      }
+      .content > *:nth-child(5) {
+        animation-delay: 0.22s;
+      }
+      .content > *:nth-child(6) {
+        animation-delay: 0.27s;
+      }
+      @keyframes in {
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      @media (max-width: 1040px) {
+        .tiles {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .row {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 860px) {
+        :root {
+          --sidebar: 0px;
+        }
+        aside.side {
+          width: 272px;
+          transform: translateX(-100%);
+          transition: transform 0.22s ease;
+          box-shadow: var(--sh-md);
+        }
+        aside.side.open {
+          transform: none;
+        }
+        .burger {
+          display: grid;
+          place-items: center;
+        }
+        .scrim {
+          position: fixed;
+          inset: 0;
+          background: rgba(10, 15, 30, 0.45);
+          z-index: 25;
+          display: none;
+        }
+        .scrim.show {
+          display: block;
+        }
+      }
+      @media (max-width: 560px) {
+        .tiles {
+          grid-template-columns: 1fr;
+        }
+        .content {
+          padding: 18px 16px 40px;
+        }
+        .top {
+          padding: 12px 16px;
+        }
+        .top .search {
+          display: none;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+          animation: none !important;
+        }
+        .content > * {
+          opacity: 1;
+          transform: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="tacto-tile" viewBox="0 0 256 256">
+        <rect x="0" y="0" width="256" height="256" rx="58" fill="#3B82F6" />
+        <g transform="translate(8.42,6.55) scale(0.9342)">
+          <path
+            fill="#fff"
+            d="M 70 54 h 116 a 26 26 0 0 1 26 26 a 26 26 0 0 1 -26 26 h -116 a 26 26 0 0 1 -26 -26 a 26 26 0 0 1 26 -26 Z"
+          />
+          <path
+            fill="#fff"
+            d="M 128 54 a 26 26 0 0 1 26 26 v 100 a 26 26 0 0 1 -26 26 a 26 26 0 0 1 -26 -26 v -100 a 26 26 0 0 1 26 -26 Z"
+          />
+          <circle cx="128" cy="150" r="13" fill="#22D3EE" />
+        </g>
+      </symbol>
+    </svg>
+
+    <div class="app">
+      <aside class="side" id="side">
+        <div class="brand">
+          <svg viewBox="0 0 256 256"><use href="#tacto-tile" /></svg>
+          Tacto <span class="beta">Beta</span>
+        </div>
+
+        <div class="site-switch">
+          <span class="dot"></span>
+          <span>
+            <div class="nm">nimbus.store</div>
+            <div class="url">Pixel active</div>
+          </span>
+          <span class="chev">⌄</span>
+        </div>
+
+        <nav class="menu">
+          <a class="active" href="#"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="3" y="3" width="7" height="9" rx="1.5" />
+              <rect x="14" y="3" width="7" height="5" rx="1.5" />
+              <rect x="14" y="12" width="7" height="9" rx="1.5" />
+              <rect x="3" y="16" width="7" height="5" rx="1.5" /></svg
+            >Overview</a
+          >
+          <a href="#"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg
+            >Notifications <span class="count">5</span></a
+          >
+          <a href="#"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M4 7h16M4 12h16M4 17h10" /></svg
+            >Events feed</a
+          >
+          <a href="#"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M3 3v18h18" />
+              <path d="M7 14l3-4 3 3 4-6" /></svg
+            >Analytics</a
+          >
+          <a href="#"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="12" cy="12" r="8" />
+              <circle cx="12" cy="12" r="3" /></svg
+            >Goals</a
+          >
+
+          <div class="grp">Sources</div>
+          <a href="#"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <ellipse cx="12" cy="6" rx="8" ry="3" />
+              <path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6" />
+              <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></svg
+            >Data &amp; pixel</a
+          >
+          <a href="#"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="3" y="3" width="8" height="8" rx="2" />
+              <rect x="13" y="13" width="8" height="8" rx="2" />
+              <path d="M11 7h4a2 2 0 0 1 2 2v4" /></svg
+            >Integrations <span class="count">3</span></a
+          >
+
+          <div class="grp">Account</div>
+          <a href="#"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 13a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 0 1-4 0v-.2a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 4.6 13H4a2 2 0 0 1 0-4h.2a1.6 1.6 0 0 0 1.1-2.7l-.1-.1A2 2 0 1 1 8 3.4l.1.1a1.6 1.6 0 0 0 1.8.3H10a1.6 1.6 0 0 0 1-1.5V2a2 2 0 0 1 4 0v.2a1.6 1.6 0 0 0 2.7 1.1l.1-.1A2 2 0 1 1 20.6 6l-.1.1a1.6 1.6 0 0 0-.3 1.8V8a1.6 1.6 0 0 0 1.5 1H22a2 2 0 0 1 0 4h-.2a1.6 1.6 0 0 0-1.4 1Z"
+              /></svg
+            >Settings</a
+          >
+          <a href="#"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+              <path d="M12 3v12m0 0l-4-4m4 4l4-4" /></svg
+            >Install pixel</a
+          >
+        </nav>
+
+        <div class="foot">
+          <div class="plan-card">
+            <div class="t">Free plan <span class="b">62%</span></div>
+            <div class="bar"><i></i></div>
+            <div class="q tnum">6,180 / 10,000 visitors this month</div>
+            <button class="up">Upgrade plan</button>
+          </div>
+          <div class="userrow">
+            <span class="ava">ZD</span>
+            <span>
+              <div class="nm">Ziyaa Danil</div>
+              <div class="em">mubakal0@gmail.com</div>
+            </span>
+            <button class="more" aria-label="Account menu">⋯</button>
+          </div>
+        </div>
+      </aside>
+      <div class="scrim" id="scrim"></div>
+
+      <main class="main">
+        <header class="top">
+          <button class="burger" id="burger" aria-label="Open menu">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <div class="search">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3-3" />
+            </svg>
+            <input placeholder="Search notifications, events…" />
+            <kbd>⌘K</kbd>
+          </div>
+          <div class="spacer"></div>
+          <span class="pixel-chip"><span class="d"></span>Pixel active</span>
+          <button class="icon-btn" id="themeBtn" aria-label="Switch theme">
+            <span id="themeIcon">○</span>
+          </button>
+          <button class="icon-btn" aria-label="Notifications">
+            <span class="badge"></span
+            ><svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.9"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+            </svg>
+          </button>
+          <button class="btn primary">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.4"
+            >
+              <path d="M12 5v14M5 12h14" /></svg
+            >New notification
+          </button>
+        </header>
+
+        <div class="content">
+          <div class="page-head">
+            <div>
+              <h1>Overview</h1>
+              <p>How your social proof is performing on nimbus.store</p>
+            </div>
+            <div class="spacer"></div>
+            <div class="range">
+              <button>24h</button>
+              <button class="on">7 days</button>
+              <button>30 days</button>
+              <button>90 days</button>
+            </div>
+          </div>
+
+          <div class="setup">
+            <div class="ico">
+              <svg
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            </div>
+            <div class="txt">
+              <b>You're almost set up</b>
+              <p>3 of 4 steps done — add a goal to start measuring conversions.</p>
+            </div>
+            <div class="steps">
+              <span class="step done"><span class="b">✓</span>Pixel</span>
+              <span class="step done"><span class="b">✓</span>Verified</span>
+              <span class="step done"><span class="b">✓</span>Notification</span>
+              <span class="step"><span class="b"></span>Add goal</span>
+            </div>
+            <button class="btn primary cta">Add goal</button>
+          </div>
+
+          <div class="tiles">
+            <div class="tile">
+              <span class="lab"
+                ><span class="ic blue"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" /></svg></span
+                >Impressions</span
+              >
+              <div class="val tnum">48,920</div>
+              <div class="foot">
+                <span class="delta up">↑ 12.4%</span><span class="vs">vs last week</span>
+              </div>
+              <svg class="spark" viewBox="0 0 76 30" preserveAspectRatio="none" aria-hidden="true">
+                <polyline
+                  fill="none"
+                  stroke="var(--accent)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  points="0,24 12,22 24,23 36,16 48,18 62,10 76,5"
+                />
+              </svg>
+            </div>
+            <div class="tile">
+              <span class="lab"
+                ><span class="ic cyan"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 11l3 3L22 4" />
+                    <path
+                      d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
+                    /></svg></span
+                >Clicks</span
+              >
+              <div class="val tnum">3,140</div>
+              <div class="foot">
+                <span class="delta up">↑ 8.1%</span><span class="vs">vs last week</span>
+              </div>
+              <svg class="spark" viewBox="0 0 76 30" preserveAspectRatio="none" aria-hidden="true">
+                <polyline
+                  fill="none"
+                  stroke="var(--accent-2)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  points="0,22 12,20 24,21 36,17 48,14 62,15 76,8"
+                />
+              </svg>
+            </div>
+            <div class="tile">
+              <span class="lab"
+                ><span class="ic violet"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M7 17 17 7" />
+                    <path d="M8 7h9v9" /></svg></span
+                >Click-through rate</span
+              >
+              <div class="val tnum">6.4%</div>
+              <div class="foot">
+                <span class="delta down">↓ 0.3%</span><span class="vs">vs last week</span>
+              </div>
+              <svg class="spark" viewBox="0 0 76 30" preserveAspectRatio="none" aria-hidden="true">
+                <polyline
+                  fill="none"
+                  stroke="#8b5cf6"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  points="0,8 12,10 24,7 36,12 48,11 62,14 76,13"
+                />
+              </svg>
+            </div>
+            <div class="tile">
+              <span class="lab"
+                ><span class="ic green"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="8" />
+                    <circle cx="12" cy="12" r="3" /></svg></span
+                >Conversions</span
+              >
+              <div class="val tnum">412</div>
+              <div class="foot">
+                <span class="delta up">↑ 19.7%</span><span class="vs">from goals</span>
+              </div>
+              <svg class="spark" viewBox="0 0 76 30" preserveAspectRatio="none" aria-hidden="true">
+                <polyline
+                  fill="none"
+                  stroke="var(--ok)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  points="0,26 12,24 24,20 36,22 48,15 62,13 76,6"
+                />
+              </svg>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Impressions &amp; clicks</h3>
+                  <div class="sub">Last 7 days</div>
+                </div>
+                <div class="spacer"></div>
+                <div class="legend">
+                  <span class="k"><i style="background: var(--accent)"></i>Impressions</span>
+                  <span class="k"><i style="background: var(--accent-2)"></i>Clicks</span>
+                </div>
+              </div>
+              <div class="chart-wrap">
+                <div class="callout tnum">7,210 impressions</div>
+                <svg
+                  class="chart"
+                  viewBox="0 0 720 230"
+                  preserveAspectRatio="none"
+                  role="img"
+                  aria-label="Impressions and clicks over the last 7 days"
+                >
+                  <defs>
+                    <linearGradient id="fillBlue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.22" />
+                      <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <g stroke="var(--line)" stroke-width="1" stroke-dasharray="3 6">
+                    <line x1="0" y1="30" x2="720" y2="30" />
+                    <line x1="0" y1="80" x2="720" y2="80" />
+                    <line x1="0" y1="130" x2="720" y2="130" />
+                    <line x1="0" y1="180" x2="720" y2="180" />
+                  </g>
+                  <path
+                    d="M0,150 C60,140 90,125 120,122 C180,116 210,140 240,135 C300,124 330,98 360,95 C420,90 450,110 480,105 C540,96 570,74 600,70 C650,63 690,58 720,52 L720,230 L0,230 Z"
+                    fill="url(#fillBlue)"
+                  />
+                  <path
+                    d="M0,150 C60,140 90,125 120,122 C180,116 210,140 240,135 C300,124 330,98 360,95 C420,90 450,110 480,105 C540,96 570,74 600,70 C650,63 690,58 720,52"
+                    fill="none"
+                    stroke="var(--accent)"
+                    stroke-width="3"
+                    stroke-linecap="round"
+                  />
+                  <path
+                    d="M0,200 C60,196 90,193 120,192 C180,190 210,198 240,196 C300,190 330,182 360,180 C420,178 450,187 480,185 C540,180 570,173 600,172 C650,170 690,167 720,164"
+                    fill="none"
+                    stroke="var(--accent-2)"
+                    stroke-width="3"
+                    stroke-linecap="round"
+                  />
+                  <line
+                    x1="720"
+                    y1="0"
+                    x2="720"
+                    y2="230"
+                    stroke="var(--accent)"
+                    stroke-width="1"
+                    stroke-dasharray="3 4"
+                    opacity="0.4"
+                  />
+                  <circle
+                    cx="720"
+                    cy="52"
+                    r="5"
+                    fill="var(--surface)"
+                    stroke="var(--accent)"
+                    stroke-width="3"
+                  />
+                  <circle
+                    cx="720"
+                    cy="164"
+                    r="5"
+                    fill="var(--surface)"
+                    stroke="var(--accent-2)"
+                    stroke-width="3"
+                  />
+                </svg>
+                <span class="ylab" style="top: 30px">8k</span>
+                <span class="ylab" style="top: 80px">6k</span>
+                <span class="ylab" style="top: 130px">4k</span>
+                <span class="ylab" style="top: 180px">2k</span>
+              </div>
+              <div class="xaxis">
+                <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span
+                ><span>Sat</span><span>Sun</span>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Live events</h3>
+                <div class="spacer"></div>
+                <a class="link" href="#">View all</a>
+              </div>
+              <div class="evt">
+                <span class="av buy">🛒</span>
+                <div class="main">
+                  <b>Mike</b> purchased <b>Nike Air Presto</b>
+                  <div class="m">London, UK · Shopify</div>
+                </div>
+                <span class="time">2m</span>
+              </div>
+              <div class="evt">
+                <span class="av signup">✦</span>
+                <div class="main">
+                  <b>Sofia</b> signed up
+                  <div class="m">Berlin, DE · Webhook</div>
+                </div>
+                <span class="time">6m</span>
+              </div>
+              <div class="evt">
+                <span class="av buy">🛒</span>
+                <div class="main">
+                  <b>James</b> purchased <b>Trail Runner X</b>
+                  <div class="m">Austin, US · Stripe</div>
+                </div>
+                <span class="time">11m</span>
+              </div>
+              <div class="evt">
+                <span class="av review">★</span>
+                <div class="main">
+                  <b>Aiko</b> left a 5-star review
+                  <div class="m">Osaka, JP · Google</div>
+                </div>
+                <span class="time">18m</span>
+              </div>
+              <div class="evt">
+                <span class="av buy">🛒</span>
+                <div class="main">
+                  <b>Lena</b> purchased <b>Cloud Hoodie</b>
+                  <div class="m">Paris, FR · Shopify</div>
+                </div>
+                <span class="time">24m</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <h3>Your notifications</h3>
+                <div class="sub">5 notifications · 3 active</div>
+              </div>
+              <div class="spacer"></div>
+              <button class="btn ghost">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                >
+                  <path d="M12 5v14M5 12h14" /></svg
+                >New
+              </button>
+            </div>
+            <div style="overflow-x: auto">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>Notification</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th class="num">Impressions</th>
+                    <th class="num">Clicks</th>
+                    <th class="num">CTR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <span class="nname"
+                        ><span class="tico sales"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.9"
+                          >
+                            <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+                            <path d="M3 6h18" />
+                            <path d="M16 10a4 4 0 0 1-8 0" /></svg></span
+                        >Recent purchases</span
+                      >
+                    </td>
+                    <td><span class="pill sales">Sales pop</span></td>
+                    <td>
+                      <span class="st-wrap on"
+                        ><label class="sw"
+                          ><input type="checkbox" checked /><span class="track"></span
+                          ><span class="knob"></span></label
+                        >Active</span
+                      >
+                    </td>
+                    <td class="num">21,430</td>
+                    <td class="num">1,620</td>
+                    <td class="num">7.6%</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="nname"
+                        ><span class="tico counter"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.9"
+                          >
+                            <path
+                              d="M4 19V5M4 19h16M8 19v-6M12 19v-9M16 19v-4M20 19V9"
+                            /></svg></span
+                        >Signups this week</span
+                      >
+                    </td>
+                    <td><span class="pill counter">Counter</span></td>
+                    <td>
+                      <span class="st-wrap on"
+                        ><label class="sw"
+                          ><input type="checkbox" checked /><span class="track"></span
+                          ><span class="knob"></span></label
+                        >Active</span
+                      >
+                    </td>
+                    <td class="num">14,210</td>
+                    <td class="num">840</td>
+                    <td class="num">5.9%</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="nname"
+                        ><span class="tico visitors"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.9"
+                          >
+                            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                            <circle cx="12" cy="12" r="3" /></svg></span
+                        >Live visitors</span
+                      >
+                    </td>
+                    <td><span class="pill visitors">Live visitors</span></td>
+                    <td>
+                      <span class="st-wrap on"
+                        ><label class="sw"
+                          ><input type="checkbox" checked /><span class="track"></span
+                          ><span class="knob"></span></label
+                        >Active</span
+                      >
+                    </td>
+                    <td class="num">9,980</td>
+                    <td class="num">520</td>
+                    <td class="num">5.2%</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="nname"
+                        ><span class="tico review"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.9"
+                          >
+                            <path
+                              d="m12 3 2.4 5 5.6.7-4 4 1 5.6L12 21l-5-2.7 1-5.6-4-4 5.6-.7Z"
+                            /></svg></span
+                        >Top-rated reviews</span
+                      >
+                    </td>
+                    <td><span class="pill review">Review</span></td>
+                    <td>
+                      <span class="st-wrap"
+                        ><label class="sw"
+                          ><input type="checkbox" /><span class="track"></span
+                          ><span class="knob"></span></label
+                        >Paused</span
+                      >
+                    </td>
+                    <td class="num">3,300</td>
+                    <td class="num">160</td>
+                    <td class="num">4.8%</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="nname"
+                        ><span class="tico custom"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.9"
+                          >
+                            <path d="M12 3a9 9 0 1 0 9 9" />
+                            <path d="M12 7v5l3 2" /></svg></span
+                        >Free shipping bar</span
+                      >
+                    </td>
+                    <td><span class="pill custom">Custom</span></td>
+                    <td>
+                      <span class="st-wrap"
+                        ><label class="sw"
+                          ><input type="checkbox" /><span class="track"></span
+                          ><span class="knob"></span></label
+                        >Paused</span
+                      >
+                    </td>
+                    <td class="num dim">—</td>
+                    <td class="num dim">—</td>
+                    <td class="num dim">—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <h3>What your visitors see</h3>
+                <div class="sub">Live preview of your top notification</div>
+              </div>
+              <div class="spacer"></div>
+              <a class="link" href="#">Customize</a>
+            </div>
+            <div class="preview-stage">
+              <div class="livecard">
+                <span class="x">×</span>
+                <div class="ph">👟</div>
+                <div class="body">
+                  <div class="h"><b>Mike</b> from London just purchased</div>
+                  <div class="s">Nike Air Presto · 12 minutes ago</div>
+                  <div class="v">
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                    >
+                      <path d="M20 6 9 17l-5-5" /></svg
+                    >Verified by Tacto
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      (function () {
+        var root = document.documentElement,
+          btn = document.getElementById("themeBtn"),
+          icon = document.getElementById("themeIcon");
+        function apply(t) {
+          if (t === "light" || t === "dark") {
+            root.setAttribute("data-theme", t);
+          } else {
+            root.removeAttribute("data-theme");
+          }
+          icon.textContent = t === "dark" ? "●" : t === "light" ? "○" : "◑";
+        }
+        var saved = "light";
+        try {
+          saved = localStorage.getItem("tacto-theme") || "light";
+        } catch (e) {}
+        apply(saved);
+        btn.addEventListener("click", function () {
+          var cur = "light";
+          try {
+            cur = localStorage.getItem("tacto-theme") || "light";
+          } catch (e) {}
+          var next = cur === "light" ? "dark" : cur === "dark" ? "system" : "light";
+          try {
+            localStorage.setItem("tacto-theme", next);
+          } catch (e) {}
+          apply(next);
+        });
+      })();
+      (function () {
+        var side = document.getElementById("side"),
+          burger = document.getElementById("burger"),
+          scrim = document.getElementById("scrim");
+        burger.addEventListener("click", function () {
+          side.classList.add("open");
+          scrim.classList.add("show");
+        });
+        scrim.addEventListener("click", function () {
+          side.classList.remove("open");
+          scrim.classList.remove("show");
+        });
+      })();
+      document.querySelectorAll(".range button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          document.querySelectorAll(".range button").forEach(function (x) {
+            x.classList.remove("on");
+          });
+          b.classList.add("on");
+        });
+      });
+    </script>
+  </body>
+</html>
