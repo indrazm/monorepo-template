@@ -42,13 +42,16 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 | EPIK J  | Onboarding & Acceptance MVP | F54–F57 |
 | EPIK K+ | Fase 2–4 (ringkas)          | F58+    |
 
-### Status progres
+### Status progres — MVP inti SELESAI ✅
 
-- ✅ **EPIK A — Fondasi (F1–F12)** selesai: rebrand, env/config, skema domain + migrasi, kontrak Zod, queue registry + worker.
-- ✅ **EPIK B (F13–F15)** selesai: organization plugin, Org default saat sign-up, middleware `organizationId`. 🔜 **F16** (UI undang anggota) belum.
-- ✅ **EPIK C (F17–F19)** selesai: kontrak sites, CRUD Sites API (tenant-filtered, uji isolasi pglite), halaman Sites + shell/tema Tacto + nav semua menu.
-- ✅ **F28** (Notifications CRUD API) selesai. 🔜 **F20–F27, F29+** berikutnya.
-- Catatan: `db:deploy` ke Postgres nyata menunggu Docker hidup; migrasi sudah ter-generate & diuji lewat pglite di test.
+Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet pixel + verifikasi → buat notifikasi (editor + preview) → `t.js` render di situs (shadow DOM, 2.9 KB gzip) → ingest (pixel capture / manual API / custom webhook terverifikasi) → analytics (impression/klik/CTR + events feed) → batas paket Free + badge "Powered by Tacto" → Overview + onboarding checklist.**
+
+- ✅ **EPIK A Fondasi (F1–F12)** · ✅ **EPIK B Auth/Org (F13–F15)** · ✅ **EPIK C Site & Pixel (F17–F21)** · ✅ **EPIK D Widget `t.js` (F22–F27)** · ✅ **EPIK E Notifikasi (F28–F36)** · ✅ **EPIK F Ingestion (F38–F42)** · ✅ **EPIK G Integrasi framework (F44)** · ✅ **EPIK H Analytics (F48–F49)** · ✅ **EPIK I Billing (F51–F53)** · ✅ **EPIK J Onboarding/E2E (F54–F57)**.
+- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; 50 test (Vitest + integrasi pglite + 1 e2e HTTP) lulus; `t.js` 2.9 KB gzip.
+- **Sengaja ditunda (bukan blocker MVP):**
+  - **F16** UI undang anggota (opsional) · **F37** tipe Review (Should/Fase 2) · **F45** katalog integrasi UI (Should/Fase 2).
+  - **F43/F47** pindah webhook & agregasi analytics ke worker BullMQ (kini sinkron/langsung) · **F32/F33** counter & live-visitors via Redis (kini via query DB) · **F41** rate-limit via Redis multi-instance (kini in-memory). Semua jalan secara fungsional; optimisasi/durabilitas menyusul saat Redis di-wire ke produser API.
+- **Catatan lingkungan:** `db:deploy` ke Postgres nyata & `docker compose up` belum diuji-runtime di mesin ini (Docker mati); migrasi diverifikasi lewat pglite, konfigurasi compose/Caddy ditulis & di-review.
 - Prasyarat (di luar penomoran): perbaikan tooling lintas-OS + `.gitattributes` (commit `chore`), dokumen dev (commit `docs`).
 
 ---
