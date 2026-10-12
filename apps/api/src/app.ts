@@ -10,6 +10,8 @@ import {
 } from "./modules/auth/middleware";
 import { createNotificationsRouter } from "./modules/notifications/router";
 import { createNotificationsService } from "./modules/notifications/services";
+import { createIngestRouter } from "./modules/ingest/router";
+import { createIngestService } from "./modules/ingest/services";
 import { createWidgetRouter } from "./modules/widget/router";
 import { createWidgetService } from "./modules/widget/services";
 import { createProfileRouter } from "./modules/profile/router";
@@ -44,6 +46,7 @@ export function createApp({
   });
   return new Hono<{ Variables: AuthVariables }>()
     .use("/widget/*", widgetCors)
+    .use("/ingest/*", widgetCors)
     .use("/api/*", dashboardCors)
     .use("/session", dashboardCors)
     .use("/profile", dashboardCors)
@@ -67,6 +70,7 @@ export function createApp({
     .route("/users", createUsersRouter(createUsersService(db)))
     .route("/api/v1/sites", createSitesRouter(createSitesService(db)))
     .route("/api/v1/notifications", createNotificationsRouter(createNotificationsService(db)))
-    .route("/widget", createWidgetRouter(createWidgetService(db)));
+    .route("/widget", createWidgetRouter(createWidgetService(db)))
+    .route("/ingest", createIngestRouter(createIngestService(db)));
 }
 export type AppType = ReturnType<typeof createApp>;

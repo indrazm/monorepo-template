@@ -241,6 +241,11 @@ export const site = pgTable(
       .notNull()
       .unique()
       .$defaultFn(() => createId()),
+    // Secret key for server-to-server ingestion (never exposed in the pixel).
+    apiKey: text("api_key")
+      .notNull()
+      .unique()
+      .$defaultFn(() => createId()),
     pixelVerifiedAt: timestamp("pixel_verified_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },

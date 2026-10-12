@@ -264,11 +264,11 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 # EPIK F — Ingestion event
 
-## Fase 38 — API key per site
+## Fase 38 — API key per site ✅
 
 > **File:** `schema.ts` (field/tabel key), `apps/api/src/modules/ingest/auth.ts`. **Cek:** tanpa key → 401. **FR:** FR-ING-02.
 
-## Fase 39 — Ingest manual + idempotency + anonimisasi
+## Fase 39 — Ingest manual + idempotency + anonimisasi ✅
 
 > **File:** `apps/api/src/modules/ingest/{router.ts,services.ts}`, `contracts/events.ts`.
 > **Kerjakan:** `POST /ingest/v1/event` → `event`; dedupeKey unique → 409; simpan displayName(nama depan)+city.
