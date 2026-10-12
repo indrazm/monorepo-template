@@ -371,7 +371,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 > **File:** widget badge verified + rate-limit (F41). **Kerjakan:** hanya event terverifikasi ber-✓.
 > **Cek:** event non-verified tak ber-✓. **FR:** FR-VER-03.
 
-## Fase 56 — E2E test alur MVP
+## Fase 56 — E2E alur MVP ✅ (HTTP e2e widget + integrasi pglite per modul; browser E2E butuh stack hidup)
 
 > **File:** `apps/web/e2e/*` / skrip integrasi. **Kerjakan:** sign-up → Site → snippet → verifikasi → 4 tipe notifikasi tampil hanya di domain terdaftar & sesuai URL → capture + webhook → loop/order/close → analytics → batas Free + badge.
 > **Cek:** skenario hijau. **FR:** SRS §9.
