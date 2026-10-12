@@ -6,7 +6,7 @@ import { webEnvSchema } from "../apps/web/src/config";
 const example = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
 const entries = Object.fromEntries(
   example
-    .split("\n")
+    .split(/\r?\n/)
     .filter((line) => /^[A-Z_][A-Z0-9_]*=/.test(line))
     .map((line) => {
       const separator = line.indexOf("=");

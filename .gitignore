@@ -8,3 +8,5 @@ build
 .env.*
 !.env.example
 coverage
+.opencode
+.code-review-graph

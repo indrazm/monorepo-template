@@ -109,10 +109,11 @@ try {
       overrides,
     }),
   );
+  // Use shell:true so the `pnpm` launcher resolves on every OS (notably the
+  // `pnpm.CMD` shim on Windows, which a bare spawnSync cannot locate).
   const result = spawnSync(
-    "pnpm",
-    ["exec", "oxlint", "--config", configPath, "--deny-warnings", "apps", "packages"],
-    { cwd: root, stdio: "inherit" },
+    `pnpm exec oxlint --config "${configPath}" --deny-warnings apps packages`,
+    { cwd: root, stdio: "inherit", shell: true },
   );
   if (result.error) throw result.error;
   process.exitCode = result.status ?? 1;

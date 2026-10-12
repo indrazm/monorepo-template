@@ -1,0 +1,16 @@
+# Normalize line endings to LF across all platforms so formatter/linter
+# checks are consistent (avoids CRLF churn on Windows checkouts).
+* text=auto eol=lf
+
+# Binary assets must never be line-ending normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
