@@ -96,6 +96,7 @@ export const notificationSchema = z.object({
 });
 
 export type NotificationType = z.output<typeof notificationTypeSchema>;
+export type EventType = z.output<typeof eventTypeSchema>;
 export type NotificationMessage = z.output<typeof notificationMessageSchema>;
 export type NotificationStyle = z.output<typeof notificationStyleSchema>;
 export type NotificationDisplay = z.output<typeof notificationDisplaySchema>;

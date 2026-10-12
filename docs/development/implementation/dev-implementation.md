@@ -164,13 +164,13 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 > **File:** `apps/web/src/features/sites/`, route `routes/sites.tsx`.
 > **Kerjakan:** daftar + form (TanStack Query, `@repo/ui`, token style guide). **Cek:** buat Site dari UI. **FR:** FR-SITE-01.
 
-## Fase 20 — Panel Install snippet + origin guard
+## Fase 20 — Panel Install snippet + origin guard (origin guard ✅)
 
 > **File:** `apps/web/src/features/sites/components/install-panel.tsx`; `apps/api/src/modules/widget/` (`assertAllowedOrigin`).
 > **Kerjakan:** snippet `<script src="{WIDGET_CDN_URL}/t.js" data-site>` + GTM; origin check domain.
 > **Cek:** domain asing ditolak. **FR:** FR-SITE-02/03/06, NFR-SEC-05.
 
-## Fase 21 — Verifikasi pixel terpasang
+## Fase 21 — Verifikasi pixel terpasang (API ✅)
 
 > **File:** `apps/api/src/modules/widget/services.ts`, web.
 > **Kerjakan:** set `pixelVerifiedAt` saat payload pertama; badge status + "Cek ulang".
@@ -219,30 +219,30 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 > **Kerjakan:** CRUD `/api/v1/notifications` per `siteId`; body `notificationConfigSchema`; tenant guard; toggle `isActive`.
 > **Cek:** buat tersimpan; inactive tak ikut payload. **FR:** FR-NED-11.
 
-## Fase 29 — Endpoint payload publik + cache Redis
+## Fase 29 — Endpoint payload publik + cache Redis ✅ (cache Redis menyusul)
 
 > **File:** `apps/api/src/modules/widget/{router.ts,services.ts}`.
 > **Kerjakan:** pilih notifikasi aktif cocok `url` → `widgetPayloadResponseSchema` + `ttl` + cache Redis.
 > **Cek:** panggilan kedua dari cache; p95 < 150 ms. **FR:** NFR-PERF-02/03.
 
-## Fase 30 — Resolver template variabel + fallback
+## Fase 30 — Resolver template variabel + fallback ✅
 
 > **File:** `apps/api/src/modules/widget/template.ts`. **Kerjakan:** `renderMessage(template,vars,fallbacks)` + trim/kapitalisasi + time-ago>N→recently; nama depan + kota saja.
 > **Cek:** unit test. **FR:** FR-NED-01/02/04, NFR-PRIV-01.
 
-## Fase 31 — Tipe: Recent Sales
+## Fase 31 — Tipe: Recent Sales ✅
 
 > **File:** `.../widget/sources/recent-sales.ts`. **Kerjakan:** `event` terbaru sesuai dataSource → widgetNotification. **FR:** FR-NOT-01.
 
-## Fase 32 — Tipe: Counter (worker)
+## Fase 32 — Tipe: Counter ✅ (via DB; worker/Redis menyusul)
 
 > **File:** `apps/worker/src/processors/counter-recompute.ts` + Redis. **Kerjakan:** agregat event/periode → Redis `counter:{notificationId}`. **FR:** FR-NOT-02, FR-ANL-05.
 
-## Fase 33 — Tipe: Live Visitors (Redis)
+## Fase 33 — Tipe: Live Visitors ✅ (via DB window; Redis menyusul)
 
 > **File:** `.../widget/sources/live-visitors.ts`. **Kerjakan:** beacon view → `ZADD visitors:{siteId}`; window 5 menit. **Cek:** 2 tab → ≥2. **FR:** FR-NOT-03.
 
-## Fase 34 — Tipe: Custom/Informational
+## Fase 34 — Tipe: Custom/Informational ✅
 
 > **File:** `.../widget/sources/custom.ts`. **Kerjakan:** teks/CTA statis. **Cek:** "garansi 30 hari" tampil. **FR:** FR-NOT-04.
 

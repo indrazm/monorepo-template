@@ -10,6 +10,8 @@ import {
 } from "./modules/auth/middleware";
 import { createNotificationsRouter } from "./modules/notifications/router";
 import { createNotificationsService } from "./modules/notifications/services";
+import { createWidgetRouter } from "./modules/widget/router";
+import { createWidgetService } from "./modules/widget/services";
 import { createProfileRouter } from "./modules/profile/router";
 import { createProfileService } from "./modules/profile/services";
 import { createSitesRouter } from "./modules/sites/router";
@@ -27,16 +29,25 @@ export function createApp({
   config: Pick<ReturnType<typeof createApiConfig>, "clientOrigins">;
 }) {
   const loadSession = createSessionMiddleware(auth, db);
+  // Dashboard/auth: credentialed CORS restricted to the configured origins.
+  const dashboardCors = cors({
+    allowHeaders: ["Content-Type", "Authorization"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    credentials: true,
+    origin: (origin) => (config.clientOrigins.includes(origin) ? origin : null),
+  });
+  // Public widget endpoints: any origin, no credentials (runs on customer sites).
+  const widgetCors = cors({
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    origin: "*",
+    maxAge: 86_400,
+  });
   return new Hono<{ Variables: AuthVariables }>()
-    .use(
-      "*",
-      cors({
-        allowHeaders: ["Content-Type", "Authorization"],
-        allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        credentials: true,
-        origin: (origin) => (config.clientOrigins.includes(origin) ? origin : null),
-      }),
-    )
+    .use("/widget/*", widgetCors)
+    .use("/api/*", dashboardCors)
+    .use("/session", dashboardCors)
+    .use("/profile", dashboardCors)
+    .use("/users", dashboardCors)
     .get("/health", (c) => c.json({ ok: true, service: "api" }, 200))
     .on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw))
     .use("/session", loadSession)
@@ -55,6 +66,7 @@ export function createApp({
     .route("/profile", createProfileRouter(createProfileService(db)))
     .route("/users", createUsersRouter(createUsersService(db)))
     .route("/api/v1/sites", createSitesRouter(createSitesService(db)))
-    .route("/api/v1/notifications", createNotificationsRouter(createNotificationsService(db)));
+    .route("/api/v1/notifications", createNotificationsRouter(createNotificationsService(db)))
+    .route("/widget", createWidgetRouter(createWidgetService(db)));
 }
 export type AppType = ReturnType<typeof createApp>;
