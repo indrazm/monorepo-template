@@ -1,4 +1,16 @@
-import { boolean, foreignKey, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { createId } from "@paralleldrive/cuid2";
+import {
+  boolean,
+  foreignKey,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 export const user = pgTable(
   "User",
@@ -85,3 +97,254 @@ export const verification = pgTable("Verification", {
   createdAt: timestamp("createdAt", { precision: 3 }).defaultNow(),
   updatedAt: timestamp("updatedAt", { precision: 3 }).$onUpdate(() => new Date()),
 });
+
+// ---------------------------------------------------------------------------
+// Tacto domain
+//
+// Auth + tenancy tables (User/Session/Account/Verification above, plus the
+// Better Auth organization-plugin tables added in F13) are owned by Better
+// Auth. Every domain table below is scoped to a tenant via `organizationId`
+// (= Better Auth organization id) and/or `siteId`. The shape of each `jsonb`
+// column is the single source of truth in `@repo/contracts`; the database
+// keeps it free-form on purpose (see SRS section 5).
+// ---------------------------------------------------------------------------
+
+// ---------- ENUMS (F4) ----------
+export const planEnum = pgEnum("plan", ["free", "starter", "growth", "agency"]);
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "recent_sales",
+  "counter",
+  "live_visitors",
+  "review",
+  "custom",
+  "combo",
+  "social_counter",
+  "youtube",
+  "low_stock",
+  "countdown",
+]);
+export const eventTypeEnum = pgEnum("event_type", [
+  "purchase",
+  "signup",
+  "visit",
+  "form_submit",
+  "custom",
+]);
+export const formPageKindEnum = pgEnum("form_page_kind", [
+  "rating",
+  "negative_feedback",
+  "welcome",
+  "question",
+  "consent",
+  "about_you",
+  "about_company",
+  "thank_you",
+]);
+export const testimonialStatusEnum = pgEnum("testimonial_status", [
+  "pending",
+  "approved",
+  "rejected",
+  "hidden",
+]);
+// "board" is the Tacto "Testimonial Board" asset (renamed from Wall of Love).
+export const assetKindEnum = pgEnum("asset_kind", [
+  "board",
+  "widget",
+  "image",
+  "video",
+  "case_study",
+  "rich_snippet",
+]);
+
+// ---------- FOUNDATION (F5) ----------
+export const site = pgTable(
+  "site",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    organizationId: text("organization_id").notNull(),
+    name: text("name").notNull(),
+    domain: text("domain").notNull(),
+    siteKey: text("site_key")
+      .notNull()
+      .unique()
+      .$defaultFn(() => createId()),
+    pixelVerifiedAt: timestamp("pixel_verified_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("site_org_idx").on(t.organizationId)],
+);
+
+export const subscription = pgTable("subscription", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  organizationId: text("organization_id").notNull().unique(),
+  plan: planEnum("plan").notNull().default("free"),
+  status: text("status").notNull().default("active"),
+  trafficQuota: integer("traffic_quota").notNull().default(2000),
+  provider: text("provider"),
+  renewsAt: timestamp("renews_at"),
+});
+
+export const integration = pgTable(
+  "integration",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    organizationId: text("organization_id").notNull(),
+    provider: text("provider").notNull(),
+    config: jsonb("config").notNull(),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("integration_org_idx").on(t.organizationId)],
+);
+
+// ---------- NOTIFICATION ENGINE (F6) ----------
+export const notification = pgTable(
+  "notification",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    name: text("name").notNull().default("Untitled notification"),
+    type: notificationTypeEnum("type").notNull(),
+    message: jsonb("message").notNull(),
+    style: jsonb("style").notNull(),
+    display: jsonb("display").notNull(),
+    dataSource: jsonb("data_source").notNull(),
+    timing: jsonb("timing").notNull(),
+    verified: boolean("verified").notNull().default(false),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("notification_site_idx").on(t.siteId)],
+);
+
+export const domainSetting = pgTable("domain_setting", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  siteId: text("site_id")
+    .notNull()
+    .unique()
+    .references(() => site.id, { onDelete: "cascade" }),
+  loop: jsonb("loop").notNull(),
+  customCss: text("custom_css"),
+  privacy: jsonb("privacy").notNull(),
+  analyticsPassthrough: jsonb("analytics_passthrough"),
+});
+
+export const event = pgTable(
+  "event",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    type: eventTypeEnum("type").notNull(),
+    source: text("source").notNull(),
+    verified: boolean("verified").notNull().default(false),
+    displayName: text("display_name"),
+    city: text("city"),
+    payload: jsonb("payload"),
+    dedupeKey: text("dedupe_key").unique(),
+    occurredAt: timestamp("occurred_at").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("event_site_occurred_idx").on(t.siteId, t.occurredAt)],
+);
+
+// ---------- TESTIMONIAL ENGINE (F7) ----------
+export const testimonialForm = pgTable("testimonial_form", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  siteId: text("site_id")
+    .notNull()
+    .references(() => site.id, { onDelete: "cascade" }),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  design: jsonb("design").notNull(),
+  reward: jsonb("reward"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const formPage = pgTable(
+  "form_page",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    formId: text("form_id")
+      .notNull()
+      .references(() => testimonialForm.id, { onDelete: "cascade" }),
+    kind: formPageKindEnum("kind").notNull(),
+    order: integer("order").notNull(),
+    config: jsonb("config").notNull(),
+  },
+  (t) => [index("form_page_form_idx").on(t.formId)],
+);
+
+export const testimonial = pgTable(
+  "testimonial",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    formId: text("form_id").references(() => testimonialForm.id, { onDelete: "set null" }),
+    authorName: text("author_name").notNull(),
+    authorPhoto: text("author_photo"),
+    role: text("role"),
+    company: text("company"),
+    rating: integer("rating"),
+    text: text("text").notNull(),
+    videoUrl: text("video_url"),
+    isPrivateFeedback: boolean("is_private_feedback").notNull().default(false),
+    consentGiven: boolean("consent_given").notNull().default(false),
+    status: testimonialStatusEnum("status").notNull().default("pending"),
+    tags: text("tags").array(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("testimonial_site_status_idx").on(t.siteId, t.status)],
+);
+
+export const asset = pgTable("asset", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  siteId: text("site_id")
+    .notNull()
+    .references(() => site.id, { onDelete: "cascade" }),
+  kind: assetKindEnum("kind").notNull(),
+  config: jsonb("config").notNull(),
+  publicSlug: text("public_slug").unique(),
+});
+
+// ---------- SHARED ----------
+export const impression = pgTable(
+  "impression",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    refId: text("ref_id").notNull(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("impression_site_created_idx").on(t.siteId, t.createdAt)],
+);

@@ -27,6 +27,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@paralleldrive/cuid2": "^3.3.0",
     "@repo/config": "workspace:*",
     "drizzle-orm": "catalog:",
     "pg": "^8.23.1"
