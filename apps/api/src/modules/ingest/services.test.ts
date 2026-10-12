@@ -55,7 +55,8 @@ describe("ingest service", () => {
     expect(stored?.city).toBe("London");
     expect(stored?.source).toBe("manual");
     expect(stored?.verified).toBe(false);
-    expect((stored?.payload as { product?: string }).product).toBe("Nike Air");
+    const payload = stored?.payload as { product?: string } | null;
+    expect(payload?.product).toBe("Nike Air");
   });
 
   it("rejects duplicate events by dedupeKey", async () => {

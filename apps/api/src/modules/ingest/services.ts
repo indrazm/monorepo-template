@@ -28,7 +28,7 @@ export function createIngestService(db: Pick<Database, "select" | "insert">) {
   // duplicates by dedupeKey (FR-ING-07). Manual/API events are not "verified".
   async function ingestEvent(siteId: string, input: IngestEventInput): Promise<IngestResult> {
     const payload = {
-      ...(input.payload ?? {}),
+      ...input.payload,
       ...(input.product ? { product: input.product } : {}),
     };
     try {
