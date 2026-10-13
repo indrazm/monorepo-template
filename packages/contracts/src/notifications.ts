@@ -38,7 +38,8 @@ export const urlMatchModes = ["all", "simple", "contains", "regex"] as const;
 export const urlMatchSchema = z
   .object({
     mode: z.enum(urlMatchModes),
-    value: z.string().trim().optional(),
+    // Capped to limit the regex-targeting (ReDoS) surface; a path rule is short.
+    value: z.string().trim().max(300).optional(),
   })
   .refine((rule) => rule.mode === "all" || (rule.value?.length ?? 0) > 0, {
     message: 'A match value is required unless the mode is "all".',

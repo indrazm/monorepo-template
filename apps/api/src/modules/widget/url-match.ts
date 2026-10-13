@@ -11,8 +11,11 @@ export function matchUrl(rule: UrlMatch, url: string): boolean {
     case "contains":
       return rule.value ? url.includes(rule.value) : false;
     case "regex":
+      // Defense-in-depth against ReDoS: reject over-long patterns before
+      // compiling. The tested input (a URL path) is already short/bounded.
+      if (!rule.value || rule.value.length > 300) return false;
       try {
-        return rule.value ? new RegExp(rule.value).test(url) : false;
+        return new RegExp(rule.value).test(url.slice(0, 2000));
       } catch {
         return false;
       }
