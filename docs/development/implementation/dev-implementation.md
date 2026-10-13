@@ -395,7 +395,7 @@ Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet 
 - **F58** OAuth Google ✅ (reset password menyusul). — FR-AUTH-04/06
 - **F59** Stripe checkout + webhook status langganan. ✅ (checkout butuh STRIPE_SECRET_KEY; webhook update plan teruji) — FR-BIL-02/05
 - **F60** Konektor Stripe/Shopify/WooCommerce (purchase→event verified) via framework F44. ✅ — FR-ING-09, FR-VER-01/02
-- **F61** Zapier/Make (endpoint + key). — FR-ING-08, FR-INT-04
+- **F61** Zapier/Make ✅ (lewat ingest API key + konektor "zapier" + UI Integrations). — FR-ING-08, FR-INT-04
 - **F62** Import review Google/Facebook → review notifications. — FR-ING-10, FR-NOT-05
 - **F63** Goals penuh + A/B testing varian. — FR-ANL-03/04
 - **F64** Katalog integrasi UI lengkap + data filtering. — FR-INT-02/03
