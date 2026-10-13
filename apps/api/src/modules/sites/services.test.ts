@@ -65,4 +65,43 @@ describe("sites service (tenant isolation)", () => {
     expect(await service.remove(ORG_A, siteA.id)).toBe(true);
     expect(await service.get(ORG_A, siteA.id)).toBeNull();
   });
+
+  it("returns default domain settings, then persists an upsert (tenant-scoped)", async () => {
+    const siteA = await service.create(ORG_A, { name: "A", domain: "a.example.com" });
+
+    const defaults = await service.getSettings(ORG_A, siteA.id);
+    expect(defaults?.loop.order).toBe("random");
+    expect(defaults?.customCss).toBeNull();
+
+    // Another org cannot read or write these settings.
+    expect(await service.getSettings(ORG_B, siteA.id)).toBeNull();
+    expect(
+      await service.upsertSettings(ORG_B, siteA.id, {
+        loop: { loopAfter: 1, order: "manual", manualOrder: [], showClose: false, closeForDays: 2 },
+        privacy: { requireConsent: true, trackIpGeo: true, storeEmail: false },
+        customCss: ".x{}",
+      }),
+    ).toBeNull();
+
+    await service.upsertSettings(ORG_A, siteA.id, {
+      loop: { loopAfter: 5, order: "manual", manualOrder: [], showClose: false, closeForDays: 3 },
+      privacy: { requireConsent: true, trackIpGeo: false, storeEmail: false },
+      customCss: ".tacto-card{border:0}",
+    });
+    const saved = await service.getSettings(ORG_A, siteA.id);
+    expect(saved?.loop.order).toBe("manual");
+    expect(saved?.loop.loopAfter).toBe(5);
+    expect(saved?.privacy.requireConsent).toBe(true);
+    expect(saved?.customCss).toBe(".tacto-card{border:0}");
+
+    // Second upsert overwrites (not duplicates).
+    await service.upsertSettings(ORG_A, siteA.id, {
+      loop: { loopAfter: 2, order: "random", manualOrder: [], showClose: true, closeForDays: 1 },
+      privacy: { requireConsent: false, trackIpGeo: true, storeEmail: false },
+      customCss: null,
+    });
+    const second = await service.getSettings(ORG_A, siteA.id);
+    expect(second?.loop.loopAfter).toBe(2);
+    expect(second?.customCss).toBeNull();
+  });
 });

@@ -25,6 +25,13 @@ async function boot(): Promise<void> {
 
   const position = payload.notifications[0]?.style.position ?? "bottom-left";
   const host = createShadowHost(position);
+
+  // Per-domain custom CSS, scoped to the widget's shadow root (FR-NGS-04).
+  if (payload.settings.customCss) {
+    const custom = document.createElement("style");
+    custom.textContent = payload.settings.customCss;
+    host.root.appendChild(custom);
+  }
   startScheduler({
     host,
     siteKey,

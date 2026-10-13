@@ -1,9 +1,25 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { Database } from "@repo/db";
-import { site } from "@repo/db/schema";
-import type { CreateSiteInput, Site, UpdateSiteInput } from "@repo/contracts/sites";
+import { domainSetting, site } from "@repo/db/schema";
+import type {
+  CreateSiteInput,
+  DomainLoopSettings,
+  DomainPrivacy,
+  DomainSetting,
+  Site,
+  UpdateSiteInput,
+} from "@repo/contracts/sites";
+import { domainLoopSettingsSchema, domainPrivacySchema } from "@repo/contracts/sites";
 
 type SiteRow = typeof site.$inferSelect;
+
+function defaultDomainSetting(): DomainSetting {
+  return {
+    loop: domainLoopSettingsSchema.parse({}),
+    privacy: domainPrivacySchema.parse({}),
+    customCss: null,
+  };
+}
 
 function toSite(row: SiteRow): Site {
   return {
@@ -18,7 +34,56 @@ function toSite(row: SiteRow): Site {
 }
 
 export function createSitesService(db: Pick<Database, "select" | "insert" | "update" | "delete">) {
-  return { list, get, create, update, remove };
+  return { list, get, create, update, remove, getSettings, upsertSettings };
+
+  async function ownsSite(organizationId: string, siteId: string): Promise<boolean> {
+    const rows = await db
+      .select({ id: site.id })
+      .from(site)
+      .where(and(eq(site.id, siteId), eq(site.organizationId, organizationId)))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  // Per-domain global settings (FR-NGS-01/02/03/05). Returns defaults when unset.
+  async function getSettings(
+    organizationId: string,
+    siteId: string,
+  ): Promise<DomainSetting | null> {
+    if (!(await ownsSite(organizationId, siteId))) return null;
+    const [row] = await db
+      .select()
+      .from(domainSetting)
+      .where(eq(domainSetting.siteId, siteId))
+      .limit(1);
+    if (!row) return defaultDomainSetting();
+    return {
+      loop: row.loop as DomainLoopSettings,
+      privacy: row.privacy as DomainPrivacy,
+      customCss: (row.customCss as string | null) ?? null,
+    };
+  }
+
+  async function upsertSettings(
+    organizationId: string,
+    siteId: string,
+    input: DomainSetting,
+  ): Promise<DomainSetting | null> {
+    if (!(await ownsSite(organizationId, siteId))) return null;
+    await db
+      .insert(domainSetting)
+      .values({
+        siteId,
+        loop: input.loop,
+        privacy: input.privacy,
+        customCss: input.customCss,
+      })
+      .onConflictDoUpdate({
+        target: domainSetting.siteId,
+        set: { loop: input.loop, privacy: input.privacy, customCss: input.customCss },
+      });
+    return input;
+  }
 
   async function list(organizationId: string): Promise<Site[]> {
     const rows = await db

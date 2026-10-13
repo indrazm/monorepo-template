@@ -29,6 +29,7 @@ import { CheckCircle2Icon, CopyIcon, Globe2Icon, PlusIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { env } from "../../../api";
 import { AppShell } from "../../app-shell/app-shell";
+import { SiteSettingsDialog } from "./site-settings-dialog";
 import {
   sitesQueryOptions,
   useCreateSiteMutation,
@@ -80,6 +81,7 @@ export function SitesPage() {
                   )}
                   <div className="flex items-center gap-1">
                     <InstallSiteButton siteKey={site.siteKey} />
+                    <SiteSettingsDialog siteId={site.id} />
                     <DeleteSiteButton id={site.id} name={site.name} />
                   </div>
                 </CardContent>

@@ -399,7 +399,7 @@ Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet 
 - **F62** Import review Google/Facebook → review notifications. — FR-ING-10, FR-NOT-05
 - **F63** Goals penuh + A/B testing varian. — FR-ANL-03/04
 - **F64** Katalog integrasi UI lengkap + data filtering. — FR-INT-02/03
-- **F65** Verified label lengkap + Custom CSS/JS + passthrough GA/GTM/Mixpanel/FB. — FR-VER-01/02, FR-NGS-04/06
+- **F65** Custom CSS per domain ✅ + domain settings UI (loop/order/close/consent). Passthrough GA/GTM = menyusul. — FR-NGS-01/02/03/04/05
 
 ### Fase 3 — suite lengkap
 

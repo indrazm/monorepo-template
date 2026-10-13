@@ -30,6 +30,7 @@ export const widgetSettingsSchema = z.object({
   closeForDays: z.number().int().min(0).default(0),
   showBadge: z.boolean(),
   requireConsent: z.boolean().default(false),
+  customCss: z.string().nullable().default(null),
 });
 
 export const widgetPayloadResponseSchema = z.object({

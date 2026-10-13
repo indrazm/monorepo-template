@@ -135,6 +135,7 @@ export function createWidgetService(db: Pick<Database, "select" | "update" | "in
         closeForDays: loop.closeForDays,
         showBadge: !planLimits[plan].removeBadge,
         requireConsent: privacy.requireConsent,
+        customCss: (settingRow?.customCss as string | null) ?? null,
       },
       ttl: DEFAULT_TTL,
     };

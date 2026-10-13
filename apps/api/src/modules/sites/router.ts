@@ -1,7 +1,7 @@
 import { apiError } from "@repo/contracts/errors";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { createSiteSchema, updateSiteSchema } from "@repo/contracts/sites";
+import { createSiteSchema, domainSettingSchema, updateSiteSchema } from "@repo/contracts/sites";
 import { type AuthVariables, requireOrg } from "../auth/middleware";
 import type { createBillingService } from "../billing/services";
 import type { createSitesService } from "./services";
@@ -57,5 +57,29 @@ export function createSitesRouter(
       const removed = await service.remove(organizationId, c.req.param("id"));
       if (!removed) return c.json(apiError("site_not_found"), 404);
       return c.json({ ok: true }, 200);
-    });
+    })
+    .get("/:id/settings", async (c) => {
+      const organizationId = requireOrg(c);
+      if (!organizationId) return c.json(apiError("unauthorized"), 401);
+      const settings = await service.getSettings(organizationId, c.req.param("id"));
+      if (!settings) return c.json(apiError("site_not_found"), 404);
+      return c.json({ settings }, 200);
+    })
+    .put(
+      "/:id/settings",
+      zValidator("json", domainSettingSchema, (result, c) => {
+        if (!result.success) return c.json(apiError("validation_error"), 400);
+      }),
+      async (c) => {
+        const organizationId = requireOrg(c);
+        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        const settings = await service.upsertSettings(
+          organizationId,
+          c.req.param("id"),
+          c.req.valid("json"),
+        );
+        if (!settings) return c.json(apiError("site_not_found"), 404);
+        return c.json({ settings }, 200);
+      },
+    );
 }
