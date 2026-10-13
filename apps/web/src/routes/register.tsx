@@ -7,6 +7,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { ThemeSelector } from "@repo/ui/components/theme-selector";
+import { GoogleButton } from "../features/auth/components/google-button";
 import { useRegisterMutation } from "../features/auth/hooks/use-auth";
 
 export const Route = createFileRoute("/register")({
@@ -36,16 +37,22 @@ function RegisterPage() {
     <div className="flex min-h-screen flex-col bg-muted/30">
       <header className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
         <Link to="/" className="font-semibold">
-          Platform
+          Tacto
         </Link>
         <ThemeSelector />
       </header>
       <main className="flex flex-1 items-center justify-center px-6 py-12">
         <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle>Create user account</CardTitle>
+            <CardTitle>Create your Tacto account</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="grid gap-4">
+            <GoogleButton label="Sign up with Google" />
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="h-px flex-1 bg-border" />
+              or
+              <span className="h-px flex-1 bg-border" />
+            </div>
             <form className="grid gap-4" onSubmit={handleSubmit}>
               <div className="grid gap-2">
                 <Label htmlFor="name">Name</Label>

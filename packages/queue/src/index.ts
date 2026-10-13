@@ -1,4 +1,5 @@
 import { Queue, QueueEvents, type ConnectionOptions } from "bullmq";
+import { Redis } from "ioredis";
 import {
   analyticsJobSchema,
   analyticsQueueName,
@@ -15,8 +16,12 @@ import {
   type WebhookJob,
 } from "@repo/contracts/jobs";
 
+// Returns a fresh ioredis client. BullMQ cannot resolve the optional `ioredis`
+// package from its own location under pnpm, so we hand it a constructed client
+// instead of connection options. `maxRetriesPerRequest: null` is required by
+// BullMQ workers. Create one connection per Queue/Worker (do not share).
 export function createQueueConnection(url: string): ConnectionOptions {
-  return { url };
+  return new Redis(url, { maxRetriesPerRequest: null });
 }
 
 export function createExampleQueue(connection: ConnectionOptions) {

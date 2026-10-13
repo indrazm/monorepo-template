@@ -20,9 +20,11 @@ const registry: { name: string; processor: Processor }[] = [
 ];
 
 export function runWorker(config: ReturnType<typeof createWorkerConfig>) {
-  const connection = { ...createQueueConnection(config.redisUrl), maxRetriesPerRequest: null };
   const workers = registry.map(({ name, processor }) => {
-    const worker = new Worker(name, processor, { connection });
+    // One ioredis connection per worker (BullMQ takes ownership of blocking ops).
+    const worker = new Worker(name, processor, {
+      connection: createQueueConnection(config.redisUrl),
+    });
     worker.on("ready", () => console.info("Queue listening", { queue: name }));
     worker.on("completed", (job) => console.info("Job completed", { queue: name, jobId: job.id }));
     worker.on("failed", (job, error) =>

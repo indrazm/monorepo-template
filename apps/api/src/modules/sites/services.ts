@@ -11,6 +11,7 @@ function toSite(row: SiteRow): Site {
     name: row.name,
     domain: row.domain,
     siteKey: row.siteKey,
+    apiKey: row.apiKey,
     pixelVerifiedAt: row.pixelVerifiedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
   };

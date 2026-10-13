@@ -37,3 +37,15 @@ export async function logout() {
     throw new Error(error.message ?? "Failed to log out.");
   }
 }
+
+// Starts the Google OAuth flow; Better Auth redirects to Google and back to
+// callbackURL on success (FR-AUTH-04).
+export async function loginWithGoogle() {
+  const { error } = await authClient.signIn.social({
+    provider: "google",
+    callbackURL: `${window.location.origin}/`,
+  });
+  if (error) {
+    throw new Error(error.message ?? "Google sign-in failed.");
+  }
+}

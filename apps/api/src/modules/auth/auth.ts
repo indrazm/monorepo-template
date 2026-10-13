@@ -19,6 +19,18 @@ export function createAuth(db: Database, config: ReturnType<typeof createApiConf
     emailAndPassword: {
       enabled: true,
     },
+    // Google OAuth is enabled only when credentials are configured (FR-AUTH-04).
+    // Better Auth handles the full flow at /api/auth/callback/google.
+    ...(config.google
+      ? {
+          socialProviders: {
+            google: {
+              clientId: config.google.clientId,
+              clientSecret: config.google.clientSecret,
+            },
+          },
+        }
+      : {}),
     plugins: [
       admin({
         adminRoles: ["admin"],

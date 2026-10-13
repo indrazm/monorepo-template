@@ -23,6 +23,8 @@ export const apiEnvSchema = z
     CLIENT_ORIGINS: originsSchema.default(["http://localhost:3000"]),
     DATABASE_URL: databaseUrlSchema,
     REDIS_URL: z.url({ protocol: /^rediss?$/ }).default("redis://localhost:16379"),
+    GOOGLE_CLIENT_ID: optionalStringSchema,
+    GOOGLE_CLIENT_SECRET: optionalStringSchema,
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== "production") return;
@@ -55,6 +57,10 @@ export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
       secret: env.BETTER_AUTH_SECRET,
       trustedOrigins: env.CLIENT_ORIGINS,
       url: env.BETTER_AUTH_URL,
+      google:
+        env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+          ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
+          : null,
     },
   };
 }

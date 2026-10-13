@@ -15,6 +15,7 @@
     "@repo/contracts": "workspace:*",
     "@repo/queue": "workspace:*",
     "bullmq": "catalog:",
+    "ioredis": "^5.11.1",
     "zod": "catalog:"
   },
   "devDependencies": {

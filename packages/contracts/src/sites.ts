@@ -19,6 +19,9 @@ export const siteSchema = z.object({
   name: z.string(),
   domain: z.string(),
   siteKey: z.string(),
+  // Secret key for server-to-server ingestion. Returned only to the site's
+  // owning organization over authenticated requests (never in the pixel).
+  apiKey: z.string(),
   pixelVerifiedAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
 });
