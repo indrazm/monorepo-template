@@ -32,7 +32,7 @@ export function createIngestService(db: Pick<Database, "select" | "insert">) {
     siteKey: string;
     provider: string;
     rawBody: string;
-    signature: string | null;
+    headers: Record<string, string | undefined>;
   }): Promise<WebhookResult> {
     const connector = getConnector(input.provider);
     if (!connector) return "no_connector";
@@ -56,7 +56,9 @@ export function createIngestService(db: Pick<Database, "select" | "insert">) {
       .limit(1);
     const secret = (integrationRow?.config as IntegrationConfig | undefined)?.secret;
     if (!secret) return "unauthorized";
-    if (!connector.verifySignature(input.rawBody, input.signature, secret)) return "unauthorized";
+    if (!connector.verify({ rawBody: input.rawBody, headers: input.headers, secret })) {
+      return "unauthorized";
+    }
 
     let raw: unknown;
     try {

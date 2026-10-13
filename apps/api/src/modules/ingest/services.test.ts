@@ -70,18 +70,19 @@ describe("ingest service", () => {
     expect(rows).toHaveLength(1);
   });
 
-  async function seedWithIntegration(secret: string) {
+  async function seedWithIntegration(secret: string, provider = "webhook") {
     const created = await sites.create("org-a", { name: "Shop", domain: "shop.example.com" });
     const [row] = await db.select().from(site).where(eq(site.id, created.id));
     await db
       .insert(schema.integration)
-      .values({ organizationId: "org-a", provider: "webhook", config: { secret } });
+      .values({ organizationId: "org-a", provider, config: { secret } });
     return { siteKey: row!.siteKey, siteId: created.id };
   }
 
-  function sign(body: string, secret: string) {
-    return createHmac("sha256", secret).update(body).digest("hex");
-  }
+  const hex = (body: string, secret: string) =>
+    createHmac("sha256", secret).update(body).digest("hex");
+  const b64 = (body: string, secret: string) =>
+    createHmac("sha256", secret).update(body).digest("base64");
 
   it("rejects a webhook with a bad signature", async () => {
     const { siteKey } = await seedWithIntegration("supersecret");
@@ -90,12 +91,12 @@ describe("ingest service", () => {
       siteKey,
       provider: "webhook",
       rawBody: body,
-      signature: "deadbeef",
+      headers: { "x-tacto-signature": "deadbeef" },
     });
     expect(result).toBe("unauthorized");
   });
 
-  it("creates a verified event from a signed webhook", async () => {
+  it("creates a verified event from a signed custom webhook", async () => {
     const { siteKey, siteId } = await seedWithIntegration("supersecret");
     const body = JSON.stringify({
       type: "purchase",
@@ -107,12 +108,84 @@ describe("ingest service", () => {
       siteKey,
       provider: "webhook",
       rawBody: body,
-      signature: sign(body, "supersecret"),
+      headers: { "x-tacto-signature": hex(body, "supersecret") },
     });
     expect(result).toBe("created");
     const [stored] = await db.select().from(event).where(eq(event.siteId, siteId));
     expect(stored?.verified).toBe(true);
     expect(stored?.source).toBe("webhook");
     expect(stored?.displayName).toBe("Mike");
+  });
+
+  it("verifies and maps a Stripe checkout.session.completed event", async () => {
+    const secret = "whsec_test";
+    const { siteKey, siteId } = await seedWithIntegration(secret, "stripe");
+    const body = JSON.stringify({
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_1",
+          customer_details: { name: "Jane Doe", address: { city: "Berlin" } },
+          metadata: { product: "Pro plan" },
+        },
+      },
+    });
+    const ts = Math.floor(Date.now() / 1000);
+    const v1 = hex(`${ts}.${body}`, secret);
+    const result = await ingest.processWebhook({
+      siteKey,
+      provider: "stripe",
+      rawBody: body,
+      headers: { "stripe-signature": `t=${ts},v1=${v1}` },
+    });
+    expect(result).toBe("created");
+    const [stored] = await db.select().from(event).where(eq(event.siteId, siteId));
+    expect(stored?.source).toBe("stripe");
+    expect(stored?.verified).toBe(true);
+    expect(stored?.displayName).toBe("Jane");
+    expect(stored?.city).toBe("Berlin");
+  });
+
+  it("verifies and maps a Shopify order webhook (base64 HMAC)", async () => {
+    const secret = "shpss_test";
+    const { siteKey, siteId } = await seedWithIntegration(secret, "shopify");
+    const body = JSON.stringify({
+      id: 123,
+      customer: { first_name: "Ola Nordmann" },
+      billing_address: { city: "Oslo" },
+      line_items: [{ title: "Sneakers" }],
+    });
+    const result = await ingest.processWebhook({
+      siteKey,
+      provider: "shopify",
+      rawBody: body,
+      headers: { "x-shopify-hmac-sha256": b64(body, secret) },
+    });
+    expect(result).toBe("created");
+    const [stored] = await db.select().from(event).where(eq(event.siteId, siteId));
+    expect(stored?.source).toBe("shopify");
+    expect(stored?.displayName).toBe("Ola");
+    expect(stored?.city).toBe("Oslo");
+  });
+
+  it("verifies and maps a WooCommerce order webhook (base64 HMAC)", async () => {
+    const secret = "wc_test";
+    const { siteKey, siteId } = await seedWithIntegration(secret, "woocommerce");
+    const body = JSON.stringify({
+      id: 55,
+      billing: { first_name: "Marco Rossi", city: "Rome" },
+      line_items: [{ name: "Espresso Cups" }],
+    });
+    const result = await ingest.processWebhook({
+      siteKey,
+      provider: "woocommerce",
+      rawBody: body,
+      headers: { "x-wc-webhook-signature": b64(body, secret) },
+    });
+    expect(result).toBe("created");
+    const [stored] = await db.select().from(event).where(eq(event.siteId, siteId));
+    expect(stored?.source).toBe("woocommerce");
+    expect(stored?.displayName).toBe("Marco");
+    expect(stored?.city).toBe("Rome");
   });
 });

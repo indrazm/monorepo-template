@@ -32,11 +32,36 @@ function copy(value: string, label: string) {
     .catch(() => toast.error("Could not copy"));
 }
 
+const PROVIDERS = [
+  { value: "webhook", label: "Custom webhook" },
+  { value: "zapier", label: "Zapier / Make" },
+  { value: "stripe", label: "Stripe" },
+  { value: "shopify", label: "Shopify" },
+  { value: "woocommerce", label: "WooCommerce" },
+] as const;
+
+type ProviderValue = (typeof PROVIDERS)[number]["value"];
+
+// Signature header each provider signs its webhook with (shown in the UI).
+const SIGNATURE_HEADER: Record<string, string> = {
+  webhook: "x-tacto-signature (hex HMAC-SHA256 of the body)",
+  zapier: "x-tacto-signature (hex HMAC-SHA256 of the body)",
+  stripe: "Stripe-Signature (Stripe webhook secret)",
+  shopify: "X-Shopify-Hmac-Sha256 (base64 HMAC-SHA256)",
+  woocommerce: "X-WC-Webhook-Signature (base64 HMAC-SHA256)",
+};
+
 export function IntegrationsPage() {
   const sites = useQuery(sitesQueryOptions);
   const integrations = useQuery(integrationsQueryOptions);
   const createIntegration = useCreateIntegrationMutation();
   const [siteId, setSiteId] = useState("");
+  const [provider, setProvider] = useState<ProviderValue>("webhook");
+  const [secretInput, setSecretInput] = useState("");
+  // Provider-managed secrets (e.g. Stripe whsec_...) must be pasted; the custom
+  // webhook/Zapier secret is generated for the user.
+  const needsPastedSecret =
+    provider === "stripe" || provider === "shopify" || provider === "woocommerce";
   const activeSite = sites.data?.find((s) => s.id === siteId) ?? sites.data?.[0];
 
   return (
@@ -50,21 +75,52 @@ export function IntegrationsPage() {
               Feed real events into Tacto — via the server API, a signed custom webhook, or Zapier.
             </p>
           </div>
-          <Button
-            className="w-fit"
-            disabled={createIntegration.isPending}
-            onClick={() =>
-              createIntegration.mutate(
-                { provider: "webhook", config: {} },
-                {
-                  onSuccess: () => toast.success("Webhook integration created"),
-                  onError: (error) => toast.error(error.message),
-                },
-              )
-            }
-          >
-            <PlusIcon className="size-4" /> Connect custom webhook
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              aria-label="Provider"
+              className={selectClass}
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as ProviderValue)}
+            >
+              {PROVIDERS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            {needsPastedSecret ? (
+              <input
+                type="password"
+                className={selectClass}
+                placeholder="Signing secret from provider"
+                value={secretInput}
+                onChange={(e) => setSecretInput(e.target.value)}
+              />
+            ) : null}
+            <Button
+              className="w-fit"
+              disabled={
+                createIntegration.isPending || (needsPastedSecret && secretInput.trim().length < 8)
+              }
+              onClick={() =>
+                createIntegration.mutate(
+                  {
+                    provider,
+                    config: needsPastedSecret ? { secret: secretInput.trim() } : {},
+                  },
+                  {
+                    onSuccess: () => {
+                      toast.success("Integration connected");
+                      setSecretInput("");
+                    },
+                    onError: (error) => toast.error(error.message),
+                  },
+                )
+              }
+            >
+              <PlusIcon className="size-4" /> Connect
+            </Button>
+          </div>
         </div>
 
         {/* Data sources for the selected site */}
@@ -123,7 +179,11 @@ export function IntegrationsPage() {
             {integrations.data && integrations.data.length > 0 ? (
               <ul className="divide-y">
                 {integrations.data.map((integration) => (
-                  <IntegrationRow key={integration.id} integration={integration} />
+                  <IntegrationRow
+                    key={integration.id}
+                    integration={integration}
+                    siteKey={activeSite?.siteKey}
+                  />
                 ))}
               </ul>
             ) : (
@@ -139,7 +199,13 @@ export function IntegrationsPage() {
   );
 }
 
-function IntegrationRow({ integration }: { integration: Integration }) {
+function IntegrationRow({
+  integration,
+  siteKey,
+}: {
+  integration: Integration;
+  siteKey: string | undefined;
+}) {
   const remove = useDeleteIntegrationMutation();
   return (
     <li className="grid gap-3 py-4">
@@ -164,6 +230,12 @@ function IntegrationRow({ integration }: { integration: Integration }) {
           Remove
         </Button>
       </div>
+      {siteKey ? (
+        <CodeRow
+          label={`Webhook URL — sign with ${SIGNATURE_HEADER[integration.provider] ?? "its signature header"}`}
+          value={`${env.VITE_API_URL}/ingest/v1/webhook/${integration.provider}?site=${siteKey}`}
+        />
+      ) : null}
       {integration.config.secret ? (
         <Secret label="Signing secret" value={integration.config.secret} />
       ) : null}

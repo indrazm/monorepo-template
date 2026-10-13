@@ -38,12 +38,11 @@ export function createIngestRouter(service: ReturnType<typeof createIngestServic
       if (!siteKey) return c.json(apiError("validation_error"), 400);
       if (!limiter(`webhook:${siteKey}`)) return c.json(apiError("rate_limited"), 429);
       const rawBody = await c.req.text();
-      const signature = c.req.header("x-tacto-signature") ?? c.req.header("x-signature") ?? null;
       const result = await service.processWebhook({
         siteKey,
         provider: c.req.param("provider"),
         rawBody,
-        signature,
+        headers: c.req.header(), // all request headers (lowercased keys)
       });
       switch (result) {
         case "created":
