@@ -51,7 +51,7 @@ Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet 
 - **Sengaja ditunda (bukan blocker MVP):**
   - **F16** UI undang anggota (opsional) · **F37** tipe Review (Should/Fase 2) · **F45** katalog integrasi UI (Should/Fase 2).
   - **F43/F47** pindah webhook & agregasi analytics ke worker BullMQ (kini sinkron/langsung) · **F32/F33** counter & live-visitors via Redis (kini via query DB) · **F41** rate-limit via Redis multi-instance (kini in-memory). Semua jalan secara fungsional; optimisasi/durabilitas menyusul saat Redis di-wire ke produser API.
-- **Catatan lingkungan:** `db:deploy` ke Postgres nyata & `docker compose up` belum diuji-runtime di mesin ini (Docker mati); migrasi diverifikasi lewat pglite, konfigurasi compose/Caddy ditulis & di-review.
+- **Verifikasi runtime (Docker):** `docker-compose.dev.yaml` (Postgres + Redis) dinyalakan, `pnpm db:deploy` menerapkan migrasi ke Postgres nyata, API + worker jalan. Smoke test HTTP end-to-end lulus: register → Org default → site → ingest (+dedupe 409) → notifikasi → payload widget (pesan ter-resolve + badge) → origin guard 403 → track → analytics; **custom webhook** (integrasi via UI) signed→202, bad-sig→401, event tersimpan `verified=true` & teranonim; worker connect Redis (4 queue "listening"); security headers aktif. Prod `docker-compose.yaml` (build image api/worker + Caddy proxy) belum di-build-runtime di sesi ini.
 - Prasyarat (di luar penomoran): perbaikan tooling lintas-OS + `.gitattributes` (commit `chore`), dokumen dev (commit `docs`).
 
 ---
@@ -307,7 +307,7 @@ Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet 
 > **Kerjakan:** definisikan interface konektor (`id`, `verifySignature?`, `mapToEvent(raw)→IngestEvent`); registry provider; CRUD `integration` per org; webhook (F42) & manual (F39) memakai konektor sesuai `provider`. Webhook generik ("custom") sebagai konektor default.
 > **Cek:** integrasi "custom webhook" terdaftar → event masuk via konektornya. **FR:** FR-INT-01 (MVP).
 
-## Fase 45 — Katalog integrasi (UI, Should)
+## Fase 45 — Katalog integrasi (UI) ✅
 
 > **File:** `apps/web/src/features/integrations/`. **Kerjakan:** daftar provider, connect/disconnect, status.
 > **Cek:** connect custom webhook dari UI. **FR:** FR-INT-02/03/04 (Fase 2).
@@ -392,7 +392,7 @@ Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet 
 
 ### Fase 2 — transaksi nyata & konversi
 
-- **F58** OAuth Google + reset password. — FR-AUTH-04/06
+- **F58** OAuth Google ✅ (reset password menyusul). — FR-AUTH-04/06
 - **F59** Stripe checkout + webhook status langganan. — FR-BIL-02/05
 - **F60** Konektor Stripe/Shopify/WooCommerce (purchase→`event verified`) via framework F44. — FR-ING-09, FR-VER-01/02
 - **F61** Zapier/Make (endpoint + key). — FR-ING-08, FR-INT-04
