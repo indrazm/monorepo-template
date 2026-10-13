@@ -14,7 +14,10 @@ const client = new PGlite();
 const db = drizzle({ client, schema });
 const app = createApp({
   db,
-  config: { clientOrigins: ["http://localhost:3000"] },
+  config: {
+    clientOrigins: ["http://localhost:3000"],
+    stripe: { secretKey: null, webhookSecret: null },
+  },
   auth: {
     getSession: async () => null,
     handler: async () => new Response(null, { status: 404 }),

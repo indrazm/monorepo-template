@@ -8,10 +8,27 @@ import {
   CardTitle,
 } from "@repo/ui/components/card";
 import { Progress } from "@repo/ui/components/progress";
-import { useQuery } from "@tanstack/react-query";
+import { toast } from "@repo/ui/components/sonner";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryOptions } from "@tanstack/react-query";
 import { apiClient } from "../../../api";
 import { AppShell } from "../../app-shell/app-shell";
+
+type PaidPlan = "starter" | "growth" | "agency";
+const UPGRADE_PLANS: { plan: PaidPlan; label: string; price: string }[] = [
+  { plan: "starter", label: "Starter", price: "$12/mo · 10K visitors" },
+  { plan: "growth", label: "Growth", price: "$35/mo · 100K visitors, 3 sites" },
+  { plan: "agency", label: "Agency", price: "$79/mo · 200K visitors, 10 sites" },
+];
+
+async function startCheckout(plan: PaidPlan): Promise<string> {
+  const response = await apiClient.api.v1.billing.checkout.$post({ json: { plan } });
+  if (response.status === 400) {
+    throw new Error("Billing is not configured yet (missing Stripe keys).");
+  }
+  if (!response.ok) throw new Error("Could not start checkout.");
+  return (await response.json()).url;
+}
 
 const billingQueryOptions = queryOptions({
   queryKey: ["billing"],
@@ -33,6 +50,13 @@ export function BillingPage() {
   const billing = useQuery(billingQueryOptions);
   const overview = billing.data;
   const usagePct = overview ? Math.min(100, (overview.usage / overview.trafficQuota) * 100) : 0;
+  const checkout = useMutation({
+    mutationFn: startCheckout,
+    onSuccess: (url) => {
+      window.location.href = url;
+    },
+    onError: (error) => toast.error(error.message),
+  });
 
   return (
     <AppShell>
@@ -82,10 +106,23 @@ export function BillingPage() {
                   Unlock more traffic, extra sites, all notification types and remove the badge.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-3">
-                <Button disabled>Upgrade plan (coming soon)</Button>
+              <CardContent className="grid gap-2">
+                {UPGRADE_PLANS.filter((p) => p.plan !== overview.plan).map((p) => (
+                  <Button
+                    key={p.plan}
+                    variant={p.plan === "growth" ? "default" : "ghost"}
+                    className={p.plan === "growth" ? "" : "border"}
+                    disabled={checkout.isPending}
+                    onClick={() => checkout.mutate(p.plan)}
+                  >
+                    <span className="flex w-full items-center justify-between gap-3">
+                      <span>Upgrade to {p.label}</span>
+                      <span className="text-xs opacity-80">{p.price}</span>
+                    </span>
+                  </Button>
+                ))}
                 <p className="text-xs text-muted-foreground">
-                  Payments arrive with Stripe in phase 2.
+                  Secure checkout via Stripe. You can cancel anytime.
                 </p>
               </CardContent>
             </Card>

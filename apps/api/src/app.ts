@@ -35,7 +35,7 @@ export function createApp({
 }: {
   auth: AuthProvider;
   db: Database;
-  config: Pick<ReturnType<typeof createApiConfig>, "clientOrigins">;
+  config: Pick<ReturnType<typeof createApiConfig>, "clientOrigins" | "stripe">;
 }) {
   const loadSession = createSessionMiddleware(auth, db);
   // Dashboard/auth: credentialed CORS restricted to the configured origins.
@@ -74,6 +74,7 @@ export function createApp({
       .use("/api/v1/notifications/*", loadSession)
       .use("/api/v1/analytics/*", loadSession)
       .use("/api/v1/billing", loadSession)
+      .use("/api/v1/billing/checkout", loadSession)
       .use("/api/v1/integrations", loadSession)
       .use("/api/v1/integrations/*", loadSession)
       .get("/session", (c) => {
@@ -87,7 +88,10 @@ export function createApp({
       .route("/api/v1/sites", createSitesRouter(createSitesService(db), createBillingService(db)))
       .route("/api/v1/notifications", createNotificationsRouter(createNotificationsService(db)))
       .route("/api/v1/analytics", createAnalyticsRouter(createAnalyticsService(db)))
-      .route("/api/v1/billing", createBillingRouter(createBillingService(db)))
+      .route(
+        "/api/v1/billing",
+        createBillingRouter(createBillingService(db), config.stripe, config.clientOrigins[0] ?? ""),
+      )
       .route("/api/v1/integrations", createIntegrationsRouter(createIntegrationsService(db)))
       .route("/widget", createWidgetRouter(createWidgetService(db)))
       .route("/ingest", createIngestRouter(createIngestService(db)))

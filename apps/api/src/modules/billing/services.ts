@@ -13,8 +13,30 @@ export type BillingOverview = {
   renewsAt: string | null;
 };
 
-export function createBillingService(db: Pick<Database, "select">) {
-  return { getPlan, getOverview, canCreateSite };
+export function createBillingService(db: Pick<Database, "select" | "update">) {
+  return { getPlan, getOverview, canCreateSite, updatePlan };
+
+  // Applies a subscription change from Stripe (SRS FR-BIL-05). Upserts onto the
+  // org's subscription row; plan defaults are kept when the event omits a plan.
+  async function updatePlan(input: {
+    organizationId: string;
+    plan: import("@repo/contracts/billing").Plan | null;
+    status: string;
+    renewsAt: Date | null;
+  }): Promise<void> {
+    const values: Partial<typeof subscription.$inferInsert> = {
+      status: input.status,
+      renewsAt: input.renewsAt,
+    };
+    if (input.plan) {
+      values.plan = input.plan;
+      values.trafficQuota = planLimits[input.plan].trafficQuota;
+    }
+    await db
+      .update(subscription)
+      .set(values)
+      .where(eq(subscription.organizationId, input.organizationId));
+  }
 
   async function getPlan(organizationId: string): Promise<Plan> {
     const [row] = await db

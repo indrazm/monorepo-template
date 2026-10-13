@@ -9,7 +9,10 @@ database.pool.query = mocks.databaseQuery;
 const app = createApp({
   auth: { getSession: mocks.getSession, handler: mocks.authHandler },
   db: database.db,
-  config: { clientOrigins: ["http://localhost:3000"] },
+  config: {
+    clientOrigins: ["http://localhost:3000"],
+    stripe: { secretKey: null, webhookSecret: null },
+  },
 });
 
 const baseDate = new Date("2026-07-03T00:00:00.000Z");

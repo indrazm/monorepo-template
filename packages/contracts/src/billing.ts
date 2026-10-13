@@ -25,6 +25,19 @@ export const planLimits: Record<Plan, PlanLimits> = {
   agency: { trafficQuota: 200_000, maxSites: 10, removeBadge: true, notificationTypes: "all" },
 };
 
+// Indicative monthly price in USD cents (PRD section 7.2); Free has no price.
+export const planPricesUsdCents: Record<Plan, number> = {
+  free: 0,
+  starter: 1_200,
+  growth: 3_500,
+  agency: 7_900,
+};
+
+// Paid plans only — the targets of a Stripe checkout.
+export const paidPlanSchema = z.enum(["starter", "growth", "agency"]);
+export const createCheckoutSchema = z.object({ plan: paidPlanSchema });
+export type CreateCheckoutInput = z.output<typeof createCheckoutSchema>;
+
 export function planAllowsNotificationType(
   plan: Plan,
   type: z.output<typeof notificationTypeSchema>,

@@ -25,6 +25,8 @@ export const apiEnvSchema = z
     REDIS_URL: z.url({ protocol: /^rediss?$/ }).default("redis://localhost:16379"),
     GOOGLE_CLIENT_ID: optionalStringSchema,
     GOOGLE_CLIENT_SECRET: optionalStringSchema,
+    STRIPE_SECRET_KEY: optionalStringSchema,
+    STRIPE_WEBHOOK_SECRET: optionalStringSchema,
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== "production") return;
@@ -53,6 +55,10 @@ export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
     clientOrigins: env.CLIENT_ORIGINS,
     databaseUrl: env.DATABASE_URL,
     redisUrl: env.REDIS_URL,
+    stripe: {
+      secretKey: env.STRIPE_SECRET_KEY ?? null,
+      webhookSecret: env.STRIPE_WEBHOOK_SECRET ?? null,
+    },
     auth: {
       secret: env.BETTER_AUTH_SECRET,
       trustedOrigins: env.CLIENT_ORIGINS,
