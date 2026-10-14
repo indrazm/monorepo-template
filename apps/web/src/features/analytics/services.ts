@@ -1,4 +1,4 @@
-import type { AnalyticsSummary } from "@repo/contracts/analytics";
+import type { Activation, AnalyticsSummary } from "@repo/contracts/analytics";
 import type { EventRecord } from "@repo/contracts/events";
 import { apiClient } from "../../api";
 
@@ -16,4 +16,11 @@ export async function getEventsFeed(siteId: string, limit = 50): Promise<EventRe
   if (!response.ok) throw new Error("Failed to load events.");
   const data = await response.json();
   return data.events;
+}
+
+export async function getActivation(siteId: string): Promise<Activation> {
+  const response = await analytics.activation.$get({ query: { siteId } });
+  if (!response.ok) throw new Error("Failed to load activation.");
+  const data = await response.json();
+  return data.activation;
 }

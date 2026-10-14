@@ -2,11 +2,8 @@ import { apiError } from "@repo/contracts/errors";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { ingestEventSchema } from "@repo/contracts/events";
-import { createRateLimiter } from "./rate-limit";
+import { createRateLimiter, type RateLimiter } from "./rate-limit";
 import type { createIngestService } from "./services";
-
-// Per-site ingestion cap: 120 events/minute (anti-abuse, SRS FR-VER-03).
-const limiter = createRateLimiter({ limit: 120, windowMs: 60_000 });
 
 // Reads the site API key from Authorization: Bearer <key> or X-Api-Key.
 function readApiKey(header: string | undefined, bearer: string | undefined): string | null {
@@ -15,7 +12,11 @@ function readApiKey(header: string | undefined, bearer: string | undefined): str
   return null;
 }
 
-export function createIngestRouter(service: ReturnType<typeof createIngestService>) {
+export function createIngestRouter(
+  service: ReturnType<typeof createIngestService>,
+  // Redis-backed limiter in production; the in-memory fallback for tests.
+  limiter: RateLimiter = createRateLimiter({ limit: 120, windowMs: 60_000 }),
+) {
   return new Hono()
     .post(
       "/v1/event",
@@ -27,7 +28,7 @@ export function createIngestRouter(service: ReturnType<typeof createIngestServic
         if (!apiKey) return c.json(apiError("unauthorized"), 401);
         const siteId = await service.resolveSiteByApiKey(apiKey);
         if (!siteId) return c.json(apiError("unauthorized"), 401);
-        if (!limiter(`event:${siteId}`)) return c.json(apiError("rate_limited"), 429);
+        if (!(await limiter(`event:${siteId}`))) return c.json(apiError("rate_limited"), 429);
         const result = await service.ingestEvent(siteId, c.req.valid("json"));
         if (result === "duplicate") return c.json(apiError("conflict"), 409);
         return c.json({ ok: true }, 201);
@@ -36,7 +37,7 @@ export function createIngestRouter(service: ReturnType<typeof createIngestServic
     .post("/v1/webhook/:provider", async (c) => {
       const siteKey = c.req.query("site");
       if (!siteKey) return c.json(apiError("validation_error"), 400);
-      if (!limiter(`webhook:${siteKey}`)) return c.json(apiError("rate_limited"), 429);
+      if (!(await limiter(`webhook:${siteKey}`))) return c.json(apiError("rate_limited"), 429);
       const rawBody = await c.req.text();
       const result = await service.processWebhook({
         siteKey,

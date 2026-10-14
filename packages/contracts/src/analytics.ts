@@ -40,6 +40,27 @@ export const bufferedImpressionSchema = z.object({
   createdAt: z.iso.datetime(),
 });
 
+// Onboarding activation snapshot (F70): where a site is in the time-to-value
+// funnel, derived from real data (pixel verified, notifications, events shown).
+export const activationQuerySchema = z.object({
+  siteId: z.string().trim().min(1),
+});
+
+export const activationSchema = z.object({
+  siteId: z.string(),
+  hasPixel: z.boolean(),
+  pixelVerifiedAt: z.iso.datetime().nullable(),
+  notificationCount: z.number().int(),
+  eventCount: z.number().int(),
+  impressionCount: z.number().int(),
+  firstImpressionAt: z.iso.datetime().nullable(),
+  activated: z.boolean(),
+  // Time from site creation to the first served impression (ms).
+  msToActivation: z.number().int().nullable(),
+});
+
+export type ActivationQuery = z.output<typeof activationQuerySchema>;
+export type Activation = z.output<typeof activationSchema>;
 export type AnalyticsQuery = z.output<typeof analyticsQuerySchema>;
 export type AnalyticsSummary = z.output<typeof analyticsSummarySchema>;
 export type EventsFeedQuery = z.output<typeof eventsFeedQuerySchema>;

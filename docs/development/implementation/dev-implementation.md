@@ -52,10 +52,11 @@ Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker,
 - ✅ **Fase 3:** F66 Combo/Low-stock/Countdown · F67 block IP + profanity filter · **F68 katalog integrasi** (33 provider: BigCommerce, Wix, SquareSpace, Ecwid, PrestaShop, Magento, Paddle, Lemon Squeezy, Gumroad, SendOwl, Recharge, HubSpot, Typeform, Jotform, Formspree, Calendly, Kajabi, Teachable, Thinkific, Memberful, Circle, Kit, Mailchimp, ActiveCampaign, WordPress, Webflow, …) + **FR-NGS-07 country display** (geo dari header CDN) + **FR-NED-12 terjemahan template**.
 - ✅ **Fase 4 (inti):** **F69 conversion widgets** — tipe `popup`, `bar`, `spin_to_win` (render di `t.js`, posisi `center`/`top-bar`/`bottom-bar`, editor + preview) + gating tipe per paket (FR-BIL-03).
 - ✅ **Durabilitas worker + Redis (F43/F46/F47 + cache F32/F33):** API enqueue webhook ke BullMQ (worker menulis `event` terverifikasi, idempoten); impression di-buffer Redis (RPUSH) oleh API lalu di-flush worker terjadwal ke Postgres; live-visitors dihitung via Redis ZSET; counter/combo di-cache Redis + recompute oleh worker. Fallback sinkron dipertahankan untuk test/unit.
-- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; **91 test** (Vitest + integrasi pglite + e2e HTTP widget/billing + processor worker) lulus; `t.js` ≈4.9 KB gzip; build web+widget + build image Docker prod lolos.
+- ✅ **F70 (inti):** rate-limit ingestion via Redis (multi-instance, fallback in-memory) · endpoint **metrik aktivasi** (`/api/v1/analytics/activation`) + onboarding "First notification shown" & time-to-activation berbasis data nyata.
+- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; **92 test** (Vitest + integrasi pglite + e2e HTTP widget/billing + processor worker) lulus; `t.js` ≈4.9 KB gzip; build web+widget + build image Docker prod lolos.
 - **Dibatalkan (keputusan produk):** import review Facebook/YouTube/Google Places (F62) — hanya integrasi inti Tacto yang disisakan.
 - **Ditunda (opsional, butuh dep/geo eksternal atau perlu data):**
-  - **F70** optimisasi performa/biaya + penyempurnaan onboarding berbasis data aktivasi · perluasan katalog integrasi lebih lanjut.
+  - Perluasan katalog integrasi lebih lanjut & optimisasi biaya lanjutan (cache payload Redis/CDN) — opsional.
 - **Credential yang perlu diisi di `.env`:** `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` (diisi), `GOOGLE_CLIENT_ID`/`SECRET` (diisi), `SMTP_*` (opsional — tanpa itu link email di-log), `HUBSPOT_*`/`SHOPIFY_*` (placeholder opsional untuk konektor OAuth mendatang; integrasi webhook memakai secret per-integrasi di dashboard).
 
 ---
@@ -418,7 +419,7 @@ Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker,
 ### Fase 4 — ekspansi
 
 - **F69** Conversion widgets ✅ (popup, notification bar, spin-to-win): tipe notifikasi baru, posisi `center`/`top-bar`/`bottom-bar`, render di `t.js`, editor + preview, gating per paket. — PRD Fase 4
-- **F70** Optimisasi performa/biaya + penyempurnaan onboarding berbasis data aktivasi. — (ditunda, opsional)
+- **F70** Optimisasi performa/biaya ✅ (inti): rate-limit Redis multi-instance + endpoint metrik aktivasi + onboarding "First notification shown" & time-to-activation. — FR-NGS/PRD §3.3
 
 ---
 

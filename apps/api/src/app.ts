@@ -21,6 +21,7 @@ import { createGoalsRouter } from "./modules/goals/router";
 import { createGoalsService } from "./modules/goals/services";
 import { createIngestRouter } from "./modules/ingest/router";
 import { createIngestService } from "./modules/ingest/services";
+import { INGEST_RATE_LIMIT } from "./modules/ingest/rate-limit";
 import { createIntegrationsRouter } from "./modules/integrations/router";
 import { createIntegrationsService } from "./modules/integrations/services";
 import { createWidgetRouter } from "./modules/widget/router";
@@ -130,6 +131,10 @@ export function createApp({
             enqueueWebhook: enqueue?.webhook,
             enqueueCounter: enqueue?.counter,
           }),
+          // Multi-instance rate limiting when Redis is available (NFR-SEC-04).
+          store
+            ? (key) => store.hitRateLimit(key, INGEST_RATE_LIMIT.limit, INGEST_RATE_LIMIT.windowMs)
+            : undefined,
         ),
       )
   );

@@ -101,6 +101,8 @@ export type RealtimeStore = {
   countVisitors: (siteId: string) => Promise<number>;
   setCounter: (notificationId: string, count: number, ttlSeconds?: number) => Promise<void>;
   getCounter: (notificationId: string) => Promise<number | null>;
+  // Fixed-window rate limit shared across API instances (NFR-SEC-04).
+  hitRateLimit: (key: string, limit: number, windowMs: number) => Promise<boolean>;
 };
 
 // A plain data connection (separate from BullMQ's blocking connections).
@@ -148,6 +150,12 @@ export function createRealtimeStore(redis: Redis): RealtimeStore {
     async getCounter(notificationId) {
       const value = await redis.get(counterKey(notificationId));
       return value === null ? null : Number(value);
+    },
+    async hitRateLimit(key, limit, windowMs) {
+      const redisKey = `tacto:ratelimit:${key}`;
+      const count = await redis.incr(redisKey);
+      if (count === 1) await redis.pexpire(redisKey, windowMs);
+      return count <= limit;
     },
   };
 }

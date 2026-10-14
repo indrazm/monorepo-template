@@ -9,20 +9,31 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { CheckIcon, CircleIcon } from "lucide-react";
+import { activationQueryOptions } from "../../analytics/hooks/use-analytics";
 import { meQueryOptions } from "../../auth/hooks/use-auth";
 import { notificationsQueryOptions } from "../../notifications/hooks/use-notifications";
 import { sitesQueryOptions } from "../../sites/hooks/use-sites";
 import { AppShell } from "../../app-shell/app-shell";
+
+function formatDuration(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return "under a minute";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  return `${hours} h`;
+}
 
 export function OverviewPage() {
   const user = useQuery(meQueryOptions);
   const sites = useQuery(sitesQueryOptions);
   const firstSiteId = sites.data?.[0]?.id ?? "";
   const notifications = useQuery(notificationsQueryOptions(firstSiteId));
+  const activation = useQuery(activationQueryOptions(firstSiteId));
 
   const hasSite = (sites.data?.length ?? 0) > 0;
   const pixelVerified = sites.data?.some((site) => site.pixelVerifiedAt) ?? false;
   const hasNotification = (notifications.data?.length ?? 0) > 0;
+  const shown = activation.data?.activated ?? false;
 
   const steps = [
     {
@@ -43,8 +54,15 @@ export function OverviewPage() {
       description: "Sales pop, counter, live visitors or custom.",
       to: "/notifications" as const,
     },
+    {
+      done: shown,
+      label: "Show your first notification",
+      description: "Visit your site — the pixel renders it automatically.",
+      to: "/analytics" as const,
+    },
   ];
   const completed = steps.filter((step) => step.done).length;
+  const msToActivation = activation.data?.msToActivation ?? null;
 
   return (
     <AppShell>
@@ -104,6 +122,9 @@ export function OverviewPage() {
               <CardTitle className="text-lg">You’re live 🎉</CardTitle>
               <CardDescription>
                 Your pixel is installed and notifications are running. Check how they perform.
+                {msToActivation !== null
+                  ? ` First notification shown in ${formatDuration(msToActivation)}.`
+                  : ""}
               </CardDescription>
             </CardHeader>
             <CardContent>

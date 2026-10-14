@@ -1,11 +1,11 @@
 import { and, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "@repo/db";
-import { event, impression, site } from "@repo/db/schema";
-import type { AnalyticsSummary } from "@repo/contracts/analytics";
+import { event, impression, notification, site } from "@repo/db/schema";
+import type { Activation, AnalyticsSummary } from "@repo/contracts/analytics";
 import type { EventRecord } from "@repo/contracts/events";
 
 export function createAnalyticsService(db: Pick<Database, "select">) {
-  return { summary, eventsFeed };
+  return { summary, eventsFeed, activation };
 
   async function siteInOrg(organizationId: string, siteId: string): Promise<boolean> {
     const rows = await db
@@ -120,5 +120,50 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
       occurredAt: row.occurredAt.toISOString(),
       createdAt: row.createdAt.toISOString(),
     }));
+  }
+
+  // Activation funnel for onboarding (F70). Returns null for a foreign site.
+  async function activation(organizationId: string, siteId: string): Promise<Activation | null> {
+    const [siteRow] = await db
+      .select({ createdAt: site.createdAt, pixelVerifiedAt: site.pixelVerifiedAt })
+      .from(site)
+      .where(and(eq(site.id, siteId), eq(site.organizationId, organizationId)))
+      .limit(1);
+    if (!siteRow) return null;
+
+    const [notifications] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(notification)
+      .where(eq(notification.siteId, siteId));
+    const [events] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(event)
+      .where(eq(event.siteId, siteId));
+    const [impressions] = await db
+      .select({
+        count: sql<number>`count(*)::int`,
+        first: sql<Date | string | null>`min(${impression.createdAt})`,
+      })
+      .from(impression)
+      .where(eq(impression.siteId, siteId));
+
+    const impressionCount = impressions?.count ?? 0;
+    const firstRaw = impressions?.first ?? null;
+    const firstImpressionAt = firstRaw ? new Date(firstRaw) : null;
+    const pixelVerifiedAt = siteRow.pixelVerifiedAt;
+    return {
+      siteId,
+      hasPixel: Boolean(pixelVerifiedAt),
+      pixelVerifiedAt: pixelVerifiedAt ? pixelVerifiedAt.toISOString() : null,
+      notificationCount: notifications?.count ?? 0,
+      eventCount: events?.count ?? 0,
+      impressionCount,
+      firstImpressionAt: firstImpressionAt ? firstImpressionAt.toISOString() : null,
+      activated: impressionCount > 0,
+      msToActivation:
+        firstImpressionAt && siteRow.createdAt
+          ? Math.max(0, firstImpressionAt.getTime() - siteRow.createdAt.getTime())
+          : null,
+    };
   }
 }

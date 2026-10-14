@@ -1,7 +1,11 @@
 import { apiError } from "@repo/contracts/errors";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { analyticsQuerySchema, eventsFeedQuerySchema } from "@repo/contracts/analytics";
+import {
+  activationQuerySchema,
+  analyticsQuerySchema,
+  eventsFeedQuerySchema,
+} from "@repo/contracts/analytics";
 import { type AuthVariables, requireOrg } from "../auth/middleware";
 import type { createAnalyticsService } from "./services";
 
@@ -33,6 +37,19 @@ export function createAnalyticsRouter(service: ReturnType<typeof createAnalytics
         const events = await service.eventsFeed(organizationId, siteId, limit);
         if (!events) return c.json(apiError("site_not_found"), 404);
         return c.json({ events }, 200);
+      },
+    )
+    .get(
+      "/activation",
+      zValidator("query", activationQuerySchema, (result, c) => {
+        if (!result.success) return c.json(apiError("validation_error"), 400);
+      }),
+      async (c) => {
+        const organizationId = requireOrg(c);
+        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        const activation = await service.activation(organizationId, c.req.valid("query").siteId);
+        if (!activation) return c.json(apiError("site_not_found"), 404);
+        return c.json({ activation }, 200);
       },
     );
 }

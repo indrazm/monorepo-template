@@ -40,6 +40,9 @@ function createFakeStore() {
     async getCounter(id) {
       return counters.get(id) ?? null;
     },
+    async hitRateLimit() {
+      return true;
+    },
   };
   return { store, buffer, visits, counters };
 }
