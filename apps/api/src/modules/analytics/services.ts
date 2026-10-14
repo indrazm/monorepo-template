@@ -1,8 +1,17 @@
-import { and, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, lt, or, sql } from "drizzle-orm";
 import type { Database } from "@repo/db";
 import { event, impression, notification, site } from "@repo/db/schema";
 import type { Activation, AnalyticsSummary } from "@repo/contracts/analytics";
 import type { EventRecord } from "@repo/contracts/events";
+
+export class InvalidEventsCursorError extends Error {
+  constructor() {
+    super("Invalid events cursor.");
+    this.name = "InvalidEventsCursorError";
+  }
+}
+
+export type EventsFeedPage = { events: EventRecord[]; nextCursor: string | null };
 
 export function createAnalyticsService(db: Pick<Database, "select">) {
   return { summary, eventsFeed, activation };
@@ -97,29 +106,53 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
     return { views, clicks, ctr: views > 0 ? clicks / views : 0, days, perDay, variants };
   }
 
+  // Keyset-paginated events feed (newest first), cursor = last event id.
   async function eventsFeed(
     organizationId: string,
     siteId: string,
     limit: number,
-  ): Promise<EventRecord[] | null> {
+    cursor?: string,
+  ): Promise<EventsFeedPage | null> {
     if (!(await siteInOrg(organizationId, siteId))) return null;
+
+    let where = eq(event.siteId, siteId);
+    if (cursor) {
+      const [cursorRow] = await db
+        .select({ occurredAt: event.occurredAt, id: event.id })
+        .from(event)
+        .where(and(eq(event.siteId, siteId), eq(event.id, cursor)))
+        .limit(1);
+      if (!cursorRow) throw new InvalidEventsCursorError();
+      where = and(
+        where,
+        or(
+          lt(event.occurredAt, cursorRow.occurredAt),
+          and(eq(event.occurredAt, cursorRow.occurredAt), lt(event.id, cursorRow.id)),
+        ),
+      )!;
+    }
+
     const rows = await db
       .select()
       .from(event)
-      .where(eq(event.siteId, siteId))
-      .orderBy(desc(event.occurredAt))
-      .limit(limit);
-    return rows.map((row) => ({
-      id: row.id,
-      siteId: row.siteId,
-      type: row.type,
-      source: row.source as EventRecord["source"],
-      verified: row.verified,
-      displayName: row.displayName,
-      city: row.city,
-      occurredAt: row.occurredAt.toISOString(),
-      createdAt: row.createdAt.toISOString(),
-    }));
+      .where(where)
+      .orderBy(desc(event.occurredAt), desc(event.id))
+      .limit(limit + 1);
+    const visible = rows.slice(0, limit);
+    return {
+      nextCursor: rows.length > limit ? (visible.at(-1)?.id ?? null) : null,
+      events: visible.map((row) => ({
+        id: row.id,
+        siteId: row.siteId,
+        type: row.type,
+        source: row.source as EventRecord["source"],
+        verified: row.verified,
+        displayName: row.displayName,
+        city: row.city,
+        occurredAt: row.occurredAt.toISOString(),
+        createdAt: row.createdAt.toISOString(),
+      })),
+    };
   }
 
   // Activation funnel for onboarding (F70). Returns null for a foreign site.

@@ -7,7 +7,7 @@ import {
   eventsFeedQuerySchema,
 } from "@repo/contracts/analytics";
 import { type AuthVariables, requireOrg } from "../auth/middleware";
-import type { createAnalyticsService } from "./services";
+import { InvalidEventsCursorError, type createAnalyticsService } from "./services";
 
 export function createAnalyticsRouter(service: ReturnType<typeof createAnalyticsService>) {
   return new Hono<{ Variables: AuthVariables }>()
@@ -33,10 +33,17 @@ export function createAnalyticsRouter(service: ReturnType<typeof createAnalytics
       async (c) => {
         const organizationId = requireOrg(c);
         if (!organizationId) return c.json(apiError("unauthorized"), 401);
-        const { siteId, limit } = c.req.valid("query");
-        const events = await service.eventsFeed(organizationId, siteId, limit);
-        if (!events) return c.json(apiError("site_not_found"), 404);
-        return c.json({ events }, 200);
+        const { siteId, limit, cursor } = c.req.valid("query");
+        try {
+          const page = await service.eventsFeed(organizationId, siteId, limit, cursor);
+          if (!page) return c.json(apiError("site_not_found"), 404);
+          return c.json(page, 200);
+        } catch (error) {
+          if (error instanceof InvalidEventsCursorError) {
+            return c.json(apiError("invalid_cursor"), 400);
+          }
+          throw error;
+        }
       },
     )
     .get(

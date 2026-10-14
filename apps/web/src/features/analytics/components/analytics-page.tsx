@@ -1,5 +1,6 @@
 import type { EventRecord } from "@repo/contracts/events";
 import { Badge } from "@repo/ui/components/badge";
+import { Button } from "@repo/ui/components/button";
 import {
   Card,
   CardContent,
@@ -13,7 +14,7 @@ import { BarChart3Icon, MousePointerClickIcon, PercentIcon, EyeIcon } from "luci
 import { useState } from "react";
 import { AppShell } from "../../app-shell/app-shell";
 import { sitesQueryOptions } from "../../sites/hooks/use-sites";
-import { eventsFeedQueryOptions, summaryQueryOptions } from "../hooks/use-analytics";
+import { summaryQueryOptions, useInfiniteEventsFeed } from "../hooks/use-analytics";
 
 const selectClass =
   "border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
@@ -23,7 +24,8 @@ export function AnalyticsPage() {
   const [siteId, setSiteId] = useState("");
   const activeSiteId = siteId || sites.data?.[0]?.id || "";
   const summary = useQuery(summaryQueryOptions(activeSiteId));
-  const events = useQuery(eventsFeedQueryOptions(activeSiteId));
+  const events = useInfiniteEventsFeed(activeSiteId);
+  const eventRows = events.data?.pages.flatMap((page) => page.events) ?? [];
 
   const ctr = summary.data ? `${(summary.data.ctr * 100).toFixed(1)}%` : "—";
 
@@ -120,12 +122,26 @@ export function AnalyticsPage() {
                 <CardTitle className="text-base">Events feed</CardTitle>
               </CardHeader>
               <CardContent>
-                {events.data && events.data.length > 0 ? (
-                  <ul className="divide-y">
-                    {events.data.map((event) => (
-                      <EventRow key={event.id} event={event} />
-                    ))}
-                  </ul>
+                {eventRows.length > 0 ? (
+                  <>
+                    <ul className="divide-y">
+                      {eventRows.map((event) => (
+                        <EventRow key={event.id} event={event} />
+                      ))}
+                    </ul>
+                    {events.hasNextPage ? (
+                      <div className="pt-4 text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={events.isFetchingNextPage}
+                          onClick={() => void events.fetchNextPage()}
+                        >
+                          {events.isFetchingNextPage ? "Loading…" : "Load more"}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </>
                 ) : (
                   <p className="py-6 text-center text-sm text-muted-foreground">
                     No events yet — install the pixel or send a test event to start.

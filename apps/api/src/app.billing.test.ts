@@ -60,6 +60,54 @@ describe("Stripe billing webhook (HTTP)", () => {
     expect(row?.trafficQuota).toBe(100_000);
   });
 
+  it("applies subscription.updated (status, renewal and customer id)", async () => {
+    const periodEnd = Math.floor(Date.now() / 1000) + 2_592_000;
+    const body = JSON.stringify({
+      type: "customer.subscription.updated",
+      data: {
+        object: {
+          customer: "cus_upd",
+          status: "active",
+          current_period_end: periodEnd,
+          metadata: { organizationId: "org-x", plan: "agency" },
+        },
+      },
+    });
+    const response = await app.request("/api/v1/billing/webhook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "stripe-signature": stripeSign(body) },
+      body,
+    });
+    expect(response.status).toBe(200);
+    const [row] = await db
+      .select()
+      .from(subscription)
+      .where(eq(subscription.organizationId, "org-x"));
+    expect(row?.plan).toBe("agency");
+    expect(row?.status).toBe("active");
+    expect(row?.externalCustomerId).toBe("cus_upd");
+    expect(row?.renewsAt).toBeInstanceOf(Date);
+  });
+
+  it("downgrades to free on subscription.deleted", async () => {
+    const body = JSON.stringify({
+      type: "customer.subscription.deleted",
+      data: { object: { metadata: { organizationId: "org-x" } } },
+    });
+    const response = await app.request("/api/v1/billing/webhook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "stripe-signature": stripeSign(body) },
+      body,
+    });
+    expect(response.status).toBe(200);
+    const [row] = await db
+      .select()
+      .from(subscription)
+      .where(eq(subscription.organizationId, "org-x"));
+    expect(row?.plan).toBe("free");
+    expect(row?.status).toBe("canceled");
+  });
+
   it("rejects a webhook with an invalid signature", async () => {
     const body = JSON.stringify({ type: "checkout.session.completed", data: { object: {} } });
     const response = await app.request("/api/v1/billing/webhook", {

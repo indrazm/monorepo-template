@@ -96,7 +96,8 @@ export function createWidgetService(
   }
 
   // Pixel auto-capture: turns a form submission into a form_submit event
-  // (SRS FR-ING-01). Only a first name + city are stored (NFR-PRIV-01).
+  // (SRS FR-ING-01). Only a first name + city are stored (NFR-PRIV-01), unless
+  // the domain's privacy settings opt in to storing the email (FR-NGS-05).
   async function capture(input: CaptureEventInput): Promise<boolean> {
     const [siteRow] = await db
       .select({ id: site.id })
@@ -104,8 +105,18 @@ export function createWidgetService(
       .where(eq(site.siteKey, input.site))
       .limit(1);
     if (!siteRow) return false;
+    const [settingRow] = await db
+      .select({ privacy: domainSetting.privacy })
+      .from(domainSetting)
+      .where(eq(domainSetting.siteId, siteRow.id))
+      .limit(1);
+    const privacy = domainPrivacySchema.parse(settingRow?.privacy ?? {});
+
     const rawName = input.fields.name ?? input.fields.first_name ?? input.fields.fullname;
     const displayName = rawName ? rawName.trim().split(/\s+/)[0] : undefined;
+    const email = privacy.storeEmail
+      ? (input.fields.email ?? input.fields.email_address)?.trim()
+      : undefined;
     await db.insert(event).values({
       siteId: siteRow.id,
       type: "form_submit",
@@ -113,7 +124,7 @@ export function createWidgetService(
       verified: false,
       displayName: displayName ?? null,
       city: input.fields.city?.trim() ?? null,
-      payload: { url: input.url },
+      payload: { url: input.url, ...(email ? { email } : {}) },
       occurredAt: new Date(),
     });
     await notifyCounter(siteRow.id);

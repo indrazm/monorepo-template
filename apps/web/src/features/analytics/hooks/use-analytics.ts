@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, useInfiniteQuery } from "@tanstack/react-query";
 import { getActivation, getEventsFeed, getSummary } from "../services";
 
 export function summaryQueryOptions(siteId: string, days = 7) {
@@ -9,10 +9,13 @@ export function summaryQueryOptions(siteId: string, days = 7) {
   });
 }
 
-export function eventsFeedQueryOptions(siteId: string) {
-  return queryOptions({
+// Keyset-paginated events feed (newest first) with a "load more" flow.
+export function useInfiniteEventsFeed(siteId: string) {
+  return useInfiniteQuery({
     queryKey: ["analytics", "events", siteId],
-    queryFn: () => getEventsFeed(siteId),
+    queryFn: ({ pageParam }) => getEventsFeed(siteId, 50, pageParam ?? undefined),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: siteId.length > 0,
   });
 }

@@ -39,6 +39,19 @@ export const integrationProviders = [
   "activecampaign",
   "wordpress",
   "webflow",
+  // CRM, support, spreadsheets & accounting
+  "salesforce",
+  "pipedrive",
+  "zoho",
+  "airtable",
+  "google_sheets",
+  "intercom",
+  "crisp",
+  "drift",
+  "tawk_to",
+  "livechat",
+  "quickbooks",
+  "xero",
 ] as const;
 export const integrationProviderSchema = z.enum(integrationProviders);
 
@@ -246,6 +259,78 @@ export const integrationMeta: Record<IntegrationProvider, IntegrationMeta> = {
   webflow: {
     label: "Webflow",
     group: "Marketing & sites",
+    secret: "generated",
+    header: "x-tacto-signature (hex HMAC-SHA256)",
+  },
+  salesforce: {
+    label: "Salesforce",
+    group: "Forms & CRM",
+    secret: "generated",
+    header: "x-tacto-signature (hex HMAC-SHA256)",
+  },
+  pipedrive: {
+    label: "Pipedrive",
+    group: "Forms & CRM",
+    secret: "generated",
+    header: "x-tacto-signature (hex HMAC-SHA256)",
+  },
+  zoho: {
+    label: "Zoho CRM",
+    group: "Forms & CRM",
+    secret: "generated",
+    header: "x-tacto-signature (hex HMAC-SHA256)",
+  },
+  airtable: {
+    label: "Airtable",
+    group: "Forms & CRM",
+    secret: "generated",
+    header: "x-tacto-signature (hex HMAC-SHA256)",
+  },
+  google_sheets: {
+    label: "Google Sheets",
+    group: "Forms & CRM",
+    secret: "generated",
+    header: "x-tacto-signature (hex HMAC-SHA256)",
+  },
+  intercom: {
+    label: "Intercom",
+    group: "Forms & CRM",
+    secret: "generated",
+    header: "x-tacto-signature (hex HMAC-SHA256)",
+  },
+  crisp: {
+    label: "Crisp",
+    group: "Forms & CRM",
+    secret: "generated",
+    header: "x-tacto-signature (hex HMAC-SHA256)",
+  },
+  drift: {
+    label: "Drift",
+    group: "Forms & CRM",
+    secret: "generated",
+    header: "x-tacto-signature (hex HMAC-SHA256)",
+  },
+  tawk_to: {
+    label: "Tawk.to",
+    group: "Forms & CRM",
+    secret: "generated",
+    header: "x-tacto-signature (hex HMAC-SHA256)",
+  },
+  livechat: {
+    label: "LiveChat",
+    group: "Forms & CRM",
+    secret: "generated",
+    header: "x-tacto-signature (hex HMAC-SHA256)",
+  },
+  quickbooks: {
+    label: "QuickBooks",
+    group: "E-commerce",
+    secret: "generated",
+    header: "x-tacto-signature (hex HMAC-SHA256)",
+  },
+  xero: {
+    label: "Xero",
+    group: "E-commerce",
     secret: "generated",
     header: "x-tacto-signature (hex HMAC-SHA256)",
   },

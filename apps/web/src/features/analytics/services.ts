@@ -11,11 +11,18 @@ export async function getSummary(siteId: string, days = 7): Promise<AnalyticsSum
   return data.summary;
 }
 
-export async function getEventsFeed(siteId: string, limit = 50): Promise<EventRecord[]> {
-  const response = await analytics.events.$get({ query: { siteId, limit: String(limit) } });
+export type EventsFeedPage = { events: EventRecord[]; nextCursor: string | null };
+
+export async function getEventsFeed(
+  siteId: string,
+  limit = 50,
+  cursor?: string,
+): Promise<EventsFeedPage> {
+  const response = await analytics.events.$get({
+    query: { siteId, limit: String(limit), ...(cursor ? { cursor } : {}) },
+  });
   if (!response.ok) throw new Error("Failed to load events.");
-  const data = await response.json();
-  return data.events;
+  return (await response.json()) as EventsFeedPage;
 }
 
 export async function getActivation(siteId: string): Promise<Activation> {

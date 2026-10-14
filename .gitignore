@@ -10,3 +10,6 @@ build
 coverage
 .opencode
 .code-review-graph
+.agents
+.claude
+skills-lock.json

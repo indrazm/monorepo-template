@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { parseBillingEvent } from "./stripe";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createBillingPortalSession, createCheckoutSession, parseBillingEvent } from "./stripe";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("parseBillingEvent", () => {
   it("captures the organization id, plan and customer id from checkout", () => {
@@ -39,5 +43,65 @@ describe("parseBillingEvent", () => {
     expect(
       parseBillingEvent({ type: "checkout.session.completed", data: { object: {} } }),
     ).toBeNull();
+  });
+});
+
+describe("createCheckoutSession", () => {
+  it("sends the Checkout Studio parameters and preserves the existing ones", async () => {
+    let body: URLSearchParams | undefined;
+    vi.stubGlobal("fetch", async (_url: string, init: { body: string }) => {
+      body = new URLSearchParams(init.body);
+      return new Response(JSON.stringify({ url: "https://checkout.stripe.com/c/pay/x" }), {
+        status: 200,
+      });
+    });
+
+    const url = await createCheckoutSession({
+      secretKey: "sk_test",
+      plan: "growth",
+      organizationId: "org-1",
+      successUrl: "https://app.example.com/billing?checkout=success",
+      cancelUrl: "https://app.example.com/billing?checkout=cancel",
+    });
+    expect(url).toBe("https://checkout.stripe.com/c/pay/x");
+
+    // fixed_by_ui (Checkout Studio)
+    expect(body?.get("ui_mode")).toBe("hosted_page");
+    expect(body?.get("billing_address_collection")).toBe("auto");
+    expect(body?.get("phone_number_collection[enabled]")).toBe("false");
+    expect(body?.get("automatic_tax[enabled]")).toBe("false");
+    expect(body?.get("allow_promotion_codes")).toBe("false");
+    expect(body?.get("submit_type")).toBe("auto");
+    expect(body?.get("integration_identifier")).toBe("hosted_web_0001");
+    expect(body?.get("origin_context")).toBe("web");
+    // sample_only kept + app linkage kept
+    expect(body?.get("mode")).toBe("subscription");
+    expect(body?.get("payment_method_collection")).toBe("always");
+    expect(body?.get("success_url")).toBe("https://app.example.com/billing?checkout=success");
+    expect(body?.get("line_items[0][price_data][recurring][interval]")).toBe("month");
+    expect(body?.get("metadata[organizationId]")).toBe("org-1");
+  });
+});
+
+describe("createBillingPortalSession", () => {
+  it("returns the portal URL", async () => {
+    vi.stubGlobal("fetch", async () => {
+      return new Response(JSON.stringify({ url: "https://billing.stripe.com/p/session" }), {
+        status: 200,
+      });
+    });
+    const url = await createBillingPortalSession({
+      secretKey: "sk_test",
+      customerId: "cus_1",
+      returnUrl: "https://app.example.com/billing",
+    });
+    expect(url).toBe("https://billing.stripe.com/p/session");
+  });
+
+  it("throws when Stripe rejects the request", async () => {
+    vi.stubGlobal("fetch", async () => new Response("nope", { status: 400 }));
+    await expect(
+      createBillingPortalSession({ secretKey: "sk_test", customerId: "x", returnUrl: "https://a" }),
+    ).rejects.toThrow(/Stripe portal failed/);
   });
 });

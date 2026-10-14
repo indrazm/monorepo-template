@@ -409,6 +409,19 @@ const registry: Record<IntegrationProvider, Connector> = {
   activecampaign: looseProvider("activecampaign", "signup"),
   wordpress: looseProvider("wordpress", "form_submit"),
   webflow: looseProvider("webflow", "form_submit"),
+
+  salesforce: looseProvider("salesforce", "signup"),
+  pipedrive: looseProvider("pipedrive", "signup"),
+  zoho: looseProvider("zoho", "signup"),
+  airtable: looseProvider("airtable", "form_submit"),
+  google_sheets: looseProvider("google_sheets", "form_submit"),
+  intercom: looseProvider("intercom", "signup"),
+  crisp: looseProvider("crisp", "signup"),
+  drift: looseProvider("drift", "signup"),
+  tawk_to: looseProvider("tawk_to", "signup"),
+  livechat: looseProvider("livechat", "signup"),
+  quickbooks: looseProvider("quickbooks", "purchase"),
+  xero: looseProvider("xero", "purchase"),
 };
 
 export function getConnector(provider: string): Connector | null {

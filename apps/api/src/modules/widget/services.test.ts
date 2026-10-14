@@ -154,6 +154,30 @@ describe("widget payload service", () => {
     expect(captured?.city).toBe("Berlin");
   });
 
+  it("stores the email on capture only when domain privacy opts in (FR-NGS-05)", async () => {
+    const created = await seedSite();
+    await sites.upsertSettings(ORG, created.id, {
+      loop: { loopAfter: 3, order: "random", manualOrder: [], showClose: true, closeForDays: 1 },
+      privacy: {
+        requireConsent: false,
+        trackIpGeo: true,
+        storeEmail: true,
+        blockedIps: [],
+        filterProfanity: false,
+      },
+      customCss: null,
+      analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
+    });
+
+    await widget.capture({
+      site: created.siteKey,
+      url: "/signup",
+      fields: { name: "Jane Doe", city: "Berlin", email: "jane@example.com" },
+    });
+    const [captured] = await db.select().from(event).where(eq(event.siteId, created.id));
+    expect((captured?.payload as { email?: string } | null)?.email).toBe("jane@example.com");
+  });
+
   it("renders a low-stock (FOMO) count and a live countdown (via the extra column)", async () => {
     const created = await seedSite();
     await notifications.create(ORG, {

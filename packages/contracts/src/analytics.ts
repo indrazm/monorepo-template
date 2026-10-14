@@ -28,6 +28,8 @@ export const analyticsSummarySchema = z.object({
 export const eventsFeedQuerySchema = z.object({
   siteId: z.string().trim().min(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+  // Keyset pagination cursor: the id of the last event on the previous page.
+  cursor: z.string().trim().min(1).optional(),
 });
 
 // Hot-path impression buffered in Redis and flushed to Postgres by the worker

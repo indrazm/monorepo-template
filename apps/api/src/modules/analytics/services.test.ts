@@ -5,8 +5,8 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as schema from "@repo/db/schema";
-import { impression } from "@repo/db/schema";
-import { createAnalyticsService } from "./services";
+import { event, impression } from "@repo/db/schema";
+import { createAnalyticsService, InvalidEventsCursorError } from "./services";
 import { createSitesService } from "../sites/services";
 
 const client = new PGlite();
@@ -72,5 +72,27 @@ describe("analytics service", () => {
     expect(after?.msToActivation).toBeGreaterThanOrEqual(0);
 
     expect(await analytics.activation("org-b", site.id)).toBeNull();
+  });
+
+  it("paginates the events feed with a keyset cursor (FR-ING-11)", async () => {
+    const site = await sites.create(ORG, { name: "Shop", domain: "shop.example.com" });
+    const base = Date.now();
+    await db.insert(event).values([
+      { siteId: site.id, type: "purchase", source: "manual", occurredAt: new Date(base) },
+      { siteId: site.id, type: "purchase", source: "manual", occurredAt: new Date(base + 1000) },
+      { siteId: site.id, type: "purchase", source: "manual", occurredAt: new Date(base + 2000) },
+    ]);
+
+    const first = await analytics.eventsFeed(ORG, site.id, 2);
+    expect(first?.events).toHaveLength(2);
+    expect(first?.nextCursor).toBeTruthy();
+
+    const second = await analytics.eventsFeed(ORG, site.id, 2, first?.nextCursor ?? undefined);
+    expect(second?.events).toHaveLength(1);
+    expect(second?.nextCursor).toBeNull();
+
+    await expect(analytics.eventsFeed(ORG, site.id, 2, "missing")).rejects.toBeInstanceOf(
+      InvalidEventsCursorError,
+    );
   });
 });
