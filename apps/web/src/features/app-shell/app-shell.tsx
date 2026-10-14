@@ -30,6 +30,7 @@ import {
   PlugIcon,
   TargetIcon,
   UserRoundIcon,
+  UsersIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { meQueryOptions, useLogoutMutation } from "../auth/hooks/use-auth";
@@ -62,6 +63,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { icon: BarChart3Icon, label: "Analytics", to: "/analytics" },
     { icon: TargetIcon, label: "Goals", to: "/goals" },
     { icon: CreditCardIcon, label: "Billing", to: "/billing" },
+    { icon: UsersIcon, label: "Team", to: "/team" },
     { icon: UserRoundIcon, label: "Profile", to: "/profile" },
   ] as const;
 

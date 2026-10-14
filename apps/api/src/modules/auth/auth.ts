@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
 import { admin, organization } from "better-auth/plugins";
+import { eq } from "drizzle-orm";
 import type { Database } from "@repo/db";
 import { member, organization as organizationTable, subscription } from "@repo/db/schema";
 import type { createApiConfig } from "../../config";
@@ -38,9 +39,30 @@ export function createAuth(db: Database, config: ReturnType<typeof createApiConf
       }),
       organization({
         allowUserToCreateOrganization: true,
+        // Invitations (FR-AUTH-05). Without an email provider configured we log
+        // the accept link so an admin can share it; wire SMTP to send for real.
+        sendInvitationEmail: async (data) => {
+          const appUrl = config.trustedOrigins[0] ?? "";
+          const link = `${appUrl}/accept-invitation/${data.id}`;
+          console.info("Organization invitation", { email: data.email, link });
+        },
       }),
     ],
     databaseHooks: {
+      session: {
+        create: {
+          // Make the user's first organization the active one so the org-plugin
+          // endpoints (members, invitations) resolve a tenant (F16).
+          before: async (session) => {
+            const [row] = await db
+              .select({ organizationId: member.organizationId })
+              .from(member)
+              .where(eq(member.userId, session.userId))
+              .limit(1);
+            return { data: { ...session, activeOrganizationId: row?.organizationId ?? null } };
+          },
+        },
+      },
       user: {
         create: {
           // Every new user gets a default organization they own, plus a free

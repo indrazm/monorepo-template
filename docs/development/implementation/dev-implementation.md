@@ -143,7 +143,7 @@ Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet 
 > **File:** `apps/api/src/modules/auth/middleware.ts`. **Kerjakan:** `AuthVariables.organizationId`; resolve org aktif; helper `requireOrg(c)`.
 > **Cek:** endpoint terproteksi baca `c.get("organizationId")`. **FR:** NFR-SEC-03.
 
-## Fase 16 — UI undang anggota (opsional MVP)
+## Fase 16 — UI undang anggota ✅
 
 > **File:** `apps/web/src/features/team/`. **Kerjakan:** panggil endpoint organization Better Auth.
 > **Cek:** undangan terkirim. **FR:** FR-AUTH-05.
