@@ -31,6 +31,12 @@ export const widgetSettingsSchema = z.object({
   showBadge: z.boolean(),
   requireConsent: z.boolean().default(false),
   customCss: z.string().nullable().default(null),
+  analyticsPassthrough: z.object({
+    gtag: z.boolean().default(false),
+    dataLayer: z.boolean().default(false),
+    fbq: z.boolean().default(false),
+    mixpanel: z.boolean().default(false),
+  }),
 });
 
 export const widgetPayloadResponseSchema = z.object({

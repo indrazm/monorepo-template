@@ -40,12 +40,23 @@ export const domainPrivacySchema = z.object({
   trackIpGeo: z.boolean().default(true),
   storeEmail: z.boolean().default(false),
 });
+// Forward widget view/click to the host page's analytics (FR-NGS-06). Uses the
+// tags already on the customer's site — no server-side keys.
+export const analyticsPassthroughSchema = z.object({
+  gtag: z.boolean().default(false), // Google Analytics / GA4 via gtag()
+  dataLayer: z.boolean().default(false), // Google Tag Manager dataLayer.push
+  fbq: z.boolean().default(false), // Facebook Pixel
+  mixpanel: z.boolean().default(false),
+});
 export const domainSettingSchema = z.object({
   loop: domainLoopSettingsSchema,
   privacy: domainPrivacySchema,
   customCss: z.string().max(20_000).nullable().default(null),
+  analyticsPassthrough: analyticsPassthroughSchema,
 });
 export const updateDomainSettingSchema = domainSettingSchema.partial();
+
+export type AnalyticsPassthrough = z.output<typeof analyticsPassthroughSchema>;
 
 export type CreateSiteInput = z.output<typeof createSiteSchema>;
 export type UpdateSiteInput = z.output<typeof updateSiteSchema>;

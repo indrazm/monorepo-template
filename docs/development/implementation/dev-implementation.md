@@ -398,8 +398,8 @@ Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet 
 - **F61** Zapier/Make ✅ (lewat ingest API key + konektor "zapier" + UI Integrations). — FR-ING-08, FR-INT-04
 - **F62** Import review Google/Facebook → review notifications. — FR-ING-10, FR-NOT-05
 - **F63** Goals ✅ (konversi URL + stats + UI); A/B testing varian menyusul. — FR-ANL-03/04
-- **F64** Katalog integrasi UI lengkap + data filtering. — FR-INT-02/03
-- **F65** Custom CSS per domain ✅ + domain settings UI (loop/order/close/consent). Passthrough GA/GTM = menyusul. — FR-NGS-01/02/03/04/05
+- **F64** Katalog integrasi UI + data filtering per-integrasi ✅ — FR-INT-02/03
+- **F65** Custom CSS + domain settings UI + passthrough GA/GTM/FB/Mixpanel ✅ — FR-NGS-01..06
 
 ### Fase 3 — suite lengkap
 

@@ -80,6 +80,7 @@ describe("sites service (tenant isolation)", () => {
         loop: { loopAfter: 1, order: "manual", manualOrder: [], showClose: false, closeForDays: 2 },
         privacy: { requireConsent: true, trackIpGeo: true, storeEmail: false },
         customCss: ".x{}",
+        analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
       }),
     ).toBeNull();
 
@@ -87,6 +88,7 @@ describe("sites service (tenant isolation)", () => {
       loop: { loopAfter: 5, order: "manual", manualOrder: [], showClose: false, closeForDays: 3 },
       privacy: { requireConsent: true, trackIpGeo: false, storeEmail: false },
       customCss: ".tacto-card{border:0}",
+      analyticsPassthrough: { gtag: true, dataLayer: false, fbq: false, mixpanel: false },
     });
     const saved = await service.getSettings(ORG_A, siteA.id);
     expect(saved?.loop.order).toBe("manual");
@@ -99,6 +101,7 @@ describe("sites service (tenant isolation)", () => {
       loop: { loopAfter: 2, order: "random", manualOrder: [], showClose: true, closeForDays: 1 },
       privacy: { requireConsent: false, trackIpGeo: true, storeEmail: false },
       customCss: null,
+      analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
     });
     const second = await service.getSettings(ORG_A, siteA.id);
     expect(second?.loop.loopAfter).toBe(2);

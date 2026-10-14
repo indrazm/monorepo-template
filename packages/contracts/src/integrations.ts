@@ -10,11 +10,20 @@ export const integrationProviders = [
 ] as const;
 export const integrationProviderSchema = z.enum(integrationProviders);
 
+// Optional data filter (FR-INT-03): only accept events whose raw payload has
+// `path` (dot notation) equal to `equals`. Skips everything else.
+export const integrationFilterSchema = z.object({
+  path: z.string().trim().min(1).max(120),
+  equals: z.string().trim().max(200),
+});
+
 // Stored config for an integration (jsonb). `secret` verifies inbound webhooks.
 export const integrationConfigSchema = z.object({
   secret: z.string().trim().min(8).optional(),
   label: z.string().trim().max(120).optional(),
+  filter: integrationFilterSchema.optional(),
 });
+export type IntegrationFilter = z.output<typeof integrationFilterSchema>;
 
 export const createIntegrationSchema = z.object({
   provider: integrationProviderSchema,

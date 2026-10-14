@@ -10,6 +10,7 @@ import {
 } from "@repo/db/schema";
 import type { CaptureEventInput, TrackEventInput } from "@repo/contracts/widget";
 import { planLimits, type Plan } from "@repo/contracts/billing";
+import { analyticsPassthroughSchema } from "@repo/contracts/sites";
 import type { DomainLoopSettings, DomainPrivacy } from "@repo/contracts/sites";
 import type {
   EventType,
@@ -136,6 +137,9 @@ export function createWidgetService(db: Pick<Database, "select" | "update" | "in
         showBadge: !planLimits[plan].removeBadge,
         requireConsent: privacy.requireConsent,
         customCss: (settingRow?.customCss as string | null) ?? null,
+        analyticsPassthrough: analyticsPassthroughSchema.parse(
+          settingRow?.analyticsPassthrough ?? {},
+        ),
       },
       ttl: DEFAULT_TTL,
     };

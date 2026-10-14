@@ -27,6 +27,17 @@ export const apiEnvSchema = z
     GOOGLE_CLIENT_SECRET: optionalStringSchema,
     STRIPE_SECRET_KEY: optionalStringSchema,
     STRIPE_WEBHOOK_SECRET: optionalStringSchema,
+    // Review import (FR-ING-10) — configured per integration, these are the
+    // platform-level API credentials.
+    GOOGLE_PLACES_API_KEY: optionalStringSchema,
+    FACEBOOK_PAGE_ACCESS_TOKEN: optionalStringSchema,
+    YOUTUBE_API_KEY: optionalStringSchema,
+    // Outbound email (invitations, password reset). Unset = links are logged.
+    SMTP_HOST: optionalStringSchema,
+    SMTP_PORT: optionalStringSchema,
+    SMTP_USER: optionalStringSchema,
+    SMTP_PASSWORD: optionalStringSchema,
+    SMTP_FROM: optionalStringSchema,
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== "production") return;
@@ -58,6 +69,18 @@ export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
     stripe: {
       secretKey: env.STRIPE_SECRET_KEY ?? null,
       webhookSecret: env.STRIPE_WEBHOOK_SECRET ?? null,
+    },
+    reviewImport: {
+      googlePlacesApiKey: env.GOOGLE_PLACES_API_KEY ?? null,
+      facebookPageAccessToken: env.FACEBOOK_PAGE_ACCESS_TOKEN ?? null,
+      youtubeApiKey: env.YOUTUBE_API_KEY ?? null,
+    },
+    smtp: {
+      host: env.SMTP_HOST ?? null,
+      port: env.SMTP_PORT ?? null,
+      user: env.SMTP_USER ?? null,
+      password: env.SMTP_PASSWORD ?? null,
+      from: env.SMTP_FROM ?? null,
     },
     auth: {
       secret: env.BETTER_AUTH_SECRET,

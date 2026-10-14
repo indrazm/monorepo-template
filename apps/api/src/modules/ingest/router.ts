@@ -46,6 +46,7 @@ export function createIngestRouter(service: ReturnType<typeof createIngestServic
       });
       switch (result) {
         case "created":
+        case "filtered":
           return c.body(null, 202);
         case "duplicate":
           return c.json(apiError("conflict"), 409);

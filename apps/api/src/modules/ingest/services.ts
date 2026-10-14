@@ -14,7 +14,18 @@ export type WebhookResult =
   | "unauthorized"
   | "not_found"
   | "no_connector"
-  | "invalid";
+  | "invalid"
+  | "filtered";
+
+// Reads a dot-notation path from an unknown object (for integration filters).
+function readPath(obj: unknown, path: string): string | undefined {
+  let current: unknown = obj;
+  for (const key of path.split(".")) {
+    if (typeof current !== "object" || current === null) return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current == null ? undefined : String(current);
+}
 
 function firstName(value: string | undefined): string | null {
   if (!value) return null;
@@ -54,7 +65,8 @@ export function createIngestService(db: Pick<Database, "select" | "insert">) {
         ),
       )
       .limit(1);
-    const secret = (integrationRow?.config as IntegrationConfig | undefined)?.secret;
+    const config = integrationRow?.config as IntegrationConfig | undefined;
+    const secret = config?.secret;
     if (!secret) return "unauthorized";
     if (!connector.verify({ rawBody: input.rawBody, headers: input.headers, secret })) {
       return "unauthorized";
@@ -65,6 +77,10 @@ export function createIngestService(db: Pick<Database, "select" | "insert">) {
       raw = JSON.parse(input.rawBody);
     } catch {
       return "invalid";
+    }
+    // Per-integration data filter (FR-INT-03): ack but skip non-matching events.
+    if (config?.filter && readPath(raw, config.filter.path) !== config.filter.equals) {
+      return "filtered";
     }
     const mapped = connector.mapToEvent(raw);
     if (!mapped) return "invalid";

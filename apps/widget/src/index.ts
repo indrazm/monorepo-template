@@ -1,5 +1,6 @@
 import { attachCapture } from "./capture";
 import { loadPayload } from "./loader";
+import { forwardAnalytics } from "./passthrough";
 import { startScheduler } from "./scheduler";
 import { createShadowHost } from "./shadow";
 import { track } from "./track";
@@ -37,8 +38,14 @@ async function boot(): Promise<void> {
     siteKey,
     notifications: payload.notifications,
     settings: payload.settings,
-    onView: (refId) => track(apiBase, { site: siteKey, refId, kind: "view" }),
-    onClick: (refId) => track(apiBase, { site: siteKey, refId, kind: "click" }),
+    onView: (refId) => {
+      track(apiBase, { site: siteKey, refId, kind: "view" });
+      forwardAnalytics(payload.settings, "view", refId);
+    },
+    onClick: (refId) => {
+      track(apiBase, { site: siteKey, refId, kind: "click" });
+      forwardAnalytics(payload.settings, "click", refId);
+    },
   });
 }
 

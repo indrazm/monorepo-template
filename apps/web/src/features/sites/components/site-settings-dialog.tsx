@@ -86,6 +86,8 @@ function SettingsForm({
     setDraft({ ...draft, loop: { ...draft.loop, ...patch } });
   const setPrivacy = (patch: Partial<DomainSetting["privacy"]>) =>
     setDraft({ ...draft, privacy: { ...draft.privacy, ...patch } });
+  const setPass = (patch: Partial<DomainSetting["analyticsPassthrough"]>) =>
+    setDraft({ ...draft, analyticsPassthrough: { ...draft.analyticsPassthrough, ...patch } });
 
   return (
     <form
@@ -159,6 +161,31 @@ function SettingsForm({
           value={draft.customCss ?? ""}
           onChange={(e) => setDraft({ ...draft, customCss: e.target.value || null })}
         />
+      </div>
+
+      <div className="grid gap-2">
+        <span className="text-sm font-medium">Forward events to your analytics</span>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {(
+            [
+              ["gtag", "Google Analytics (gtag)"],
+              ["dataLayer", "Google Tag Manager"],
+              ["fbq", "Facebook Pixel"],
+              ["mixpanel", "Mixpanel"],
+            ] as const
+          ).map(([key, label]) => (
+            <label
+              key={key}
+              className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+            >
+              {label}
+              <Switch
+                checked={draft.analyticsPassthrough[key]}
+                onCheckedChange={(checked) => setPass({ [key]: checked })}
+              />
+            </label>
+          ))}
+        </div>
       </div>
 
       <DialogFooter>

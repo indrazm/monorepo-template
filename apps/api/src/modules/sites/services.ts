@@ -9,7 +9,11 @@ import type {
   Site,
   UpdateSiteInput,
 } from "@repo/contracts/sites";
-import { domainLoopSettingsSchema, domainPrivacySchema } from "@repo/contracts/sites";
+import {
+  analyticsPassthroughSchema,
+  domainLoopSettingsSchema,
+  domainPrivacySchema,
+} from "@repo/contracts/sites";
 
 type SiteRow = typeof site.$inferSelect;
 
@@ -18,6 +22,7 @@ function defaultDomainSetting(): DomainSetting {
     loop: domainLoopSettingsSchema.parse({}),
     privacy: domainPrivacySchema.parse({}),
     customCss: null,
+    analyticsPassthrough: analyticsPassthroughSchema.parse({}),
   };
 }
 
@@ -61,6 +66,7 @@ export function createSitesService(db: Pick<Database, "select" | "insert" | "upd
       loop: row.loop as DomainLoopSettings,
       privacy: row.privacy as DomainPrivacy,
       customCss: (row.customCss as string | null) ?? null,
+      analyticsPassthrough: analyticsPassthroughSchema.parse(row.analyticsPassthrough ?? {}),
     };
   }
 
@@ -70,18 +76,16 @@ export function createSitesService(db: Pick<Database, "select" | "insert" | "upd
     input: DomainSetting,
   ): Promise<DomainSetting | null> {
     if (!(await ownsSite(organizationId, siteId))) return null;
+    const values = {
+      loop: input.loop,
+      privacy: input.privacy,
+      customCss: input.customCss,
+      analyticsPassthrough: input.analyticsPassthrough,
+    };
     await db
       .insert(domainSetting)
-      .values({
-        siteId,
-        loop: input.loop,
-        privacy: input.privacy,
-        customCss: input.customCss,
-      })
-      .onConflictDoUpdate({
-        target: domainSetting.siteId,
-        set: { loop: input.loop, privacy: input.privacy, customCss: input.customCss },
-      });
+      .values({ siteId, ...values })
+      .onConflictDoUpdate({ target: domainSetting.siteId, set: values });
     return input;
   }
 
