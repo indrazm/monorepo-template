@@ -21,6 +21,7 @@ import { createIngestRouter } from "./modules/ingest/router";
 import { createIngestService } from "./modules/ingest/services";
 import { createIntegrationsRouter } from "./modules/integrations/router";
 import { createIntegrationsService } from "./modules/integrations/services";
+import { createReviewsService } from "./modules/reviews/services";
 import { createWidgetRouter } from "./modules/widget/router";
 import { createWidgetService } from "./modules/widget/services";
 import { createProfileRouter } from "./modules/profile/router";
@@ -37,7 +38,7 @@ export function createApp({
 }: {
   auth: AuthProvider;
   db: Database;
-  config: Pick<ReturnType<typeof createApiConfig>, "clientOrigins" | "stripe">;
+  config: Pick<ReturnType<typeof createApiConfig>, "clientOrigins" | "stripe" | "reviewImport">;
 }) {
   const loadSession = createSessionMiddleware(auth, db);
   const goalsService = createGoalsService(db);
@@ -97,7 +98,13 @@ export function createApp({
         "/api/v1/billing",
         createBillingRouter(createBillingService(db), config.stripe, config.clientOrigins[0] ?? ""),
       )
-      .route("/api/v1/integrations", createIntegrationsRouter(createIntegrationsService(db)))
+      .route(
+        "/api/v1/integrations",
+        createIntegrationsRouter(
+          createIntegrationsService(db),
+          createReviewsService(db, config.reviewImport),
+        ),
+      )
       .route("/api/v1/goals", createGoalsRouter(goalsService))
       .route(
         "/widget",

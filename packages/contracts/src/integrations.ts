@@ -7,6 +7,7 @@ export const integrationProviders = [
   "stripe",
   "shopify",
   "woocommerce",
+  "google", // Google Places reviews import
 ] as const;
 export const integrationProviderSchema = z.enum(integrationProviders);
 
@@ -22,6 +23,7 @@ export const integrationConfigSchema = z.object({
   secret: z.string().trim().min(8).optional(),
   label: z.string().trim().max(120).optional(),
   filter: integrationFilterSchema.optional(),
+  placeId: z.string().trim().max(200).optional(), // Google Places place_id
 });
 export type IntegrationFilter = z.output<typeof integrationFilterSchema>;
 
