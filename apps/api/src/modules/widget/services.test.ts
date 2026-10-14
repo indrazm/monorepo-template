@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -391,6 +391,63 @@ describe("widget payload service", () => {
     expect(withCountry.kind === "ok" && withCountry.payload.notifications[0]?.mediaUrl).toBe(
       "https://flagcdn.com/w80/br.png",
     );
+  });
+
+  it("honors the manual display order (FR-NGS-02)", async () => {
+    const created = await seedSite();
+    const first = await notifications.create(ORG, {
+      siteId: created.id,
+      name: "A",
+      type: "custom",
+      isActive: true,
+      config: config({ message: { template: "First", fallbacks: {} } }),
+    });
+    const second = await notifications.create(ORG, {
+      siteId: created.id,
+      name: "B",
+      type: "custom",
+      isActive: true,
+      config: config({ message: { template: "Second", fallbacks: {} } }),
+    });
+    if (!first || !second) throw new Error("failed to seed notifications");
+    await sites.upsertSettings(ORG, created.id, {
+      loop: {
+        loopAfter: 1,
+        order: "manual",
+        manualOrder: [second.id, first.id],
+        showClose: true,
+        closeForDays: 1,
+      },
+      privacy: {
+        requireConsent: false,
+        trackIpGeo: true,
+        storeEmail: false,
+        blockedIps: [],
+        filterProfanity: false,
+      },
+      customCss: null,
+      analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
+    });
+
+    const result = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+    });
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    expect(result.payload.notifications.map((n) => n.id)).toEqual([second.id, first.id]);
+  });
+
+  it("records a visit event for the traffic quota (FR-BIL-01)", async () => {
+    const created = await seedSite();
+    expect(await widget.recordVisit({ site: created.siteKey })).toBe(true);
+    const [row] = await db
+      .select()
+      .from(event)
+      .where(and(eq(event.siteId, created.id), eq(event.type, "visit")));
+    expect(row?.source).toBe("pixel");
+    expect(await widget.recordVisit({ site: "missing" })).toBe(false);
   });
 
   it("filters by country when geo is known, fails open when unknown (FR-NGS-07)", async () => {

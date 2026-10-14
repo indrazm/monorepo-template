@@ -374,6 +374,51 @@ export const webhookEventSchema = z.object({
   occurredAt: z.iso.datetime().optional(),
 });
 
+// How a provider is connected:
+// - "direct": the provider signs its own webhook with a signing secret you
+//   paste here (we verify its native header). The custom webhook is also
+//   direct — you sign the body with the generated secret.
+// - "automation": the provider has no inbound webhook we can verify, so you
+//   forward events through Zapier / Make (or your own server) and sign the body
+//   with the generated secret (header `x-tacto-signature`).
+export type IntegrationMode = "direct" | "automation";
+
+export type IntegrationGuide = {
+  mode: IntegrationMode;
+  steps: string[];
+  // The signature header/scheme this integration expects.
+  signature: string;
+};
+
+export function integrationGuide(provider: IntegrationProvider): IntegrationGuide {
+  const meta = integrationMeta[provider];
+  const isAutomation = meta.secret === "generated" && provider !== "webhook";
+  if (!isAutomation) {
+    return {
+      mode: "direct",
+      signature: meta.header,
+      steps: [
+        `Open ${meta.label}'s webhook / developer settings.`,
+        `Add a webhook endpoint pointing to the URL below.`,
+        meta.secret === "pasted"
+          ? `Paste ${meta.label}'s signing secret here (${meta.header}).`
+          : "Sign each request body with the secret below: hex HMAC-SHA256 in the x-tacto-signature header.",
+        "Subscribe to the events you want to show (orders, purchases, forms…).",
+      ],
+    };
+  }
+  return {
+    mode: "automation",
+    signature: "x-tacto-signature (hex HMAC-SHA256 of the raw body)",
+    steps: [
+      `If ${meta.label} can't send a webhook we can verify, forward it via Zapier / Make (or your server).`,
+      `Add a “Webhooks → POST” action to the URL below.`,
+      "Set header x-tacto-signature = hex HMAC-SHA256(rawBody, secret) — use the generated secret.",
+      "Map the JSON body fields: name, city, product, dedupeKey, occurredAt.",
+    ],
+  };
+}
+
 export type IntegrationConfig = z.output<typeof integrationConfigSchema>;
 export type CreateIntegrationInput = z.output<typeof createIntegrationSchema>;
 export type Integration = z.output<typeof integrationSchema>;

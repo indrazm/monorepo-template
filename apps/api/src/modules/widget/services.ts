@@ -9,7 +9,7 @@ import {
   site,
   subscription,
 } from "@repo/db/schema";
-import type { CaptureEventInput, TrackEventInput } from "@repo/contracts/widget";
+import type { CaptureEventInput, TrackEventInput, VisitEventInput } from "@repo/contracts/widget";
 import { planLimits, type Plan } from "@repo/contracts/billing";
 import type { RealtimeStore } from "@repo/queue";
 import { analyticsPassthroughSchema, domainPrivacySchema } from "@repo/contracts/sites";
@@ -58,7 +58,27 @@ export function createWidgetService(
   db: Pick<Database, "select" | "update" | "insert">,
   deps: WidgetServiceDeps = {},
 ) {
-  return { getPayload, recordImpression, capture };
+  return { getPayload, recordImpression, capture, recordVisit };
+
+  // Records a pageview as a `visit` event once per session. This is the real
+  // traffic signal behind the plan's monthly visitor quota (FR-BIL-01) and the
+  // analytics live-visitor window fallback (FR-NOT-03).
+  async function recordVisit(input: VisitEventInput): Promise<boolean> {
+    const [siteRow] = await db
+      .select({ id: site.id })
+      .from(site)
+      .where(eq(site.siteKey, input.site))
+      .limit(1);
+    if (!siteRow) return false;
+    await db.insert(event).values({
+      siteId: siteRow.id,
+      type: "visit",
+      source: "pixel",
+      verified: false,
+      occurredAt: new Date(),
+    });
+    return true;
+  }
 
   // Records a view/click impression (SRS FR-ANL-01). Buffered in Redis on the
   // hot path and flushed to Postgres by the worker (F46/F47); fallback inserts.
@@ -195,11 +215,13 @@ export function createWidgetService(
       .from(notification)
       .where(and(eq(notification.siteId, siteRow.id), eq(notification.isActive, true)))
       .orderBy(desc(notification.createdAt));
+    // Display order: manual drag-and-drop order, or newest-first (FR-NGS-02).
+    const orderedRows = applyManualOrder(activeRows, loop);
 
     const notifications: WidgetNotification[] = [];
     // Blocked IPs get the settings/badge but no notifications (FR-NGS-07).
     if (!blocked) {
-      for (const row of activeRows) {
+      for (const row of orderedRows) {
         const config = toConfig(row);
         if (!matchUrl(config.display.url, input.url)) continue;
         // Country targeting (FR-NGS-07): a known country must be in the list.
@@ -419,6 +441,18 @@ export function createWidgetService(
 
 function eventTypesOf(dataSource: NotificationDataSource): EventType[] {
   return dataSource.eventTypes.length > 0 ? dataSource.eventTypes : ["purchase"];
+}
+
+// Honors the per-domain manual order (FR-NGS-02): notifications listed in
+// `manualOrder` come first in that sequence; the rest keep the DB order.
+function applyManualOrder<T extends { id: string }>(rows: T[], loop: DomainLoopSettings): T[] {
+  if (loop.order !== "manual" || loop.manualOrder.length === 0) return rows;
+  const position = new Map(loop.manualOrder.map((id, index) => [id, index]));
+  return [...rows].sort((a, b) => {
+    const ai = position.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+    const bi = position.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+    return ai - bi;
+  });
 }
 
 function firstString(...values: unknown[]): string | undefined {

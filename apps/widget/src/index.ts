@@ -5,6 +5,7 @@ import { forwardAnalytics } from "./passthrough";
 import { startScheduler } from "./scheduler";
 import { createShadowHost } from "./shadow";
 import { track } from "./track";
+import { visit } from "./visit";
 import type { WidgetPayloadResponse } from "@repo/contracts/widget";
 
 // Captured at synchronous eval time (document.currentScript is null later).
@@ -19,6 +20,9 @@ let started = false;
 function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string): void {
   if (started) return;
   started = true;
+
+  // One pageview per session feeds the traffic quota (FR-BIL-01).
+  visit(apiBase, siteKey);
 
   // Auto-capture is independent of having notifications to show.
   attachCapture(apiBase, siteKey);

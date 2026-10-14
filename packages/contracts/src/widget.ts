@@ -75,8 +75,15 @@ export const captureEventSchema = z.object({
   fields: z.record(z.string(), z.string()).default({}),
 });
 
+// ---------- pageview (POST /widget/v1/visit, once per session) ----------
+// Counts traffic for the plan quota and analytics (SRS FR-BIL-01).
+export const visitEventSchema = z.object({
+  site: z.string().trim().min(1),
+});
+
 export type WidgetNotification = z.output<typeof widgetNotificationSchema>;
 export type WidgetSettings = z.output<typeof widgetSettingsSchema>;
 export type WidgetPayloadResponse = z.output<typeof widgetPayloadResponseSchema>;
 export type TrackEventInput = z.output<typeof trackEventSchema>;
 export type CaptureEventInput = z.output<typeof captureEventSchema>;
+export type VisitEventInput = z.output<typeof visitEventSchema>;

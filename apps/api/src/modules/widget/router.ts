@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import {
   captureEventSchema,
   trackEventSchema,
+  visitEventSchema,
   widgetPayloadQuerySchema,
 } from "@repo/contracts/widget";
 import type { createWidgetService } from "./services";
@@ -73,6 +74,16 @@ export function createWidgetRouter(
       }),
       async (c) => {
         await service.capture(c.req.valid("json"));
+        return c.body(null, 202);
+      },
+    )
+    .post(
+      "/v1/visit",
+      zValidator("json", visitEventSchema, (result, c) => {
+        if (!result.success) return c.json(apiError("validation_error"), 400);
+      }),
+      async (c) => {
+        await service.recordVisit(c.req.valid("json"));
         return c.body(null, 202);
       },
     );

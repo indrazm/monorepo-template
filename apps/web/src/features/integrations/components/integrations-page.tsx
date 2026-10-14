@@ -1,4 +1,5 @@
 import {
+  integrationGuide,
   integrationMeta,
   integrationProviders,
   type Integration,
@@ -61,6 +62,7 @@ export function IntegrationsPage() {
   // providers (webhook/Zapier/Make/…) get a secret generated for the user.
   const needsPastedSecret = integrationMeta[provider].secret === "pasted";
   const activeSite = sites.data?.find((s) => s.id === siteId) ?? sites.data?.[0];
+  const guide = integrationGuide(provider);
 
   return (
     <AppShell>
@@ -129,8 +131,17 @@ export function IntegrationsPage() {
         {activeSite ? (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Send events</CardTitle>
-              <CardDescription>Use these with your server, Zapier, or any backend.</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-base">
+                Connect {integrationMeta[provider].label}
+                <Badge variant="secondary">
+                  {guide.mode === "direct" ? "Direct" : "Via Zapier / Make"}
+                </Badge>
+              </CardTitle>
+              <CardDescription>
+                {guide.mode === "direct"
+                  ? "Register this webhook in the provider and paste its signing secret."
+                  : "Forward events through Zapier / Make (or a server) and sign them with the secret."}
+              </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
               {sites.data && sites.data.length > 1 ? (
@@ -159,9 +170,19 @@ export function IntegrationsPage() {
                 value={`${env.VITE_API_URL}/ingest/v1/event`}
               />
               <CodeRow
-                label="Custom webhook URL (header x-tacto-signature: HMAC-SHA256)"
-                value={`${env.VITE_API_URL}/ingest/v1/webhook/webhook?site=${activeSite.siteKey}`}
+                label={`Webhook URL for ${integrationMeta[provider].label}`}
+                value={`${env.VITE_API_URL}/ingest/v1/webhook/${provider}?site=${activeSite.siteKey}`}
               />
+              <CodeRow label="Signature we verify" value={guide.signature} />
+
+              <div className="rounded-md border bg-muted/40 p-3">
+                <p className="text-xs font-semibold text-muted-foreground">How to connect</p>
+                <ol className="mt-2 grid list-decimal gap-1 pl-5 text-sm">
+                  {guide.steps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              </div>
             </CardContent>
           </Card>
         ) : (
@@ -213,8 +234,11 @@ function IntegrationRow({
     <li className="grid gap-3 py-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="capitalize">
-            {integration.provider}
+          <Badge variant="secondary">{integrationMeta[integration.provider].label}</Badge>
+          <Badge variant="outline" className="font-normal">
+            {integrationGuide(integration.provider).mode === "direct"
+              ? "Direct"
+              : "Via Zapier / Make"}
           </Badge>
           <span className="text-xs text-muted-foreground">{integration.status}</span>
         </div>
