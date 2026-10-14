@@ -20,12 +20,12 @@ values below.
 
 - [apps/api/src/modules/billing/stripe.ts](apps/api/src/modules/billing/stripe.ts)
 
-| Field              | Current Value                                                                                         | What to Set                                                                                                                                                         |
-| ------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| mode               | `subscription`                                                                                        | Keep `"subscription"` (recurring plans) or switch to `"payment"` for one-time charges.                                                                              |
-| success_url        | `${CLIENT_ORIGINS[0]}/billing?checkout=success`                                                       | Your real post-payment page. Set `CLIENT_ORIGINS` to your production origin; keep the `?checkout=success` marker.                                                   |
-| cancel_url         | `${CLIENT_ORIGINS[0]}/billing?checkout=cancel`                                                        | Your real cancel/return page (same note as above).                                                                                                                  |
-| line_items[].price | inline `price_data` (name = `Tacto <plan>`, unit_amount from `planPricesUsdCents`, monthly recurring) | Optional: replace the inline `price_data` with real Stripe Price IDs from the Dashboard (https://dashboard.stripe.com/prices). Only if you move prices out of code. |
+| Field               | Current Value                                                                | What to Set                                                                                                                                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| mode                | `subscription`                                                               | Keep `"subscription"` (recurring plans) or switch to `"payment"` for one-time charges.                                                                                                                         |
+| success_url         | `${CLIENT_ORIGINS[0]}/billing?checkout=success`                              | Your real post-payment page. Set `CLIENT_ORIGINS` to your production origin; keep the `?checkout=success` marker.                                                                                              |
+| cancel_url          | `${CLIENT_ORIGINS[0]}/billing?checkout=cancel`                               | Your real cancel/return page (same note as above).                                                                                                                                                             |
+| line_items[0].price | `STRIPE_PRICE_STARTER` / `STRIPE_PRICE_GROWTH` / `STRIPE_PRICE_AGENCY` (env) | Set each env var to the recurring **Price ID** (`price_...`) of the matching plan from https://dashboard.stripe.com/prices. Checkout now references these Prices, so the amount matches the Dashboard exactly. |
 
 > `success_url` / `cancel_url` are derived from `CLIENT_ORIGINS[0]`, so in
 > production set `CLIENT_ORIGINS` to your public app origin.
@@ -77,7 +77,14 @@ Server-only (no `VITE_` prefix) — already referenced in `apps/api/src/config.t
 ```sh
 STRIPE_SECRET_KEY=sk_test_...      # https://dashboard.stripe.com/test/apikeys
 STRIPE_WEBHOOK_SECRET=whsec_...    # https://dashboard.stripe.com/workbench/webhooks
+STRIPE_PRICE_STARTER=price_...     # recurring Price ID for the Starter plan
+STRIPE_PRICE_GROWTH=price_...      # recurring Price ID for the Growth plan
+STRIPE_PRICE_AGENCY=price_...      # recurring Price ID for the Agency plan
 ```
+
+> Prices now come from the Stripe Dashboard via these Price IDs, so the
+> Checkout amount always matches your Stripe products. If a plan's Price ID is
+> missing, `POST /api/v1/billing/checkout` returns `integration_unconfigured`.
 
 No publishable key is needed because checkout is a **hosted redirect** (the
 browser is sent to Stripe, not embedded). If you later switch to embedded

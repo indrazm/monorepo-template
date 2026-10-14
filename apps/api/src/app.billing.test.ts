@@ -16,7 +16,11 @@ const app = createApp({
   db,
   config: {
     clientOrigins: ["http://localhost:3000"],
-    stripe: { secretKey: "sk_test_x", webhookSecret: WEBHOOK_SECRET },
+    stripe: {
+      secretKey: "sk_test_x",
+      webhookSecret: WEBHOOK_SECRET,
+      prices: { starter: null, growth: null, agency: null },
+    },
   },
   auth: {
     getSession: async () => null,

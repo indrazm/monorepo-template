@@ -59,6 +59,7 @@ describe("createCheckoutSession", () => {
     const url = await createCheckoutSession({
       secretKey: "sk_test",
       plan: "growth",
+      priceId: "price_growth",
       organizationId: "org-1",
       successUrl: "https://app.example.com/billing?checkout=success",
       cancelUrl: "https://app.example.com/billing?checkout=cancel",
@@ -78,7 +79,9 @@ describe("createCheckoutSession", () => {
     expect(body?.get("mode")).toBe("subscription");
     expect(body?.get("payment_method_collection")).toBe("always");
     expect(body?.get("success_url")).toBe("https://app.example.com/billing?checkout=success");
-    expect(body?.get("line_items[0][price_data][recurring][interval]")).toBe("month");
+    // Real Stripe Price ID from the Dashboard (not inline price_data).
+    expect(body?.get("line_items[0][price]")).toBe("price_growth");
+    expect(body?.get("line_items[0][quantity]")).toBe("1");
     expect(body?.get("metadata[organizationId]")).toBe("org-1");
   });
 });

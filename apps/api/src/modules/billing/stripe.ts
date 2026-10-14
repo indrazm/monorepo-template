@@ -1,7 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { planPricesUsdCents, type Plan } from "@repo/contracts/billing";
+import type { Plan } from "@repo/contracts/billing";
 
-export type StripeConfig = { secretKey: string | null; webhookSecret: string | null };
+export type StripeConfig = {
+  secretKey: string | null;
+  webhookSecret: string | null;
+  // Stripe Price IDs per paid plan (from the Dashboard).
+  prices?: Record<Exclude<Plan, "free">, string | null>;
+};
 
 // Verifies a Stripe webhook signature: header `t=<ts>,v1=<hex hmac of ts.body>`.
 export function verifyStripeSignature(
@@ -82,15 +87,16 @@ export function parseBillingEvent(raw: unknown): BillingUpdate | null {
 }
 
 // Creates a Stripe Checkout Session via the REST API (no SDK dependency).
-// Returns the hosted checkout URL. Requires STRIPE_SECRET_KEY.
+// Returns the hosted checkout URL. Requires STRIPE_SECRET_KEY and a Price ID
+// (STRIPE_PRICE_*) so the amount matches the product configured in Stripe.
 export async function createCheckoutSession(options: {
   secretKey: string;
   plan: Exclude<Plan, "free">;
+  priceId: string;
   organizationId: string;
   successUrl: string;
   cancelUrl: string;
 }): Promise<string> {
-  const amount = planPricesUsdCents[options.plan];
   const form = new URLSearchParams();
   // Parameters configured in Checkout Studio (fixed_by_ui).
   form.set("ui_mode", "hosted_page");
@@ -107,11 +113,9 @@ export async function createCheckoutSession(options: {
   form.set("payment_method_collection", "always");
   form.set("success_url", options.successUrl);
   form.set("cancel_url", options.cancelUrl);
+  // Reference the Price created in the Stripe Dashboard (recurring).
+  form.set("line_items[0][price]", options.priceId);
   form.set("line_items[0][quantity]", "1");
-  form.set("line_items[0][price_data][currency]", "usd");
-  form.set("line_items[0][price_data][product_data][name]", `Tacto ${options.plan}`);
-  form.set("line_items[0][price_data][unit_amount]", String(amount));
-  form.set("line_items[0][price_data][recurring][interval]", "month");
   form.set("metadata[organizationId]", options.organizationId);
   form.set("metadata[plan]", options.plan);
   form.set("subscription_data[metadata][organizationId]", options.organizationId);

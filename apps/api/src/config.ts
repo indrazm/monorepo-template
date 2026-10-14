@@ -27,6 +27,10 @@ export const apiEnvSchema = z
     GOOGLE_CLIENT_SECRET: optionalStringSchema,
     STRIPE_SECRET_KEY: optionalStringSchema,
     STRIPE_WEBHOOK_SECRET: optionalStringSchema,
+    // Stripe Price IDs from the Dashboard (one per paid plan).
+    STRIPE_PRICE_STARTER: optionalStringSchema,
+    STRIPE_PRICE_GROWTH: optionalStringSchema,
+    STRIPE_PRICE_AGENCY: optionalStringSchema,
     // Outbound email (invitations, password reset). Unset = links are logged.
     SMTP_HOST: optionalStringSchema,
     SMTP_PORT: optionalStringSchema,
@@ -70,6 +74,13 @@ export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
     stripe: {
       secretKey: env.STRIPE_SECRET_KEY ?? null,
       webhookSecret: env.STRIPE_WEBHOOK_SECRET ?? null,
+      // Price IDs configured in the Stripe Dashboard (recommended over inline
+      // amounts so Checkout matches your products).
+      prices: {
+        starter: env.STRIPE_PRICE_STARTER ?? null,
+        growth: env.STRIPE_PRICE_GROWTH ?? null,
+        agency: env.STRIPE_PRICE_AGENCY ?? null,
+      },
     },
     smtp: {
       host: env.SMTP_HOST ?? null,

@@ -34,10 +34,14 @@ export function createBillingRouter(
           const organizationId = requireOrg(c);
           if (!organizationId) return c.json(apiError("unauthorized"), 401);
           if (!stripe.secretKey) return c.json(apiError("integration_unconfigured"), 400);
+          const plan = c.req.valid("json").plan;
+          const priceId = stripe.prices?.[plan] ?? null;
+          if (!priceId) return c.json(apiError("integration_unconfigured"), 400);
           try {
             const url = await createCheckoutSession({
               secretKey: stripe.secretKey,
-              plan: c.req.valid("json").plan,
+              plan,
+              priceId,
               organizationId,
               successUrl: `${appUrl}/billing?checkout=success`,
               cancelUrl: `${appUrl}/billing?checkout=cancel`,
