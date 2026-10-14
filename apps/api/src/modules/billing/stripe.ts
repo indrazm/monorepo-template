@@ -92,7 +92,19 @@ export async function createCheckoutSession(options: {
 }): Promise<string> {
   const amount = planPricesUsdCents[options.plan];
   const form = new URLSearchParams();
+  // Parameters configured in Checkout Studio (fixed_by_ui).
+  form.set("ui_mode", "hosted_page");
+  form.set("billing_address_collection", "auto");
+  form.set("phone_number_collection[enabled]", "false");
+  form.set("automatic_tax[enabled]", "false");
+  form.set("allow_promotion_codes", "false");
+  form.set("submit_type", "auto");
+  form.set("integration_identifier", "hosted_web_0001");
+  form.set("origin_context", "web");
+  // mode is a sample value: "subscription" for recurring billing.
   form.set("mode", "subscription");
+  // Payment methods are only collected for subscription mode.
+  form.set("payment_method_collection", "always");
   form.set("success_url", options.successUrl);
   form.set("cancel_url", options.cancelUrl);
   form.set("line_items[0][quantity]", "1");
