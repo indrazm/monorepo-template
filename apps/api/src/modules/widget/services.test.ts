@@ -189,4 +189,45 @@ describe("widget payload service", () => {
     expect(byType.low_stock?.message).toBe("Only 3 left in stock!");
     expect(byType.countdown?.countdownEndsAt).toBe(endsAt);
   });
+
+  it("blocks listed IPs and masks profanity (FR-NGS-07)", async () => {
+    const created = await seedSite();
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "Custom",
+      type: "custom",
+      isActive: true,
+      config: config({ message: { template: "This product is damn good", fallbacks: {} } }),
+    });
+    await sites.upsertSettings(ORG, created.id, {
+      loop: { loopAfter: 3, order: "random", manualOrder: [], showClose: true, closeForDays: 1 },
+      privacy: {
+        requireConsent: false,
+        trackIpGeo: true,
+        storeEmail: false,
+        blockedIps: ["203.0.113.5"],
+        filterProfanity: true,
+      },
+      customCss: null,
+      analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
+    });
+
+    const masked = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+      requestIp: "198.51.100.9",
+    });
+    expect(masked.kind === "ok" && masked.payload.notifications[0]?.message).toBe(
+      "This product is d**n good",
+    );
+
+    const blocked = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+      requestIp: "203.0.113.5",
+    });
+    expect(blocked.kind === "ok" && blocked.payload.notifications).toHaveLength(0);
+  });
 });

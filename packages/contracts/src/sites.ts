@@ -39,6 +39,10 @@ export const domainPrivacySchema = z.object({
   requireConsent: z.boolean().default(false),
   trackIpGeo: z.boolean().default(true),
   storeEmail: z.boolean().default(false),
+  // Anti-abuse (FR-NGS-07): IPs that never receive notifications, and an
+  // optional profanity mask on rendered text.
+  blockedIps: z.array(z.string().trim().min(1).max(64)).max(200).default([]),
+  filterProfanity: z.boolean().default(false),
 });
 // Forward widget view/click to the host page's analytics (FR-NGS-06). Uses the
 // tags already on the customer's site — no server-side keys.

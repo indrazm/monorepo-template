@@ -4,7 +4,6 @@ import { domainSetting, site } from "@repo/db/schema";
 import type {
   CreateSiteInput,
   DomainLoopSettings,
-  DomainPrivacy,
   DomainSetting,
   Site,
   UpdateSiteInput,
@@ -64,7 +63,7 @@ export function createSitesService(db: Pick<Database, "select" | "insert" | "upd
     if (!row) return defaultDomainSetting();
     return {
       loop: row.loop as DomainLoopSettings,
-      privacy: row.privacy as DomainPrivacy,
+      privacy: domainPrivacySchema.parse(row.privacy ?? {}),
       customCss: (row.customCss as string | null) ?? null,
       analyticsPassthrough: analyticsPassthroughSchema.parse(row.analyticsPassthrough ?? {}),
     };

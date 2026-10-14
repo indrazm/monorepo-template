@@ -404,7 +404,7 @@ Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet 
 ### Fase 3 — suite lengkap
 
 - **F66** Tipe: Combo ✅, Low stock (FOMO) ✅, Countdown ✅ (Social/YouTube dilewati — integrasi tak dipakai). — FR-NOT-06/07
-- **F67** Privacy lanjut: profanity filter, block IP, country display, cegah duplikat; terjemahan template. — FR-NGS-07, FR-NED-12
+- **F67** Privacy/anti-abuse: block IP ✅ + profanity filter ✅ (country-display - **F67** Privacy lanjut: profanity filter, block IP, country display, cegah duplikat; terjemahan template. — FR-NGS-07, FR-NED-12 terjemahan template ditunda — perlu geo/i18n). — FR-NGS-07, FR-NED-12
 - **F68** Katalog integrasi diperluas (BigCommerce/Wix/HubSpot/Typeform/Kajabi).
 
 ### Fase 4 — ekspansi

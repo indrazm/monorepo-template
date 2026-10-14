@@ -22,7 +22,11 @@ export function createWidgetRouter(
       async (c) => {
         const { site, url } = c.req.valid("query");
         const origin = c.req.header("origin") ?? c.req.header("referer") ?? null;
-        const result = await service.getPayload({ siteKey: site, url, origin });
+        const requestIp =
+          c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+          c.req.header("x-real-ip") ??
+          null;
+        const result = await service.getPayload({ siteKey: site, url, origin, requestIp });
         if (result.kind === "not_found") return c.json(apiError("site_not_found"), 404);
         if (result.kind === "forbidden") return c.json(apiError("forbidden"), 403);
         onPageview?.(site, url);

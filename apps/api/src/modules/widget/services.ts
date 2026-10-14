@@ -10,8 +10,9 @@ import {
 } from "@repo/db/schema";
 import type { CaptureEventInput, TrackEventInput } from "@repo/contracts/widget";
 import { planLimits, type Plan } from "@repo/contracts/billing";
-import { analyticsPassthroughSchema } from "@repo/contracts/sites";
-import type { DomainLoopSettings, DomainPrivacy } from "@repo/contracts/sites";
+import { analyticsPassthroughSchema, domainPrivacySchema } from "@repo/contracts/sites";
+import type { DomainLoopSettings } from "@repo/contracts/sites";
+import { maskProfanity } from "./profanity";
 import type {
   EventType,
   NotificationConfig,
@@ -84,6 +85,7 @@ export function createWidgetService(db: Pick<Database, "select" | "update" | "in
     siteKey: string;
     url: string;
     origin: string | null;
+    requestIp?: string | null;
   }): Promise<PayloadResult> {
     const [siteRow] = await db.select().from(site).where(eq(site.siteKey, input.siteKey)).limit(1);
     if (!siteRow) return { kind: "not_found" };
@@ -105,7 +107,8 @@ export function createWidgetService(db: Pick<Database, "select" | "update" | "in
       .where(eq(domainSetting.siteId, siteRow.id))
       .limit(1);
     const loop = (settingRow?.loop as DomainLoopSettings | undefined) ?? defaultLoop();
-    const privacy = (settingRow?.privacy as DomainPrivacy | undefined) ?? defaultPrivacy();
+    const privacy = domainPrivacySchema.parse(settingRow?.privacy ?? {});
+    const blocked = Boolean(input.requestIp && privacy.blockedIps.includes(input.requestIp));
 
     const [subRow] = await db
       .select()
@@ -121,11 +124,17 @@ export function createWidgetService(db: Pick<Database, "select" | "update" | "in
       .orderBy(desc(notification.createdAt));
 
     const notifications: WidgetNotification[] = [];
-    for (const row of activeRows) {
-      const config = toConfig(row);
-      if (!matchUrl(config.display.url, input.url)) continue;
-      const rendered = await renderNotification(siteRow.id, row, config);
-      if (rendered) notifications.push(rendered);
+    // Blocked IPs get the settings/badge but no notifications (FR-NGS-07).
+    if (!blocked) {
+      for (const row of activeRows) {
+        const config = toConfig(row);
+        if (!matchUrl(config.display.url, input.url)) continue;
+        const rendered = await renderNotification(siteRow.id, row, config);
+        if (rendered) {
+          if (privacy.filterProfanity) rendered.message = maskProfanity(rendered.message);
+          notifications.push(rendered);
+        }
+      }
     }
 
     const payload: WidgetPayloadResponse = {
@@ -308,7 +317,4 @@ function originAllowed(origin: string | null, domain: string): boolean {
 
 function defaultLoop(): DomainLoopSettings {
   return { loopAfter: 3, order: "random", manualOrder: [], showClose: true, closeForDays: 1 };
-}
-function defaultPrivacy(): DomainPrivacy {
-  return { requireConsent: false, trackIpGeo: true, storeEmail: false };
 }

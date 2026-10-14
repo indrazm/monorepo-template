@@ -152,6 +152,35 @@ function SettingsForm({
         />
       </label>
 
+      <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
+        <span className="text-sm">
+          Filter profanity
+          <span className="block text-xs text-muted-foreground">Mask coarse words in text.</span>
+        </span>
+        <Switch
+          checked={draft.privacy.filterProfanity}
+          onCheckedChange={(checked) => setPrivacy({ filterProfanity: checked })}
+        />
+      </label>
+
+      <div className="grid gap-2">
+        <Label htmlFor="blockedIps">Blocked IPs (one per line)</Label>
+        <Textarea
+          id="blockedIps"
+          rows={2}
+          placeholder="203.0.113.5"
+          value={draft.privacy.blockedIps.join("\n")}
+          onChange={(e) =>
+            setPrivacy({
+              blockedIps: e.target.value
+                .split("\n")
+                .map((ip) => ip.trim())
+                .filter(Boolean),
+            })
+          }
+        />
+      </div>
+
       <div className="grid gap-2">
         <Label htmlFor="customCss">Custom CSS (advanced)</Label>
         <Textarea

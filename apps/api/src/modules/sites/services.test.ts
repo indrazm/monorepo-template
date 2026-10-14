@@ -78,7 +78,13 @@ describe("sites service (tenant isolation)", () => {
     expect(
       await service.upsertSettings(ORG_B, siteA.id, {
         loop: { loopAfter: 1, order: "manual", manualOrder: [], showClose: false, closeForDays: 2 },
-        privacy: { requireConsent: true, trackIpGeo: true, storeEmail: false },
+        privacy: {
+          requireConsent: true,
+          trackIpGeo: true,
+          storeEmail: false,
+          blockedIps: [],
+          filterProfanity: false,
+        },
         customCss: ".x{}",
         analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
       }),
@@ -86,7 +92,13 @@ describe("sites service (tenant isolation)", () => {
 
     await service.upsertSettings(ORG_A, siteA.id, {
       loop: { loopAfter: 5, order: "manual", manualOrder: [], showClose: false, closeForDays: 3 },
-      privacy: { requireConsent: true, trackIpGeo: false, storeEmail: false },
+      privacy: {
+        requireConsent: true,
+        trackIpGeo: false,
+        storeEmail: false,
+        blockedIps: [],
+        filterProfanity: false,
+      },
       customCss: ".tacto-card{border:0}",
       analyticsPassthrough: { gtag: true, dataLayer: false, fbq: false, mixpanel: false },
     });
@@ -99,7 +111,13 @@ describe("sites service (tenant isolation)", () => {
     // Second upsert overwrites (not duplicates).
     await service.upsertSettings(ORG_A, siteA.id, {
       loop: { loopAfter: 2, order: "random", manualOrder: [], showClose: true, closeForDays: 1 },
-      privacy: { requireConsent: false, trackIpGeo: true, storeEmail: false },
+      privacy: {
+        requireConsent: false,
+        trackIpGeo: true,
+        storeEmail: false,
+        blockedIps: [],
+        filterProfanity: false,
+      },
       customCss: null,
       analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
     });
