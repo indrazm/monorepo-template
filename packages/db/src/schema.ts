@@ -299,6 +299,8 @@ export const notification = pgTable(
     timing: jsonb("timing").notNull(),
     verified: boolean("verified").notNull().default(false),
     isActive: boolean("is_active").notNull().default(true),
+    // Type-specific extras (countdown target, low-stock number).
+    extra: jsonb("extra"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("notification_site_idx").on(t.siteId)],

@@ -71,12 +71,18 @@ export const notificationTimingSchema = z.object({
   intervalMs: z.number().int().min(0).max(120_000).default(8_000),
 });
 
+// Type-specific extras (FR-NOT-06/07): countdown target + low-stock number.
+export const countdownConfigSchema = z.object({ endsAt: z.iso.datetime() });
+export const fomoConfigSchema = z.object({ stock: z.number().int().min(0).max(1_000_000) });
+
 export const notificationConfigSchema = z.object({
   message: notificationMessageSchema,
   style: notificationStyleSchema,
   display: notificationDisplaySchema,
   dataSource: notificationDataSourceSchema,
   timing: notificationTimingSchema,
+  countdown: countdownConfigSchema.optional(),
+  fomo: fomoConfigSchema.optional(),
 });
 
 export const createNotificationSchema = z.object({

@@ -28,6 +28,7 @@ const BASE_CSS = `
 .tacto-msg { font-weight: 700; font-size: 13.5px; line-height: 1.35; }
 .tacto-sub { font-size: 12px; color: #5b606e; margin-top: 2px; }
 .tacto-verified { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px; font-size: 11px; font-weight: 700; color: #0e9f6e; }
+.tacto-countdown { margin-top: 4px; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: #17181c; }
 .tacto-close {
   position: absolute; top: 6px; right: 8px; border: 0; background: transparent; cursor: pointer;
   color: #8a90a0; font-size: 15px; line-height: 1; padding: 2px;

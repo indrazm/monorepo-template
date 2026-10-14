@@ -28,6 +28,7 @@ import { matchUrl } from "./url-match";
 const DEFAULT_TTL = 30;
 const LIVE_WINDOW_MS = 5 * 60_000;
 const COUNTER_WINDOW_MS = 7 * 86_400_000;
+const COMBO_WINDOW_MS = 30 * 86_400_000;
 
 type NotificationRow = typeof notification.$inferSelect;
 type EventRow = typeof event.$inferSelect;
@@ -163,9 +164,34 @@ export function createWidgetService(db: Pick<Database, "select" | "update" | "in
     switch (row.type) {
       case "custom":
         return { ...base, message: renderMessage(config.message as NotificationMessage, {}) };
-      case "counter":
-      case "combo": {
+      case "countdown": {
+        // Static urgency message + a live countdown rendered by the pixel.
+        const endsAt = config.countdown?.endsAt;
+        if (!endsAt || new Date(endsAt).getTime() <= Date.now()) return null;
+        return {
+          ...base,
+          message: renderMessage(config.message as NotificationMessage, {}),
+          countdownEndsAt: endsAt,
+        };
+      }
+      case "low_stock": {
+        // FOMO: render the configured remaining stock as {{count}}.
+        const stock = config.fomo?.stock ?? 0;
+        return {
+          ...base,
+          message: renderMessage(config.message as NotificationMessage, { count: stock }),
+        };
+      }
+      case "counter": {
         const count = await countEvents(siteId, eventTypesOf(config.dataSource), COUNTER_WINDOW_MS);
+        if (count === 0) return null;
+        return {
+          ...base,
+          message: renderMessage(config.message as NotificationMessage, { count }),
+        };
+      }
+      case "combo": {
+        const count = await countEvents(siteId, eventTypesOf(config.dataSource), COMBO_WINDOW_MS);
         if (count === 0) return null;
         return {
           ...base,
@@ -242,12 +268,15 @@ function eventTypesOf(dataSource: NotificationDataSource): EventType[] {
 }
 
 function toConfig(row: NotificationRow): NotificationConfig {
+  const extra = (row.extra ?? {}) as { countdown?: unknown; fomo?: unknown };
   return {
     message: row.message,
     style: row.style,
     display: row.display,
     dataSource: row.dataSource,
     timing: row.timing,
+    ...(extra.countdown ? { countdown: extra.countdown } : {}),
+    ...(extra.fomo ? { fomo: extra.fomo } : {}),
   } as NotificationConfig;
 }
 

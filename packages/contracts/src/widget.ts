@@ -9,6 +9,7 @@ export const widgetNotificationSchema = z.object({
   message: z.string(),
   timeAgo: z.string().optional(),
   mediaUrl: z.string().optional(),
+  countdownEndsAt: z.string().optional(),
   style: z.object({
     position: z.enum(["bottom-left", "bottom-right", "top-left", "top-right"]),
     accent: z.string(),

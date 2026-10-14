@@ -11,6 +11,7 @@ import type {
 type NotificationRow = typeof notification.$inferSelect;
 
 function toNotification(row: NotificationRow): Notification {
+  const extra = (row.extra ?? {}) as { countdown?: unknown; fomo?: unknown };
   return {
     id: row.id,
     siteId: row.siteId,
@@ -25,8 +26,18 @@ function toNotification(row: NotificationRow): Notification {
       display: row.display,
       dataSource: row.dataSource,
       timing: row.timing,
+      ...(extra.countdown ? { countdown: extra.countdown } : {}),
+      ...(extra.fomo ? { fomo: extra.fomo } : {}),
     } as NotificationConfig,
   };
+}
+
+// Packs type-specific extras into the `extra` jsonb column.
+function toExtra(config: NotificationConfig): Record<string, unknown> | null {
+  const extra: Record<string, unknown> = {};
+  if (config.countdown) extra.countdown = config.countdown;
+  if (config.fomo) extra.fomo = config.fomo;
+  return Object.keys(extra).length > 0 ? extra : null;
 }
 
 export function createNotificationsService(
@@ -81,6 +92,7 @@ export function createNotificationsService(
         display: input.config.display,
         dataSource: input.config.dataSource,
         timing: input.config.timing,
+        extra: toExtra(input.config),
       })
       .returning();
     if (!row) throw new Error("Failed to create notification.");
@@ -104,6 +116,7 @@ export function createNotificationsService(
     if (input.config?.display !== undefined) values.display = input.config.display;
     if (input.config?.dataSource !== undefined) values.dataSource = input.config.dataSource;
     if (input.config?.timing !== undefined) values.timing = input.config.timing;
+    if (input.config) values.extra = toExtra(input.config as NotificationConfig);
     const [row] = await db
       .update(notification)
       .set(values)

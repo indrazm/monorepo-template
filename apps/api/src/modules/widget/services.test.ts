@@ -153,4 +153,40 @@ describe("widget payload service", () => {
     expect(captured?.displayName).toBe("Jane"); // first name only
     expect(captured?.city).toBe("Berlin");
   });
+
+  it("renders a low-stock (FOMO) count and a live countdown (via the extra column)", async () => {
+    const created = await seedSite();
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "Low stock",
+      type: "low_stock",
+      isActive: true,
+      config: config({
+        message: { template: "Only {{count}} left in stock!", fallbacks: {} },
+        fomo: { stock: 3 },
+      }),
+    });
+    const endsAt = new Date(Date.now() + 3_600_000).toISOString();
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "Flash sale",
+      type: "countdown",
+      isActive: true,
+      config: config({
+        message: { template: "Flash sale ends soon!", fallbacks: {} },
+        countdown: { endsAt },
+      }),
+    });
+
+    const result = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+    });
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    const byType = Object.fromEntries(result.payload.notifications.map((n) => [n.type, n]));
+    expect(byType.low_stock?.message).toBe("Only 3 left in stock!");
+    expect(byType.countdown?.countdownEndsAt).toBe(endsAt);
+  });
 });

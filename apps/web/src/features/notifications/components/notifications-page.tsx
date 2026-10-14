@@ -36,13 +36,25 @@ import { NotificationPreview } from "./notification-preview";
 const TYPES: { value: NotificationType; label: string }[] = [
   { value: "recent_sales", label: "Recent sales" },
   { value: "counter", label: "Counter" },
+  { value: "combo", label: "Combo (30-day count)" },
   { value: "live_visitors", label: "Live visitors" },
   { value: "review", label: "Review" },
+  { value: "low_stock", label: "Low stock (FOMO)" },
+  { value: "countdown", label: "Countdown" },
   { value: "custom", label: "Custom" },
 ];
 
 const selectClass =
   "border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
+
+// ISO -> value for <input type="datetime-local"> (local time, no seconds).
+function toLocalInput(iso: string | undefined): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 function defaultConfig(): NotificationConfig {
   return {
@@ -66,7 +78,7 @@ function defaultConfig(): NotificationConfig {
 function eventTypesForType(type: NotificationType): NotificationConfig["dataSource"]["eventTypes"] {
   if (type === "live_visitors") return ["visit"];
   if (type === "review") return ["review"];
-  if (type === "custom") return [];
+  if (type === "custom" || type === "countdown" || type === "low_stock") return [];
   return ["purchase"];
 }
 
@@ -217,6 +229,8 @@ function NotificationEditorDialog({
     const payloadConfig: NotificationConfig = {
       ...config,
       dataSource: { ...config.dataSource, eventTypes: eventTypesForType(type) },
+      countdown: type === "countdown" ? config.countdown : undefined,
+      fomo: type === "low_stock" ? config.fomo : undefined,
     };
     const onError = (error: Error) => toast.error(error.message);
     if (existing) {
@@ -305,6 +319,37 @@ function NotificationEditorDialog({
               {"{{time_ago}}"}
             </p>
           </div>
+
+          {type === "countdown" ? (
+            <div className="grid gap-2">
+              <Label htmlFor="n-endsAt">Countdown ends at</Label>
+              <Input
+                id="n-endsAt"
+                type="datetime-local"
+                value={toLocalInput(config.countdown?.endsAt)}
+                onChange={(e) =>
+                  patchConfig({
+                    countdown: e.target.value
+                      ? { endsAt: new Date(e.target.value).toISOString() }
+                      : undefined,
+                  })
+                }
+              />
+            </div>
+          ) : null}
+
+          {type === "low_stock" ? (
+            <div className="grid gap-2">
+              <Label htmlFor="n-stock">Units left ({"{{count}}"})</Label>
+              <Input
+                id="n-stock"
+                type="number"
+                min={0}
+                value={config.fomo?.stock ?? 0}
+                onChange={(e) => patchConfig({ fomo: { stock: Number(e.target.value) } })}
+              />
+            </div>
+          ) : null}
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="grid gap-2">

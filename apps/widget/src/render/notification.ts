@@ -7,7 +7,20 @@ const ICONS: Record<string, string> = {
   counter: "📈",
   combo: "📈",
   custom: "💬",
+  countdown: "⏳",
+  low_stock: "🔥",
 };
+
+function formatRemaining(ms: number): string {
+  if (ms <= 0) return "00:00:00";
+  const total = Math.floor(ms / 1000);
+  const d = Math.floor(total / 86_400);
+  const h = Math.floor((total % 86_400) / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (d > 0 ? `${d}d ` : "") + `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
 
 // Builds the signature notification card (style-guide .livecard). Returns the
 // card plus its close button so the scheduler can wire interactions.
@@ -43,6 +56,18 @@ export function renderCard(
     sub.className = "tacto-sub";
     sub.textContent = notification.timeAgo;
     body.appendChild(sub);
+  }
+  if (notification.countdownEndsAt) {
+    const endsAt = new Date(notification.countdownEndsAt).getTime();
+    const timer = document.createElement("div");
+    timer.className = "tacto-countdown";
+    const tick = () => {
+      timer.textContent = `⏳ ${formatRemaining(endsAt - Date.now())}`;
+      if (!card.isConnected || endsAt - Date.now() <= 0) clearInterval(handle);
+    };
+    const handle = setInterval(tick, 1000);
+    tick();
+    body.appendChild(timer);
   }
   if (notification.verified) {
     const verified = document.createElement("div");
