@@ -26,11 +26,13 @@
     "better-auth": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
+    "nodemailer": "^10.1.1",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
     "@types/node": "catalog:",
+    "@types/nodemailer": "^8.0.2",
     "tsx": "catalog:",
     "typescript": "catalog:"
   }

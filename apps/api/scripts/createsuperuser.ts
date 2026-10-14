@@ -2,13 +2,14 @@ import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { eq } from "drizzle-orm";
 import { createAuth } from "../src/modules/auth/auth";
+import { createMailer } from "../src/modules/auth/mailer";
 import { createDatabase } from "@repo/db";
 import { createApiConfig, parseApiEnv } from "../src/config";
 import { user as userTable } from "@repo/db/schema";
 
 const config = createApiConfig(parseApiEnv(process.env));
 const { db, pool } = createDatabase(config.databaseUrl);
-const auth = createAuth(db, config.auth);
+const auth = createAuth(db, config.auth, createMailer(config.smtp));
 
 const rl = createInterface({ input, output });
 

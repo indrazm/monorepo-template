@@ -12,12 +12,14 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as BillingRouteImport } from './routes/billing'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as GoalsRouteImport } from './routes/goals'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SitesRouteImport } from './routes/sites'
 import { Route as TeamRouteImport } from './routes/team'
 import { Route as AcceptInvitationInvitationIdRouteImport } from './routes/accept-invitation.$invitationId'
@@ -35,6 +37,11 @@ const AnalyticsRoute = AnalyticsRouteImport.update({
 const BillingRoute = BillingRouteImport.update({
   id: '/billing',
   path: '/billing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GoalsRoute = GoalsRouteImport.update({
@@ -67,6 +74,11 @@ const RegisterRoute = RegisterRouteImport.update({
   path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SitesRoute = SitesRouteImport.update({
   id: '/sites',
   path: '/sites',
@@ -88,12 +100,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
   '/billing': typeof BillingRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/goals': typeof GoalsRoute
   '/integrations': typeof IntegrationsRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/profile': typeof ProfileRoute
   '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sites': typeof SitesRoute
   '/team': typeof TeamRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
@@ -102,12 +116,14 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
   '/billing': typeof BillingRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/goals': typeof GoalsRoute
   '/integrations': typeof IntegrationsRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/profile': typeof ProfileRoute
   '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sites': typeof SitesRoute
   '/team': typeof TeamRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
@@ -117,12 +133,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
   '/billing': typeof BillingRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/goals': typeof GoalsRoute
   '/integrations': typeof IntegrationsRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/profile': typeof ProfileRoute
   '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sites': typeof SitesRoute
   '/team': typeof TeamRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
@@ -133,12 +151,14 @@ export interface FileRouteTypes {
     | '/'
     | '/analytics'
     | '/billing'
+    | '/forgot-password'
     | '/goals'
     | '/integrations'
     | '/login'
     | '/notifications'
     | '/profile'
     | '/register'
+    | '/reset-password'
     | '/sites'
     | '/team'
     | '/accept-invitation/$invitationId'
@@ -147,12 +167,14 @@ export interface FileRouteTypes {
     | '/'
     | '/analytics'
     | '/billing'
+    | '/forgot-password'
     | '/goals'
     | '/integrations'
     | '/login'
     | '/notifications'
     | '/profile'
     | '/register'
+    | '/reset-password'
     | '/sites'
     | '/team'
     | '/accept-invitation/$invitationId'
@@ -161,12 +183,14 @@ export interface FileRouteTypes {
     | '/'
     | '/analytics'
     | '/billing'
+    | '/forgot-password'
     | '/goals'
     | '/integrations'
     | '/login'
     | '/notifications'
     | '/profile'
     | '/register'
+    | '/reset-password'
     | '/sites'
     | '/team'
     | '/accept-invitation/$invitationId'
@@ -176,12 +200,14 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnalyticsRoute: typeof AnalyticsRoute
   BillingRoute: typeof BillingRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   GoalsRoute: typeof GoalsRoute
   IntegrationsRoute: typeof IntegrationsRoute
   LoginRoute: typeof LoginRoute
   NotificationsRoute: typeof NotificationsRoute
   ProfileRoute: typeof ProfileRoute
   RegisterRoute: typeof RegisterRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SitesRoute: typeof SitesRoute
   TeamRoute: typeof TeamRoute
   AcceptInvitationInvitationIdRoute: typeof AcceptInvitationInvitationIdRoute
@@ -208,6 +234,13 @@ declare module '@tanstack/react-router' {
       path: '/billing'
       fullPath: '/billing'
       preLoaderRoute: typeof BillingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/goals': {
@@ -252,6 +285,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RegisterRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sites': {
       id: '/sites'
       path: '/sites'
@@ -280,12 +320,14 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnalyticsRoute: AnalyticsRoute,
   BillingRoute: BillingRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   GoalsRoute: GoalsRoute,
   IntegrationsRoute: IntegrationsRoute,
   LoginRoute: LoginRoute,
   NotificationsRoute: NotificationsRoute,
   ProfileRoute: ProfileRoute,
   RegisterRoute: RegisterRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SitesRoute: SitesRoute,
   TeamRoute: TeamRoute,
   AcceptInvitationInvitationIdRoute: AcceptInvitationInvitationIdRoute,

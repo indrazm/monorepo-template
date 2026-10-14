@@ -76,9 +76,14 @@ function LoginPage() {
               <Button type="submit" disabled={loginMutation.isPending}>
                 {loginMutation.isPending ? "Logging in..." : "Login"}
               </Button>
-              <Button asChild type="button" variant="link">
-                <Link to="/register">Create a user account</Link>
-              </Button>
+              <div className="flex items-center justify-between">
+                <Button asChild type="button" variant="link" className="px-0">
+                  <Link to="/register">Create a user account</Link>
+                </Button>
+                <Button asChild type="button" variant="link" className="px-0">
+                  <Link to="/forgot-password">Forgot password?</Link>
+                </Button>
+              </div>
             </form>
           </CardContent>
         </Card>

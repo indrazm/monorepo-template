@@ -38,6 +38,25 @@ export async function logout() {
   }
 }
 
+// Password reset (FR-AUTH-06). Better Auth emails a link to `${redirectTo}
+// ?token=...`; the reset page submits the new password with that token.
+export async function requestPasswordReset(email: string) {
+  const { error } = await authClient.requestPasswordReset({
+    email,
+    redirectTo: `${window.location.origin}/reset-password`,
+  });
+  if (error) {
+    throw new Error(error.message ?? "Could not start password reset.");
+  }
+}
+
+export async function resetPassword(token: string, newPassword: string) {
+  const { error } = await authClient.resetPassword({ token, newPassword });
+  if (error) {
+    throw new Error(error.message ?? "Could not reset password.");
+  }
+}
+
 // Starts the Google OAuth flow; Better Auth redirects to Google and back to
 // callbackURL on success (FR-AUTH-04).
 export async function loginWithGoogle() {

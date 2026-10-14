@@ -7,8 +7,14 @@ import type { Database } from "@repo/db";
 import { member, organization as organizationTable, subscription } from "@repo/db/schema";
 import type { createApiConfig } from "../../config";
 import * as schema from "@repo/db/schema";
+import type { Mailer } from "./mailer";
 
-export function createAuth(db: Database, config: ReturnType<typeof createApiConfig>["auth"]) {
+export function createAuth(
+  db: Database,
+  config: ReturnType<typeof createApiConfig>["auth"],
+  mailer: Mailer,
+) {
+  const appUrl = config.trustedOrigins[0] ?? config.url;
   return betterAuth({
     appName: "Tacto",
     telemetry: { enabled: false },
@@ -19,6 +25,15 @@ export function createAuth(db: Database, config: ReturnType<typeof createApiConf
     }),
     emailAndPassword: {
       enabled: true,
+      // Password reset via email (FR-AUTH-06). `url` is Better Auth's reset link.
+      sendResetPassword: async ({ user, url }) => {
+        await mailer.send({
+          to: user.email,
+          subject: "Reset your Tacto password",
+          text: `Reset your password: ${url}`,
+          html: `<p>Reset your Tacto password:</p><p><a href="${url}">${url}</a></p>`,
+        });
+      },
     },
     // Google OAuth is enabled only when credentials are configured (FR-AUTH-04).
     // Better Auth handles the full flow at /api/auth/callback/google.
@@ -42,9 +57,13 @@ export function createAuth(db: Database, config: ReturnType<typeof createApiConf
         // Invitations (FR-AUTH-05). Without an email provider configured we log
         // the accept link so an admin can share it; wire SMTP to send for real.
         sendInvitationEmail: async (data) => {
-          const appUrl = config.trustedOrigins[0] ?? "";
           const link = `${appUrl}/accept-invitation/${data.id}`;
-          console.info("Organization invitation", { email: data.email, link });
+          await mailer.send({
+            to: data.email,
+            subject: "You've been invited to a Tacto organization",
+            text: `Accept your invitation: ${link}`,
+            html: `<p>You've been invited to join a Tacto organization.</p><p><a href="${link}">Accept invitation</a></p>`,
+          });
         },
       }),
     ],

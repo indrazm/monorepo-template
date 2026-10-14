@@ -3,10 +3,11 @@ import { createDatabase } from "@repo/db";
 import { createApp } from "./app";
 import type { createApiConfig } from "./config";
 import { createAuth } from "./modules/auth/auth";
+import { createMailer } from "./modules/auth/mailer";
 
 export function startServer(config: ReturnType<typeof createApiConfig>) {
   const { db, pool } = createDatabase(config.databaseUrl);
-  const auth = createAuth(db, config.auth);
+  const auth = createAuth(db, config.auth, createMailer(config.smtp));
   const app = createApp({
     db,
     config,

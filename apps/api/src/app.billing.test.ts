@@ -17,7 +17,6 @@ const app = createApp({
   config: {
     clientOrigins: ["http://localhost:3000"],
     stripe: { secretKey: "sk_test_x", webhookSecret: WEBHOOK_SECRET },
-    reviewImport: { googlePlacesApiKey: null },
   },
   auth: {
     getSession: async () => null,

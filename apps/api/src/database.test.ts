@@ -14,7 +14,9 @@ import { createApiConfig, parseApiEnv } from "./config";
 
 const client = new PGlite();
 const db = drizzle({ client, schema });
-const auth = createAuth(db, createApiConfig(parseApiEnv({ NODE_ENV: "test" })).auth);
+const auth = createAuth(db, createApiConfig(parseApiEnv({ NODE_ENV: "test" })).auth, {
+  send: async () => undefined,
+});
 const { updateProfile } = createProfileService(db);
 const { listRecentUsers } = createUsersService(db);
 

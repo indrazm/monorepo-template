@@ -392,11 +392,11 @@ Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet 
 
 ### Fase 2 — transaksi nyata & konversi
 
-- **F58** OAuth Google ✅ (reset password menyusul). — FR-AUTH-04/06
+- **F58** OAuth Google ✅ + reset password via email ✅ (SMTP) — FR-AUTH-04/06
 - **F59** Stripe checkout + webhook status langganan. ✅ (checkout butuh STRIPE_SECRET_KEY; webhook update plan teruji) — FR-BIL-02/05
 - **F60** Konektor Stripe/Shopify/WooCommerce (purchase→event verified) via framework F44. ✅ — FR-ING-09, FR-VER-01/02
 - **F61** Zapier/Make ✅ (lewat ingest API key + konektor "zapier" + UI Integrations). — FR-ING-08, FR-INT-04
-- **F62** Import review Google/Facebook → review notifications. — FR-ING-10, FR-NOT-05
+- **F62** Import review Google/Facebook — DIBATALKAN (di luar prioritas; FB/YouTube/Google review dihapus atas keputusan produk). Tipe Review (F37) tetap via webhook/ingest. — FR-ING-10
 - **F63** Goals ✅ (konversi URL + stats + UI); A/B testing varian menyusul. — FR-ANL-03/04
 - **F64** Katalog integrasi UI + data filtering per-integrasi ✅ — FR-INT-02/03
 - **F65** Custom CSS + domain settings UI + passthrough GA/GTM/FB/Mixpanel ✅ — FR-NGS-01..06
