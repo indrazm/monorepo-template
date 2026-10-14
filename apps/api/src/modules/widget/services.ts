@@ -25,7 +25,11 @@ import type {
   NotificationType,
   NotificationVariant,
 } from "@repo/contracts/notifications";
-import type { WidgetNotification, WidgetPayloadResponse } from "@repo/contracts/widget";
+import {
+  widgetPayloadResponseSchema,
+  type WidgetNotification,
+  type WidgetPayloadResponse,
+} from "@repo/contracts/widget";
 import { renderMessage } from "./template";
 import { matchUrl } from "./url-match";
 
@@ -148,6 +152,26 @@ export function createWidgetService(
     const privacy = domainPrivacySchema.parse(settingRow?.privacy ?? {});
     const blocked = Boolean(input.requestIp && privacy.blockedIps.includes(input.requestIp));
 
+    // Redis payload cache (NFR-PERF-02/03). Keyed by site/url/lang/country so
+    // targeting stays correct. Blocked requests and A/B variants bypass it.
+    const cacheKey =
+      deps.store && !blocked
+        ? `tacto:widget:${input.siteKey}:${hashKey(input.url)}:${input.locale ?? ""}:${(
+            input.country ?? ""
+          ).toUpperCase()}`
+        : null;
+    if (deps.store && cacheKey) {
+      const cached = await deps.store.cacheGet(cacheKey);
+      if (cached) {
+        try {
+          const parsed = widgetPayloadResponseSchema.safeParse(JSON.parse(cached));
+          if (parsed.success) return { kind: "ok", payload: parsed.data };
+        } catch {
+          /* corrupt cache entry — recompute */
+        }
+      }
+    }
+
     const [subRow] = await db
       .select()
       .from(subscription)
@@ -199,6 +223,10 @@ export function createWidgetService(
       },
       ttl: DEFAULT_TTL,
     };
+    // Only cache when the payload is visitor-independent (no A/B variant shown).
+    if (deps.store && cacheKey && notifications.every((item) => !item.variantId)) {
+      await deps.store.cacheSet(cacheKey, JSON.stringify(payload), DEFAULT_TTL);
+    }
     return { kind: "ok", payload };
   }
 
@@ -413,6 +441,15 @@ function resolveMedia(payload: unknown): string | undefined {
     return `https://flagcdn.com/w80/${country.toLowerCase()}.png`;
   }
   return undefined;
+}
+
+// Short stable hash of a URL, used to keep cache keys small.
+function hashKey(value: string): string {
+  let hash = 5381;
+  for (let i = 0; i < value.length; i++) {
+    hash = ((hash << 5) + hash) ^ value.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 // Deterministic FNV-1a → [0,1). Same visitor always maps to the same variant.

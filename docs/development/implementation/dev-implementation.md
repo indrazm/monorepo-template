@@ -44,7 +44,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 ### Status progres — MVP + Fase 2 + Fase 3 + Fase 4 (inti) SELESAI ✅
 
-Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker, + prod compose/Caddy): **sign-up / Google OAuth / reset password → Org default + Team → Site + snippet + verifikasi pixel → editor notifikasi (recent_sales, counter, combo, live_visitors, review, custom, low_stock/FOMO, countdown, popup/bar/spin-to-win) + preview + terjemahan → `t.js` (shadow DOM, ≈4.9 KB gzip) render + conversion widgets + custom CSS + passthrough GA/GTM/FB/Mixpanel → ingest (pixel capture / API key / custom webhook + 30+ konektor terverifikasi + data filter) → **worker BullMQ: webhook→event durabel, flush buffer impression Redis→Postgres, recompute counter ke cache Redis** → analytics (impression/klik/CTR + events feed) + Goals (konversi) → Billing freemium + Stripe checkout/webhook + badge → anti-abuse (block IP, profanity, country, rate-limit) → Overview + onboarding.**
+Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker, + prod compose/Caddy): **sign-up / Google OAuth / reset password → Org default + Team → Site + snippet + verifikasi pixel → editor notifikasi (recent_sales, counter, combo, live_visitors, review, custom, low_stock/FOMO, countdown, popup/bar/spin-to-win) + preview + terjemahan → `t.js` (shadow DOM, ≈5.2 KB gzip) render + conversion widgets + consent GDPR + custom CSS + passthrough GA/GTM/FB/Mixpanel → ingest (pixel capture / API key / custom webhook + 30+ konektor terverifikasi + data filter) → **worker BullMQ: webhook→event durabel, flush buffer impression Redis→Postgres, recompute counter ke cache Redis** → analytics (impression/klik/CTR + events feed) + Goals (konversi) → Billing freemium + Stripe checkout/webhook + badge → anti-abuse (block IP, profanity, country, rate-limit) → Overview + onboarding.**
 
 - ✅ **MVP (EPIK A–J, F1–F57)** lengkap.
 - ✅ **Fase 2:** F58 Google OAuth + reset password · F59 Stripe billing (checkout + webhook) · F60 konektor Stripe/Shopify/WooCommerce · F61 Zapier/Make · F63 Goals · F64 data filtering integrasi · F65 custom CSS + domain settings + passthrough analytics · F16 Team (undang anggota) · F37 tipe Review.
@@ -53,10 +53,11 @@ Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker,
 - ✅ **Fase 4 (inti):** **F69 conversion widgets** — tipe `popup`, `bar`, `spin_to_win` (render di `t.js`, posisi `center`/`top-bar`/`bottom-bar`, editor + preview) + gating tipe per paket (FR-BIL-03).
 - ✅ **Durabilitas worker + Redis (F43/F46/F47 + cache F32/F33):** API enqueue webhook ke BullMQ (worker menulis `event` terverifikasi, idempoten); impression di-buffer Redis (RPUSH) oleh API lalu di-flush worker terjadwal ke Postgres; live-visitors dihitung via Redis ZSET; counter/combo di-cache Redis + recompute oleh worker. Fallback sinkron dipertahankan untuk test/unit.
 - ✅ **F70 (inti):** rate-limit ingestion via Redis (multi-instance, fallback in-memory) · endpoint **metrik aktivasi** (`/api/v1/analytics/activation`) + onboarding "First notification shown" & time-to-activation berbasis data nyata.
-- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; **92 test** (Vitest + integrasi pglite + e2e HTTP widget/billing + processor worker) lulus; `t.js` ≈4.9 KB gzip; build web+widget + build image Docker prod lolos.
+- ✅ **Penutupan gap:** **consent GDPR ditegakkan di pixel** (FR-NGS-05 — tahan render/tracking sampai consent via `window.tacto.grantConsent()`/cookie `tacto_consent`) · **cache payload widget di Redis** (NFR-PERF-03; bypass bila blocked/A-B variant) · **Stripe Billing Portal** (FR-BIL-05 self-serve upgrade/downgrade/cancel, `externalCustomerId`).
+- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; **98 test** (Vitest + integrasi pglite + e2e HTTP widget/billing + processor worker) lulus; `t.js` ≈5.2 KB gzip; build web+widget + build image Docker prod lolos.
 - **Dibatalkan (keputusan produk):** import review Facebook/YouTube/Google Places (F62) — hanya integrasi inti Tacto yang disisakan.
-- **Ditunda (opsional, butuh dep/geo eksternal atau perlu data):**
-  - Perluasan katalog integrasi lebih lanjut & optimisasi biaya lanjutan (cache payload Redis/CDN) — opsional.
+- **Ditunda (opsional):**
+  - Perluasan katalog integrasi lebih lanjut & optimisasi biaya/perf lanjutan — opsional.
 - **Credential yang perlu diisi di `.env`:** `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` (diisi), `GOOGLE_CLIENT_ID`/`SECRET` (diisi), `SMTP_*` (opsional — tanpa itu link email di-log), `HUBSPOT_*`/`SHOPIFY_*` (placeholder opsional untuk konektor OAuth mendatang; integrasi webhook memakai secret per-integrasi di dashboard).
 
 ---

@@ -64,6 +64,13 @@
       "when": 1791975487917,
       "tag": "0008_thankful_thunderbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791977377665,
+      "tag": "0009_harsh_harrier",
+      "breakpoints": true
     }
   ]
 }

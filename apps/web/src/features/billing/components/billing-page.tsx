@@ -30,6 +30,12 @@ async function startCheckout(plan: PaidPlan): Promise<string> {
   return (await response.json()).url;
 }
 
+async function openPortal(): Promise<string> {
+  const response = await apiClient.api.v1.billing.portal.$post();
+  if (!response.ok) throw new Error("Could not open the billing portal.");
+  return (await response.json()).url;
+}
+
 const billingQueryOptions = queryOptions({
   queryKey: ["billing"],
   queryFn: async () => {
@@ -52,6 +58,13 @@ export function BillingPage() {
   const usagePct = overview ? Math.min(100, (overview.usage / overview.trafficQuota) * 100) : 0;
   const checkout = useMutation({
     mutationFn: startCheckout,
+    onSuccess: (url) => {
+      window.location.href = url;
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const portal = useMutation({
+    mutationFn: openPortal,
     onSuccess: (url) => {
       window.location.href = url;
     },
@@ -96,6 +109,15 @@ export function BillingPage() {
                     {overview.sitesUsed} / {overview.maxSites}
                   </span>
                 </div>
+                {overview.manageable ? (
+                  <Button
+                    variant="outline"
+                    disabled={portal.isPending}
+                    onClick={() => portal.mutate()}
+                  >
+                    Manage subscription
+                  </Button>
+                ) : null}
               </CardContent>
             </Card>
 

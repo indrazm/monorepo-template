@@ -5,6 +5,7 @@ import { createCheckoutSchema } from "@repo/contracts/billing";
 import { type AuthVariables, requireOrg } from "../auth/middleware";
 import type { createBillingService } from "./services";
 import {
+  createBillingPortalSession,
   createCheckoutSession,
   parseBillingEvent,
   verifyStripeSignature,
@@ -48,6 +49,26 @@ export function createBillingRouter(
           }
         },
       )
+      // Authenticated: open the Stripe Billing Portal for self-serve
+      // upgrade/downgrade/cancel (FR-BIL-05).
+      .post("/portal", async (c) => {
+        const organizationId = requireOrg(c);
+        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        if (!stripe.secretKey) return c.json(apiError("integration_unconfigured"), 400);
+        const customerId = await service.getCustomerId(organizationId);
+        if (!customerId) return c.json(apiError("conflict"), 400);
+        try {
+          const url = await createBillingPortalSession({
+            secretKey: stripe.secretKey,
+            customerId,
+            returnUrl: `${appUrl}/billing`,
+          });
+          return c.json({ url }, 200);
+        } catch (error) {
+          console.error("Stripe portal failed", error);
+          return c.json(apiError("integration_unconfigured"), 502);
+        }
+      })
       // Public: Stripe webhook updates the subscription (FR-BIL-05). No session;
       // authenticity is the Stripe signature. Mounted here but not behind auth.
       .post("/webhook", async (c) => {

@@ -50,4 +50,22 @@ describe("billing guard", () => {
     expect(overview.sitesUsed).toBe(1);
     expect(overview.removeBadge).toBe(false);
   });
+
+  it("captures the provider customer id and flags the plan manageable (FR-BIL-05)", async () => {
+    await db.insert(schema.subscription).values({ organizationId: "org-d", plan: "free" });
+    expect(await billing.getCustomerId("org-d")).toBeNull();
+    expect((await billing.getOverview("org-d")).manageable).toBe(false);
+
+    await billing.updatePlan({
+      organizationId: "org-d",
+      plan: "starter",
+      status: "active",
+      renewsAt: null,
+      customerId: "cus_123",
+    });
+    expect(await billing.getCustomerId("org-d")).toBe("cus_123");
+    const overview = await billing.getOverview("org-d");
+    expect(overview.manageable).toBe(true);
+    expect(overview.plan).toBe("starter");
+  });
 });

@@ -43,6 +43,12 @@ function createFakeStore() {
     async hitRateLimit() {
       return true;
     },
+    async cacheGet() {
+      return null;
+    },
+    async cacheSet() {
+      /* no-op */
+    },
   };
   return { store, buffer, visits, counters };
 }
@@ -77,6 +83,70 @@ describe("widget telemetry buffering", () => {
     expect(buffer).toHaveLength(1);
     expect(buffer[0]).toMatchObject({ siteId: site.id, refId: "n1", kind: "view" });
     expect(visits).toEqual(["v1"]);
+  });
+
+  it("serves a cached payload on the hot path (NFR-PERF-03)", async () => {
+    const site = await sites.create(ORG, { name: "Shop", domain: "shop.example.com" });
+    const cached = {
+      notifications: [
+        {
+          id: "cached",
+          type: "custom",
+          verified: false,
+          message: "From cache",
+          style: { position: "bottom-left", accent: "#000000" },
+          timing: { delayMs: 0, durationMs: 5000, intervalMs: 8000 },
+        },
+      ],
+      settings: {
+        loopAfter: 3,
+        order: "random",
+        showClose: true,
+        showBadge: true,
+        analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
+      },
+      ttl: 30,
+    };
+    const base = createFakeStore().store;
+    const widget = createWidgetService(db, {
+      store: { ...base, cacheGet: async () => JSON.stringify(cached) },
+    });
+
+    const result = await widget.getPayload({
+      siteKey: site.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+    });
+    expect(result.kind).toBe("ok");
+    expect(result.kind === "ok" && result.payload.notifications[0]?.message).toBe("From cache");
+  });
+
+  it("does not cache an A/B variant payload (visitor-specific)", async () => {
+    const site = await sites.create(ORG, { name: "Shop", domain: "shop.example.com" });
+    await notifications.create(ORG, {
+      siteId: site.id,
+      name: "AB",
+      type: "custom",
+      isActive: true,
+      config: config({
+        variants: [
+          { id: "A", weight: 50, message: { template: "A", fallbacks: {} } },
+          { id: "B", weight: 50, message: { template: "B", fallbacks: {} } },
+        ],
+      }),
+    });
+    let setCalls = 0;
+    const base = createFakeStore().store;
+    const widget = createWidgetService(db, {
+      store: { ...base, cacheSet: async () => void setCalls++ },
+    });
+    await widget.getPayload({
+      siteKey: site.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+      visitorKey: "v1",
+    });
+    expect(setCalls).toBe(0);
   });
 
   it("reads live-visitor count from Redis for a live_visitors notification", async () => {

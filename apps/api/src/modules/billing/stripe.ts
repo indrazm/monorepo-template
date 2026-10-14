@@ -30,7 +30,19 @@ export type BillingUpdate = {
   plan: Plan | null;
   status: string;
   renewsAt: Date | null;
+  // Stripe customer id (`cus_...`), captured to open the billing portal later.
+  customerId: string | null;
 };
+
+function customerIdOf(object: Record<string, unknown>): string | null {
+  const customer = object.customer;
+  if (typeof customer === "string") return customer;
+  if (customer && typeof customer === "object") {
+    const id = (customer as { id?: unknown }).id;
+    if (typeof id === "string") return id;
+  }
+  return null;
+}
 
 // Extracts the subscription change we care about from a Stripe event. We only
 // act on checkout completion and subscription lifecycle events.
@@ -42,10 +54,11 @@ export function parseBillingEvent(raw: unknown): BillingUpdate | null {
     typeof metadata.organizationId === "string" ? metadata.organizationId : null;
   if (!organizationId) return null;
 
+  const customerId = customerIdOf(object);
   switch (event.type) {
     case "checkout.session.completed": {
       const plan = typeof metadata.plan === "string" ? (metadata.plan as Plan) : null;
-      return { organizationId, plan, status: "active", renewsAt: null };
+      return { organizationId, plan, status: "active", renewsAt: null, customerId };
     }
     case "customer.subscription.updated":
     case "customer.subscription.created": {
@@ -58,10 +71,11 @@ export function parseBillingEvent(raw: unknown): BillingUpdate | null {
         plan,
         status,
         renewsAt: periodEnd ? new Date(periodEnd * 1000) : null,
+        customerId,
       };
     }
     case "customer.subscription.deleted":
-      return { organizationId, plan: "free", status: "canceled", renewsAt: null };
+      return { organizationId, plan: "free", status: "canceled", renewsAt: null, customerId };
     default:
       return null;
   }
@@ -105,5 +119,32 @@ export async function createCheckoutSession(options: {
   }
   const session = (await response.json()) as { url?: string };
   if (!session.url) throw new Error("Stripe did not return a checkout URL.");
+  return session.url;
+}
+
+// Creates a Stripe Billing Portal session so the customer can upgrade, downgrade
+// or cancel on their own (SRS FR-BIL-05). Returns the hosted portal URL.
+export async function createBillingPortalSession(options: {
+  secretKey: string;
+  customerId: string;
+  returnUrl: string;
+}): Promise<string> {
+  const form = new URLSearchParams();
+  form.set("customer", options.customerId);
+  form.set("return_url", options.returnUrl);
+  const response = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${options.secretKey}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: form,
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Stripe portal failed: ${response.status} ${detail.slice(0, 200)}`);
+  }
+  const session = (await response.json()) as { url?: string };
+  if (!session.url) throw new Error("Stripe did not return a portal URL.");
   return session.url;
 }

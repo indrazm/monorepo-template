@@ -41,6 +41,12 @@ function createFakeStore() {
     async hitRateLimit() {
       return true;
     },
+    async cacheGet() {
+      return null;
+    },
+    async cacheSet() {
+      /* no-op */
+    },
   };
   return { store, buffer, counters };
 }

@@ -11,10 +11,12 @@ export type BillingOverview = {
   maxSites: number;
   removeBadge: boolean;
   renewsAt: string | null;
+  // A provider customer id exists → the billing portal can be opened.
+  manageable: boolean;
 };
 
 export function createBillingService(db: Pick<Database, "select" | "update">) {
-  return { getPlan, getOverview, canCreateSite, updatePlan };
+  return { getPlan, getOverview, canCreateSite, updatePlan, getCustomerId };
 
   // Applies a subscription change from Stripe (SRS FR-BIL-05). Upserts onto the
   // org's subscription row; plan defaults are kept when the event omits a plan.
@@ -23,6 +25,7 @@ export function createBillingService(db: Pick<Database, "select" | "update">) {
     plan: import("@repo/contracts/billing").Plan | null;
     status: string;
     renewsAt: Date | null;
+    customerId?: string | null;
   }): Promise<void> {
     const values: Partial<typeof subscription.$inferInsert> = {
       status: input.status,
@@ -32,10 +35,20 @@ export function createBillingService(db: Pick<Database, "select" | "update">) {
       values.plan = input.plan;
       values.trafficQuota = planLimits[input.plan].trafficQuota;
     }
+    if (input.customerId) values.externalCustomerId = input.customerId;
     await db
       .update(subscription)
       .set(values)
       .where(eq(subscription.organizationId, input.organizationId));
+  }
+
+  async function getCustomerId(organizationId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ customerId: subscription.externalCustomerId })
+      .from(subscription)
+      .where(eq(subscription.organizationId, organizationId))
+      .limit(1);
+    return row?.customerId ?? null;
   }
 
   async function getPlan(organizationId: string): Promise<Plan> {
@@ -106,6 +119,7 @@ export function createBillingService(db: Pick<Database, "select" | "update">) {
       maxSites: limits.maxSites,
       removeBadge: limits.removeBadge,
       renewsAt: subRow?.renewsAt ? subRow.renewsAt.toISOString() : null,
+      manageable: Boolean(subRow?.externalCustomerId),
     };
   }
 }

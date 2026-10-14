@@ -265,6 +265,8 @@ export const subscription = pgTable("subscription", {
   status: text("status").notNull().default("active"),
   trafficQuota: integer("traffic_quota").notNull().default(2000),
   provider: text("provider"),
+  // Provider-side customer id (e.g. Stripe `cus_...`) for the billing portal.
+  externalCustomerId: text("external_customer_id"),
   renewsAt: timestamp("renews_at"),
 });
 

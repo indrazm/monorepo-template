@@ -103,6 +103,9 @@ export type RealtimeStore = {
   getCounter: (notificationId: string) => Promise<number | null>;
   // Fixed-window rate limit shared across API instances (NFR-SEC-04).
   hitRateLimit: (key: string, limit: number, windowMs: number) => Promise<boolean>;
+  // Small JSON/value cache for the widget payload (NFR-PERF-02/03).
+  cacheGet: (key: string) => Promise<string | null>;
+  cacheSet: (key: string, value: string, ttlSeconds: number) => Promise<void>;
 };
 
 // A plain data connection (separate from BullMQ's blocking connections).
@@ -156,6 +159,13 @@ export function createRealtimeStore(redis: Redis): RealtimeStore {
       const count = await redis.incr(redisKey);
       if (count === 1) await redis.pexpire(redisKey, windowMs);
       return count <= limit;
+    },
+    async cacheGet(key) {
+      return redis.get(key);
+    },
+    async cacheSet(key, value, ttlSeconds) {
+      if (ttlSeconds > 0) await redis.set(key, value, "EX", ttlSeconds);
+      else await redis.set(key, value);
     },
   };
 }

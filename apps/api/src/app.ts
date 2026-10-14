@@ -96,6 +96,7 @@ export function createApp({
       .use("/api/v1/goals/*", loadSession)
       .use("/api/v1/billing", loadSession)
       .use("/api/v1/billing/checkout", loadSession)
+      .use("/api/v1/billing/portal", loadSession)
       .use("/api/v1/integrations", loadSession)
       .use("/api/v1/integrations/*", loadSession)
       .get("/session", (c) => {
