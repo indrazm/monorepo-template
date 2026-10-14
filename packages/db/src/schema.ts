@@ -424,3 +424,20 @@ export const impression = pgTable(
   },
   (t) => [index("impression_site_created_idx").on(t.siteId, t.createdAt)],
 );
+
+// Conversion goals (FR-ANL-03). `rule` is a URL match (see @repo/contracts).
+export const goal = pgTable(
+  "goal",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    rule: jsonb("rule").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("goal_site_idx").on(t.siteId)],
+);

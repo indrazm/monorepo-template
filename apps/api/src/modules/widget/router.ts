@@ -8,7 +8,11 @@ import {
 } from "@repo/contracts/widget";
 import type { createWidgetService } from "./services";
 
-export function createWidgetRouter(service: ReturnType<typeof createWidgetService>) {
+export function createWidgetRouter(
+  service: ReturnType<typeof createWidgetService>,
+  // Called on a served pageview to record goal conversions (best-effort).
+  onPageview?: (siteKey: string, url: string) => void,
+) {
   return new Hono()
     .get(
       "/v1/payload",
@@ -21,6 +25,7 @@ export function createWidgetRouter(service: ReturnType<typeof createWidgetServic
         const result = await service.getPayload({ siteKey: site, url, origin });
         if (result.kind === "not_found") return c.json(apiError("site_not_found"), 404);
         if (result.kind === "forbidden") return c.json(apiError("forbidden"), 403);
+        onPageview?.(site, url);
         c.header("Cache-Control", `public, max-age=${result.payload.ttl}`);
         return c.json(result.payload, 200);
       },

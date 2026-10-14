@@ -28,6 +28,7 @@ import {
   LayoutDashboardIcon,
   LogOutIcon,
   PlugIcon,
+  TargetIcon,
   UserRoundIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -59,6 +60,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { icon: BellIcon, label: "Notifications", to: "/notifications" },
     { icon: PlugIcon, label: "Integrations", to: "/integrations" },
     { icon: BarChart3Icon, label: "Analytics", to: "/analytics" },
+    { icon: TargetIcon, label: "Goals", to: "/goals" },
     { icon: CreditCardIcon, label: "Billing", to: "/billing" },
     { icon: UserRoundIcon, label: "Profile", to: "/profile" },
   ] as const;

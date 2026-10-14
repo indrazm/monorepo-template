@@ -15,6 +15,8 @@ import { createAnalyticsRouter } from "./modules/analytics/router";
 import { createAnalyticsService } from "./modules/analytics/services";
 import { createBillingRouter } from "./modules/billing/router";
 import { createBillingService } from "./modules/billing/services";
+import { createGoalsRouter } from "./modules/goals/router";
+import { createGoalsService } from "./modules/goals/services";
 import { createIngestRouter } from "./modules/ingest/router";
 import { createIngestService } from "./modules/ingest/services";
 import { createIntegrationsRouter } from "./modules/integrations/router";
@@ -38,6 +40,7 @@ export function createApp({
   config: Pick<ReturnType<typeof createApiConfig>, "clientOrigins" | "stripe">;
 }) {
   const loadSession = createSessionMiddleware(auth, db);
+  const goalsService = createGoalsService(db);
   // Dashboard/auth: credentialed CORS restricted to the configured origins.
   const dashboardCors = cors({
     allowHeaders: ["Content-Type", "Authorization"],
@@ -73,6 +76,8 @@ export function createApp({
       .use("/api/v1/notifications", loadSession)
       .use("/api/v1/notifications/*", loadSession)
       .use("/api/v1/analytics/*", loadSession)
+      .use("/api/v1/goals", loadSession)
+      .use("/api/v1/goals/*", loadSession)
       .use("/api/v1/billing", loadSession)
       .use("/api/v1/billing/checkout", loadSession)
       .use("/api/v1/integrations", loadSession)
@@ -93,7 +98,13 @@ export function createApp({
         createBillingRouter(createBillingService(db), config.stripe, config.clientOrigins[0] ?? ""),
       )
       .route("/api/v1/integrations", createIntegrationsRouter(createIntegrationsService(db)))
-      .route("/widget", createWidgetRouter(createWidgetService(db)))
+      .route("/api/v1/goals", createGoalsRouter(goalsService))
+      .route(
+        "/widget",
+        createWidgetRouter(createWidgetService(db), (siteKey, url) => {
+          void goalsService.recordConversions(siteKey, url).catch(() => undefined);
+        }),
+      )
       .route("/ingest", createIngestRouter(createIngestService(db)))
   );
 }
