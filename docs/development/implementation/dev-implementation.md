@@ -321,7 +321,7 @@ Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet 
 > **File:** `apps/api/src/modules/widget/router.ts` (`/widget/v1/track`). **Kerjakan:** validasi `trackEventSchema` → buffer Redis.
 > **Cek:** track cepat; buffer bertambah. **FR:** FR-ANL-01.
 
-## Fase 47 — Worker agregasi → Postgres (+ tabel `goal`)
+## Fase 47 — Tabel `goal` ✅ (worker agregasi analytics menyusul)
 
 > **File:** `apps/worker/src/processors/analytics-aggregate.ts`; `schema.ts` (+`goal`, migrasi).
 > **Kerjakan:** flush buffer Redis → `impression` + rollup. Tambah tabel `goal` (dipakai penuh di Fase 2).
@@ -397,7 +397,7 @@ Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet 
 - **F60** Konektor Stripe/Shopify/WooCommerce (purchase→event verified) via framework F44. ✅ — FR-ING-09, FR-VER-01/02
 - **F61** Zapier/Make ✅ (lewat ingest API key + konektor "zapier" + UI Integrations). — FR-ING-08, FR-INT-04
 - **F62** Import review Google/Facebook → review notifications. — FR-ING-10, FR-NOT-05
-- **F63** Goals penuh + A/B testing varian. — FR-ANL-03/04
+- **F63** Goals ✅ (konversi URL + stats + UI); A/B testing varian menyusul. — FR-ANL-03/04
 - **F64** Katalog integrasi UI lengkap + data filtering. — FR-INT-02/03
 - **F65** Custom CSS per domain ✅ + domain settings UI (loop/order/close/consent). Passthrough GA/GTM = menyusul. — FR-NGS-01/02/03/04/05
 
