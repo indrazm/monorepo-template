@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm --parallel --filter './apps/*' dev",
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
     "deploy:web": "pnpm --filter @repo/web deploy",
-    "build": "pnpm --filter './apps/*' build",
+    "build": "pnpm --filter \"./apps/*\" build",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r typecheck",
     "check": "pnpm check:boundaries && pnpm check:env && pnpm lint && pnpm format:check",
