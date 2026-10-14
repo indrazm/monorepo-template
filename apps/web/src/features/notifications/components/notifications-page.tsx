@@ -42,7 +42,36 @@ const TYPES: { value: NotificationType; label: string }[] = [
   { value: "low_stock", label: "Low stock (FOMO)" },
   { value: "countdown", label: "Countdown" },
   { value: "custom", label: "Custom" },
+  { value: "popup", label: "Popup (conversion)" },
+  { value: "bar", label: "Notification bar (conversion)" },
+  { value: "spin_to_win", label: "Spin to win (conversion)" },
 ];
+
+type Position = NotificationConfig["style"]["position"];
+const CORNER_POSITIONS: Position[] = ["bottom-left", "bottom-right", "top-left", "top-right"];
+const POSITION_LABELS: Record<Position, string> = {
+  "bottom-left": "Bottom left",
+  "bottom-right": "Bottom right",
+  "top-left": "Top left",
+  "top-right": "Top right",
+  "top-bar": "Top bar",
+  "bottom-bar": "Bottom bar",
+  center: "Center overlay",
+};
+// Conversion widgets fix their layout: bars are full-width, popup/spin centered.
+const CONVERSION_POSITIONS: Partial<Record<NotificationType, Position[]>> = {
+  bar: ["bottom-bar", "top-bar"],
+  popup: ["center"],
+  spin_to_win: ["center"],
+};
+function positionsForType(type: NotificationType): Position[] {
+  return CONVERSION_POSITIONS[type] ?? CORNER_POSITIONS;
+}
+function defaultPositionFor(type: NotificationType): Position {
+  if (type === "bar") return "bottom-bar";
+  if (type === "popup" || type === "spin_to_win") return "center";
+  return "bottom-left";
+}
 
 const selectClass =
   "border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
@@ -78,7 +107,16 @@ function defaultConfig(): NotificationConfig {
 function eventTypesForType(type: NotificationType): NotificationConfig["dataSource"]["eventTypes"] {
   if (type === "live_visitors") return ["visit"];
   if (type === "review") return ["review"];
-  if (type === "custom" || type === "countdown" || type === "low_stock") return [];
+  if (
+    type === "custom" ||
+    type === "countdown" ||
+    type === "low_stock" ||
+    type === "popup" ||
+    type === "bar" ||
+    type === "spin_to_win"
+  ) {
+    return [];
+  }
   return ["purchase"];
 }
 
@@ -224,6 +262,38 @@ function NotificationEditorDialog({
     setConfig((previous) => ({ ...previous, ...patch }));
   }
 
+  // Translations (FR-NED-12): a locale-keyed map of message templates.
+  const translations = config.message.translations ?? {};
+  function setTranslations(next: NonNullable<NotificationConfig["message"]["translations"]>) {
+    patchConfig({
+      message: { ...config.message, translations: Object.keys(next).length ? next : undefined },
+    });
+  }
+  function addTranslation() {
+    let n = 1;
+    while (translations[`lang${n}`]) n++;
+    setTranslations({
+      ...translations,
+      [`lang${n}`]: { template: config.message.template, fallbacks: {} },
+    });
+  }
+  function patchTranslation(locale: string, template: string) {
+    const current = translations[locale] ?? { template: "", fallbacks: {} };
+    setTranslations({ ...translations, [locale]: { ...current, template } });
+  }
+  function renameTranslation(from: string, to: string) {
+    const next: typeof translations = {};
+    for (const [key, value] of Object.entries(translations)) next[key === from ? to : key] = value;
+    setTranslations(next);
+  }
+  function removeTranslation(locale: string) {
+    const next: typeof translations = {};
+    for (const [key, value] of Object.entries(translations)) {
+      if (key !== locale) next[key] = value;
+    }
+    setTranslations(next);
+  }
+
   function handleSubmit(formEvent: FormEvent) {
     formEvent.preventDefault();
     const payloadConfig: NotificationConfig = {
@@ -293,7 +363,13 @@ function NotificationEditorDialog({
                 id="n-type"
                 className={selectClass}
                 value={type}
-                onChange={(e) => setType(e.target.value as NotificationType)}
+                onChange={(e) => {
+                  const nextType = e.target.value as NotificationType;
+                  setType(nextType);
+                  patchConfig({
+                    style: { ...config.style, position: defaultPositionFor(nextType) },
+                  });
+                }}
               >
                 {TYPES.map((t) => (
                   <option key={t.value} value={t.value}>
@@ -318,6 +394,43 @@ function NotificationEditorDialog({
               Variables: {"{{first_name}}"}, {"{{city}}"}, {"{{product}}"}, {"{{count}}"},{" "}
               {"{{time_ago}}"}
             </p>
+          </div>
+
+          <div className="grid gap-2 rounded-md border p-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Translations</Label>
+              <Button type="button" variant="ghost" size="sm" onClick={addTranslation}>
+                <PlusIcon className="size-4" /> Add
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Shown when the visitor&apos;s language matches a locale code (e.g. id, es, pt-BR).
+            </p>
+            {Object.entries(translations).map(([locale, value]) => (
+              <div key={locale} className="grid gap-2 sm:grid-cols-[110px_1fr_auto]">
+                <Input
+                  aria-label="Locale"
+                  placeholder="es"
+                  value={locale}
+                  onChange={(e) => renameTranslation(locale, e.target.value)}
+                />
+                <Textarea
+                  aria-label={`${locale} template`}
+                  rows={2}
+                  value={value.template}
+                  onChange={(e) => patchTranslation(locale, e.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => removeTranslation(locale)}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
           </div>
 
           {type === "countdown" ? (
@@ -367,10 +480,11 @@ function NotificationEditorDialog({
                   })
                 }
               >
-                <option value="bottom-left">Bottom left</option>
-                <option value="bottom-right">Bottom right</option>
-                <option value="top-left">Top left</option>
-                <option value="top-right">Top right</option>
+                {positionsForType(type).map((position) => (
+                  <option key={position} value={position}>
+                    {POSITION_LABELS[position]}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="grid gap-2">

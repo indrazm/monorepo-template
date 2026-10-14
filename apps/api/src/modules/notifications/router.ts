@@ -32,7 +32,11 @@ export function createNotificationsRouter(service: ReturnType<typeof createNotif
       async (c) => {
         const organizationId = requireOrg(c);
         if (!organizationId) return c.json(apiError("unauthorized"), 401);
-        const notification = await service.create(organizationId, c.req.valid("json"));
+        const input = c.req.valid("json");
+        if (!(await service.planAllows(organizationId, input.type))) {
+          return c.json(apiError("plan_limit_reached"), 403);
+        }
+        const notification = await service.create(organizationId, input);
         if (!notification) return c.json(apiError("site_not_found"), 404);
         return c.json({ notification }, 201);
       },
@@ -52,11 +56,11 @@ export function createNotificationsRouter(service: ReturnType<typeof createNotif
       async (c) => {
         const organizationId = requireOrg(c);
         if (!organizationId) return c.json(apiError("unauthorized"), 401);
-        const notification = await service.update(
-          organizationId,
-          c.req.param("id"),
-          c.req.valid("json"),
-        );
+        const input = c.req.valid("json");
+        if (input.type && !(await service.planAllows(organizationId, input.type))) {
+          return c.json(apiError("plan_limit_reached"), 403);
+        }
+        const notification = await service.update(organizationId, c.req.param("id"), input);
         if (!notification) return c.json(apiError("notification_not_found"), 404);
         return c.json({ notification }, 200);
       },

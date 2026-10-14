@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { notificationTypeSchema } from "./notifications";
+import { notificationPositionSchema, notificationTypeSchema } from "./notifications";
 
 // ---------- payload served to the pixel (GET /widget/v1/payload) ----------
 export const widgetNotificationSchema = z.object({
@@ -11,7 +11,7 @@ export const widgetNotificationSchema = z.object({
   mediaUrl: z.string().optional(),
   countdownEndsAt: z.string().optional(),
   style: z.object({
-    position: z.enum(["bottom-left", "bottom-right", "top-left", "top-right"]),
+    position: notificationPositionSchema,
     accent: z.string(),
     shape: z.enum(["rounded", "square"]).default("rounded"),
     size: z.enum(["sm", "md"]).default("md"),
@@ -49,6 +49,8 @@ export const widgetPayloadResponseSchema = z.object({
 export const widgetPayloadQuerySchema = z.object({
   site: z.string().trim().min(1),
   url: z.string().trim().min(1),
+  // Visitor language (e.g. "pt-BR"), used to pick a translated template.
+  lang: z.string().trim().max(35).optional(),
 });
 
 // ---------- telemetry (POST /widget/v1/track, beacon) ----------

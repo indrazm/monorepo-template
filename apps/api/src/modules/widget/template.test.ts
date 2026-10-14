@@ -25,6 +25,22 @@ describe("renderMessage", () => {
     );
     expect(text).toBe("Someone just signed up");
   });
+
+  it("uses a translation matching the visitor locale, else the base template", () => {
+    const message = {
+      template: "{{first_name}} just bought {{product}}",
+      fallbacks: {},
+      translations: {
+        id: { template: "{{first_name}} baru saja membeli {{product}}", fallbacks: {} },
+      },
+    };
+    expect(renderMessage(message, { first_name: "siti", product: "Sepatu" }, "id-ID")).toBe(
+      "Siti baru saja membeli Sepatu",
+    );
+    expect(renderMessage(message, { first_name: "siti", product: "Sepatu" }, "de")).toBe(
+      "Siti just bought Sepatu",
+    );
+  });
 });
 
 describe("timeAgo", () => {

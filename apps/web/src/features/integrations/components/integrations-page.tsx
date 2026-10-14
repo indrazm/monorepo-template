@@ -1,4 +1,9 @@
-import type { Integration } from "@repo/contracts/integrations";
+import {
+  integrationMeta,
+  integrationProviders,
+  type Integration,
+  type IntegrationProvider,
+} from "@repo/contracts/integrations";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import {
@@ -32,36 +37,29 @@ function copy(value: string, label: string) {
     .catch(() => toast.error("Could not copy"));
 }
 
-const PROVIDERS = [
-  { value: "webhook", label: "Custom webhook" },
-  { value: "zapier", label: "Zapier / Make" },
-  { value: "stripe", label: "Stripe" },
-  { value: "shopify", label: "Shopify" },
-  { value: "woocommerce", label: "WooCommerce" },
+const GROUP_ORDER = [
+  "Generic",
+  "E-commerce",
+  "Forms & CRM",
+  "Courses & members",
+  "Marketing & sites",
 ] as const;
 
-type ProviderValue = (typeof PROVIDERS)[number]["value"];
-
-// Signature header each provider signs its webhook with (shown in the UI).
-const SIGNATURE_HEADER: Record<string, string> = {
-  webhook: "x-tacto-signature (hex HMAC-SHA256 of the body)",
-  zapier: "x-tacto-signature (hex HMAC-SHA256 of the body)",
-  stripe: "Stripe-Signature (Stripe webhook secret)",
-  shopify: "X-Shopify-Hmac-Sha256 (base64 HMAC-SHA256)",
-  woocommerce: "X-WC-Webhook-Signature (base64 HMAC-SHA256)",
-};
+const PROVIDER_GROUPS = GROUP_ORDER.map((group) => ({
+  group,
+  providers: integrationProviders.filter((id) => integrationMeta[id].group === group),
+})).filter((entry) => entry.providers.length > 0);
 
 export function IntegrationsPage() {
   const sites = useQuery(sitesQueryOptions);
   const integrations = useQuery(integrationsQueryOptions);
   const createIntegration = useCreateIntegrationMutation();
   const [siteId, setSiteId] = useState("");
-  const [provider, setProvider] = useState<ProviderValue>("webhook");
+  const [provider, setProvider] = useState<IntegrationProvider>("webhook");
   const [secretInput, setSecretInput] = useState("");
-  // Provider-managed secrets (e.g. Stripe whsec_...) must be pasted; the custom
-  // webhook/Zapier secret is generated for the user.
-  const needsPastedSecret =
-    provider === "stripe" || provider === "shopify" || provider === "woocommerce";
+  // Provider-managed secrets (e.g. Stripe whsec_...) must be pasted; generic
+  // providers (webhook/Zapier/Make/…) get a secret generated for the user.
+  const needsPastedSecret = integrationMeta[provider].secret === "pasted";
   const activeSite = sites.data?.find((s) => s.id === siteId) ?? sites.data?.[0];
 
   return (
@@ -80,12 +78,16 @@ export function IntegrationsPage() {
               aria-label="Provider"
               className={selectClass}
               value={provider}
-              onChange={(e) => setProvider(e.target.value as ProviderValue)}
+              onChange={(e) => setProvider(e.target.value as IntegrationProvider)}
             >
-              {PROVIDERS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
+              {PROVIDER_GROUPS.map(({ group, providers }) => (
+                <optgroup key={group} label={group}>
+                  {providers.map((id) => (
+                    <option key={id} value={id}>
+                      {integrationMeta[id].label}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             {needsPastedSecret ? (
@@ -232,7 +234,7 @@ function IntegrationRow({
       </div>
       {siteKey ? (
         <CodeRow
-          label={`Webhook URL — sign with ${SIGNATURE_HEADER[integration.provider] ?? "its signature header"}`}
+          label={`Webhook URL — sign with ${integrationMeta[integration.provider].header}`}
           value={`${env.VITE_API_URL}/ingest/v1/webhook/${integration.provider}?site=${siteKey}`}
         />
       ) : null}

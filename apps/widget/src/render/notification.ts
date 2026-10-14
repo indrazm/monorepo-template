@@ -9,7 +9,13 @@ const ICONS: Record<string, string> = {
   custom: "💬",
   countdown: "⏳",
   low_stock: "🔥",
+  popup: "🎉",
+  bar: "📣",
+  spin_to_win: "🎁",
 };
+
+type RenderResult = { card: HTMLElement; close: HTMLElement | null };
+type RenderOptions = { showClose: boolean; showBadge: boolean };
 
 function formatRemaining(ms: number): string {
   if (ms <= 0) return "00:00:00";
@@ -22,12 +28,50 @@ function formatRemaining(ms: number): string {
   return (d > 0 ? `${d}d ` : "") + `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
 
-// Builds the signature notification card (style-guide .livecard). Returns the
-// card plus its close button so the scheduler can wire interactions.
-export function renderCard(
-  notification: WidgetNotification,
-  options: { showClose: boolean; showBadge: boolean },
-): { card: HTMLElement; close: HTMLElement | null } {
+function buildClose(label = "Close notification"): HTMLElement {
+  const close = document.createElement("button");
+  close.className = "tacto-close";
+  close.setAttribute("aria-label", label);
+  close.textContent = "×";
+  return close;
+}
+
+function buildVerified(): HTMLElement {
+  const verified = document.createElement("div");
+  verified.className = "tacto-verified";
+  verified.textContent = "✓ Verified by Tacto";
+  return verified;
+}
+
+function buildBadge(): HTMLElement {
+  const badge = document.createElement("div");
+  badge.className = "tacto-badge";
+  const link = document.createElement("a");
+  link.href = "https://tacto.io";
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.textContent = "Powered by Tacto";
+  badge.appendChild(link);
+  return badge;
+}
+
+// Dispatches to the right renderer: social-proof card vs. conversion widgets
+// (F69). All return the same shape so the scheduler stays type-agnostic.
+export function renderCard(notification: WidgetNotification, options: RenderOptions): RenderResult {
+  switch (notification.type) {
+    case "bar":
+      return renderBar(notification, options);
+    case "popup":
+      return renderPopup(notification, options);
+    case "spin_to_win":
+      return renderSpin(notification, options);
+    default:
+      return renderSocialCard(notification, options);
+  }
+}
+
+// The signature notification card (style-guide .livecard).
+function renderSocialCard(notification: WidgetNotification, options: RenderOptions): RenderResult {
   const card = document.createElement("div");
   card.className = "tacto-card";
   card.setAttribute("data-shape", notification.style.shape ?? "rounded");
@@ -69,35 +113,127 @@ export function renderCard(
     tick();
     body.appendChild(timer);
   }
-  if (notification.verified) {
-    const verified = document.createElement("div");
-    verified.className = "tacto-verified";
-    verified.textContent = "✓ Verified by Tacto";
-    body.appendChild(verified);
-  }
-  if (options.showBadge) {
-    const badge = document.createElement("div");
-    badge.className = "tacto-badge";
-    const link = document.createElement("a");
-    link.href = "https://tacto.io";
-    link.target = "_blank";
-    link.rel = "noopener";
-    link.textContent = "Powered by Tacto";
-    badge.appendChild(link);
-    body.appendChild(badge);
-  }
+  if (notification.verified) body.appendChild(buildVerified());
+  if (options.showBadge) body.appendChild(buildBadge());
 
   card.append(media, body);
 
   let close: HTMLElement | null = null;
   if (options.showClose) {
-    close = document.createElement("button");
-    close.className = "tacto-close";
-    close.setAttribute("aria-label", "Close notification");
-    close.textContent = "×";
+    close = buildClose();
     card.appendChild(close);
   }
   // Accent tint on the left media tile.
   media.style.boxShadow = `inset 0 0 0 1px ${notification.style.accent}22`;
   return { card, close };
+}
+
+// Full-width notification bar pinned to the top or bottom of the viewport.
+function renderBar(notification: WidgetNotification, options: RenderOptions): RenderResult {
+  const bar = document.createElement("div");
+  bar.className = "tacto-bar";
+  bar.setAttribute("data-shape", notification.style.shape ?? "rounded");
+  bar.style.background = notification.style.accent;
+
+  const icon = document.createElement("span");
+  icon.className = "tacto-bar-icon";
+  icon.textContent = ICONS[notification.type] ?? "📣";
+
+  const msg = document.createElement("span");
+  msg.className = "tacto-bar-msg";
+  msg.textContent = notification.message;
+
+  bar.append(icon, msg);
+  if (notification.verified) bar.appendChild(buildVerified());
+  if (options.showBadge) bar.appendChild(buildBadge());
+
+  // Overlays and bars are always dismissable (accessibility, NFR-A11Y-01).
+  const close = buildClose();
+  bar.appendChild(close);
+  return { card: bar, close };
+}
+
+function overlayWithModal(shape: string): { overlay: HTMLElement; modal: HTMLElement } {
+  const overlay = document.createElement("div");
+  overlay.className = "tacto-overlay";
+  const modal = document.createElement("div");
+  modal.className = "tacto-modal";
+  modal.setAttribute("data-shape", shape);
+  overlay.appendChild(modal);
+  return { overlay, modal };
+}
+
+// Centered modal popup.
+function renderPopup(notification: WidgetNotification, options: RenderOptions): RenderResult {
+  const { overlay, modal } = overlayWithModal(notification.style.shape ?? "rounded");
+  const close = buildClose();
+
+  const media = document.createElement("div");
+  media.className = "tacto-modal-icon";
+  media.style.background = `${notification.style.accent}1a`;
+  media.textContent = ICONS[notification.type] ?? "🎉";
+
+  const title = document.createElement("p");
+  title.className = "tacto-modal-title";
+  title.textContent = notification.message;
+
+  modal.append(media, title);
+  if (notification.timeAgo) {
+    const sub = document.createElement("p");
+    sub.className = "tacto-sub";
+    sub.textContent = notification.timeAgo;
+    modal.appendChild(sub);
+  }
+  if (notification.verified) modal.appendChild(buildVerified());
+  if (options.showBadge) modal.appendChild(buildBadge());
+  modal.appendChild(close);
+  return { card: overlay, close };
+}
+
+// Spin-to-win overlay: a wheel that spins once to reveal the reward message.
+function renderSpin(notification: WidgetNotification, options: RenderOptions): RenderResult {
+  const { overlay, modal } = overlayWithModal(notification.style.shape ?? "rounded");
+  const close = buildClose();
+
+  const heading = document.createElement("p");
+  heading.className = "tacto-modal-title";
+  heading.textContent = "🎁 Spin to win";
+
+  const wheelWrap = document.createElement("div");
+  wheelWrap.className = "tacto-wheel-wrap";
+  const wheel = document.createElement("div");
+  wheel.className = "tacto-wheel";
+  wheel.style.background = `conic-gradient(${notification.style.accent} 0 25%, #eef0f6 0 50%, ${notification.style.accent} 0 75%, #eef0f6 0)`;
+  const pointer = document.createElement("div");
+  pointer.className = "tacto-spin-pointer";
+  pointer.textContent = "▼";
+  wheelWrap.append(wheel, pointer);
+
+  const button = document.createElement("button");
+  button.className = "tacto-spin-btn";
+  button.style.background = notification.style.accent;
+  button.textContent = "Spin the wheel";
+
+  const result = document.createElement("p");
+  result.className = "tacto-spin-result";
+
+  let spun = false;
+  button.addEventListener("click", () => {
+    if (spun) return;
+    spun = true;
+    button.disabled = true;
+    const degrees = 1440 + Math.floor(Math.random() * 360);
+    wheel.style.transform = `rotate(${degrees}deg)`;
+    setTimeout(() => {
+      result.textContent = `🎉 ${notification.message}`;
+      result.setAttribute("data-shown", "1");
+      button.textContent = "You won!";
+    }, 3200);
+  });
+
+  modal.append(heading, wheelWrap, button, result);
+  if (notification.verified) modal.appendChild(buildVerified());
+  if (options.showBadge) modal.appendChild(buildBadge());
+  modal.appendChild(close);
+  return { card: overlay, close };
 }

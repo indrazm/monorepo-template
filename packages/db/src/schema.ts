@@ -193,6 +193,9 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "youtube",
   "low_stock",
   "countdown",
+  "popup",
+  "bar",
+  "spin_to_win",
 ]);
 export const eventTypeEnum = pgEnum("event_type", [
   "purchase",

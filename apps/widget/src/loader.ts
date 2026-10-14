@@ -8,9 +8,10 @@ export async function loadPayload(
   url: string,
 ): Promise<WidgetPayloadResponse | null> {
   try {
+    const lang = typeof navigator !== "undefined" ? navigator.language : "";
     const endpoint = `${apiBase}/widget/v1/payload?site=${encodeURIComponent(
       siteKey,
-    )}&url=${encodeURIComponent(url)}`;
+    )}&url=${encodeURIComponent(url)}&lang=${encodeURIComponent(lang)}`;
     const response = await fetch(endpoint, { credentials: "omit" });
     if (!response.ok) return null;
     return (await response.json()) as WidgetPayloadResponse;

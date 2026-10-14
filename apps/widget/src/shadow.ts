@@ -11,6 +11,9 @@ const BASE_CSS = `
 .tacto-stack[data-pos$="right"] { right: 18px; align-items: flex-end; }
 .tacto-stack[data-pos^="top"] { top: 18px; }
 .tacto-stack[data-pos^="bottom"] { bottom: 18px; }
+.tacto-stack[data-pos="center"] { inset: 0; align-items: center; justify-content: center; pointer-events: none; }
+.tacto-stack[data-pos="top-bar"] { top: 0; left: 0; right: 0; align-items: stretch; }
+.tacto-stack[data-pos="bottom-bar"] { bottom: 0; left: 0; right: 0; align-items: stretch; }
 .tacto-card {
   display: flex; align-items: center; gap: 14px; max-width: 360px;
   background: #fff; color: #17181c; border: 1px solid #e7e9f0; border-radius: 16px;
@@ -35,7 +38,45 @@ const BASE_CSS = `
 }
 .tacto-badge { margin-top: 2px; font-size: 10px; color: #8a90a0; }
 .tacto-badge a { color: #8a90a0; text-decoration: none; }
-@media (prefers-reduced-motion: reduce) { .tacto-card { transition: none; } }
+.tacto-bar {
+  display: flex; align-items: center; gap: 12px; width: 100%; background: #3b82f6; color: #fff;
+  padding: 12px 20px; font-weight: 700; font-size: 14px;
+  opacity: 0; transform: translateY(-8px); transition: opacity .2s ease, transform .2s ease;
+}
+.tacto-stack[data-pos="bottom-bar"] .tacto-bar { transform: translateY(8px); }
+.tacto-bar[data-shown="1"] { opacity: 1; transform: translateY(0); }
+.tacto-bar[data-shape="square"] { border-radius: 0; }
+.tacto-bar-icon { font-size: 18px; flex: none; }
+.tacto-bar-msg { flex: 1; min-width: 0; }
+.tacto-bar .tacto-verified { color: #eafff5; margin: 0; }
+.tacto-bar .tacto-badge { margin: 0; }
+.tacto-bar .tacto-badge a { color: rgba(255,255,255,.75); }
+.tacto-bar .tacto-close { position: static; color: rgba(255,255,255,.85); margin-left: 4px; }
+.tacto-overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(17,20,30,.5); pointer-events: auto; padding: 20px;
+  opacity: 0; transition: opacity .2s ease;
+}
+.tacto-overlay[data-shown="1"] { opacity: 1; }
+.tacto-modal {
+  position: relative; width: min(360px, 92vw); background: #fff; color: #17181c;
+  border-radius: 18px; padding: 26px 22px; text-align: center;
+  box-shadow: 0 30px 60px -24px rgba(20,28,60,.5);
+  transform: scale(.96); transition: transform .2s ease;
+}
+.tacto-overlay[data-shown="1"] .tacto-modal { transform: scale(1); }
+.tacto-modal[data-shape="square"] { border-radius: 10px; }
+.tacto-modal-icon { width: 54px; height: 54px; border-radius: 14px; display: grid; place-items: center; margin: 0 auto 12px; font-size: 26px; }
+.tacto-modal-title { font-weight: 800; font-size: 16px; line-height: 1.35; margin: 0 0 6px; }
+.tacto-modal .tacto-verified, .tacto-modal .tacto-badge { justify-content: center; }
+.tacto-wheel-wrap { position: relative; width: 180px; height: 180px; margin: 14px auto; }
+.tacto-wheel { width: 100%; height: 100%; border-radius: 50%; border: 6px solid #fff; box-shadow: 0 0 0 1px #e7e9f0, 0 12px 30px -12px rgba(20,28,60,.4); transition: transform 3s cubic-bezier(.17,.67,.2,1); }
+.tacto-spin-pointer { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); font-size: 20px; color: #17181c; }
+.tacto-spin-btn { margin-top: 6px; border: 0; border-radius: 10px; padding: 10px 18px; color: #fff; font-weight: 800; cursor: pointer; font-size: 14px; }
+.tacto-spin-btn[disabled] { cursor: default; opacity: .85; }
+.tacto-spin-result { margin: 10px 0 0; font-weight: 800; font-size: 14px; opacity: 0; transform: translateY(6px); transition: opacity .25s ease, transform .25s ease; }
+.tacto-spin-result[data-shown="1"] { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .tacto-card, .tacto-bar, .tacto-overlay, .tacto-modal, .tacto-wheel { transition: none; } }
 `;
 
 export type ShadowHost = { root: ShadowRoot; stack: HTMLElement; destroy: () => void };

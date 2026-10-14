@@ -11,6 +11,10 @@ export const notificationTypes = [
   "youtube",
   "low_stock",
   "countdown",
+  // Conversion widgets (F69, "Boost"): popup modal, notification bar, spin-to-win.
+  "popup",
+  "bar",
+  "spin_to_win",
 ] as const;
 export const notificationTypeSchema = z.enum(notificationTypes);
 
@@ -26,15 +30,37 @@ export const eventTypeSchema = z.enum(eventTypes);
 
 const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/i, "Expected a hex color like #3B82F6.");
 
+// A localized variant of the message template (FR-NED-12). Keyed by locale
+// (e.g. "id", "es", "pt-BR"); picked from the visitor's language when present.
+export const notificationTranslationSchema = z.object({
+  template: z.string().trim().min(1).max(280),
+  fallbacks: z.record(z.string(), z.string()).default({}),
+});
+
 export const notificationMessageSchema = z.object({
   // e.g. "{{first_name}} from {{city}} just bought {{product}}"
   template: z.string().trim().min(1).max(280),
   fallbacks: z.record(z.string(), z.string()).default({}),
   hideTimeAgoAfterDays: z.number().int().positive().max(365).optional(),
+  translations: z
+    .record(z.string().trim().min(2).max(12), notificationTranslationSchema)
+    .optional(),
 });
 
+export const notificationPositions = [
+  "bottom-left",
+  "bottom-right",
+  "top-left",
+  "top-right",
+  // Conversion-widget positions (F69): full-width bars + a centered overlay.
+  "top-bar",
+  "bottom-bar",
+  "center",
+] as const;
+export const notificationPositionSchema = z.enum(notificationPositions);
+
 export const notificationStyleSchema = z.object({
-  position: z.enum(["bottom-left", "bottom-right", "top-left", "top-right"]),
+  position: notificationPositionSchema,
   accent: hexColorSchema,
   shape: z.enum(["rounded", "square"]).default("rounded"),
   size: z.enum(["sm", "md"]).default("md"),

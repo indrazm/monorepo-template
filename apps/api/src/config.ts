@@ -33,6 +33,12 @@ export const apiEnvSchema = z
     SMTP_USER: optionalStringSchema,
     SMTP_PASSWORD: optionalStringSchema,
     SMTP_FROM: optionalStringSchema,
+    // Reserved for OAuth/polling integration connectors. Webhook-based
+    // integrations use per-integration secrets stored in the dashboard instead.
+    HUBSPOT_CLIENT_ID: optionalStringSchema,
+    HUBSPOT_CLIENT_SECRET: optionalStringSchema,
+    SHOPIFY_API_KEY: optionalStringSchema,
+    SHOPIFY_API_SECRET: optionalStringSchema,
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== "production") return;
@@ -71,6 +77,16 @@ export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
       user: env.SMTP_USER ?? null,
       password: env.SMTP_PASSWORD ?? null,
       from: env.SMTP_FROM ?? null,
+    },
+    integrations: {
+      hubspot:
+        env.HUBSPOT_CLIENT_ID && env.HUBSPOT_CLIENT_SECRET
+          ? { clientId: env.HUBSPOT_CLIENT_ID, clientSecret: env.HUBSPOT_CLIENT_SECRET }
+          : null,
+      shopify:
+        env.SHOPIFY_API_KEY && env.SHOPIFY_API_SECRET
+          ? { apiKey: env.SHOPIFY_API_KEY, apiSecret: env.SHOPIFY_API_SECRET }
+          : null,
     },
     auth: {
       secret: env.BETTER_AUTH_SECRET,

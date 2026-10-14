@@ -188,4 +188,78 @@ describe("ingest service", () => {
     expect(stored?.displayName).toBe("Marco");
     expect(stored?.city).toBe("Rome");
   });
+
+  it("verifies and maps a BigCommerce order webhook (hex HMAC)", async () => {
+    const secret = "bc_test";
+    const { siteKey, siteId } = await seedWithIntegration(secret, "bigcommerce");
+    const body = JSON.stringify({
+      order_number: 777,
+      customer: { first_name: "Lena Weber" },
+      billing_address: { city: "Munich" },
+      line_items: [{ name: "Coffee Beans" }],
+    });
+    const result = await ingest.processWebhook({
+      siteKey,
+      provider: "bigcommerce",
+      rawBody: body,
+      headers: { "x-bc-signature": hex(body, secret) },
+    });
+    expect(result).toBe("created");
+    const [stored] = await db.select().from(event).where(eq(event.siteId, siteId));
+    expect(stored?.source).toBe("bigcommerce");
+    expect(stored?.displayName).toBe("Lena");
+    expect(stored?.city).toBe("Munich");
+    expect((stored?.payload as { product?: string } | null)?.product).toBe("Coffee Beans");
+  });
+
+  it("verifies a Typeform submission (base64 HMAC with sha256= prefix)", async () => {
+    const secret = "tf_test";
+    const { siteKey, siteId } = await seedWithIntegration(secret, "typeform");
+    const body = JSON.stringify({ event_type: "form_response", event_id: "evt_1", city: "Lisbon" });
+    const result = await ingest.processWebhook({
+      siteKey,
+      provider: "typeform",
+      rawBody: body,
+      headers: { "typeform-signature": `sha256=${b64(body, secret)}` },
+    });
+    expect(result).toBe("created");
+    const [stored] = await db.select().from(event).where(eq(event.siteId, siteId));
+    expect(stored?.source).toBe("typeform");
+    expect(stored?.type).toBe("form_submit");
+    expect(stored?.verified).toBe(true);
+  });
+
+  it("verifies a Paddle webhook (ts;h1 composite signature)", async () => {
+    const secret = "pdl_test";
+    const { siteKey, siteId } = await seedWithIntegration(secret, "paddle");
+    const body = JSON.stringify({ event_type: "transaction.completed", data: { id: "txn_1" } });
+    const ts = Math.floor(Date.now() / 1000);
+    const h1 = hex(`${ts}:${body}`, secret);
+    const result = await ingest.processWebhook({
+      siteKey,
+      provider: "paddle",
+      rawBody: body,
+      headers: { "paddle-signature": `ts=${ts};h1=${h1}` },
+    });
+    expect(result).toBe("created");
+    const [stored] = await db.select().from(event).where(eq(event.siteId, siteId));
+    expect(stored?.source).toBe("paddle");
+    expect(stored?.type).toBe("purchase");
+  });
+
+  it("accepts a generic x-tacto-signature for a generated-secret provider", async () => {
+    const secret = "gen_test";
+    const { siteKey, siteId } = await seedWithIntegration(secret, "squarespace");
+    const body = JSON.stringify({ eventType: "order.created", customer: { first_name: "Ada" } });
+    const result = await ingest.processWebhook({
+      siteKey,
+      provider: "squarespace",
+      rawBody: body,
+      headers: { "x-tacto-signature": hex(body, secret) },
+    });
+    expect(result).toBe("created");
+    const [stored] = await db.select().from(event).where(eq(event.siteId, siteId));
+    expect(stored?.source).toBe("squarespace");
+    expect(stored?.displayName).toBe("Ada");
+  });
 });

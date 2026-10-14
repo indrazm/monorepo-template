@@ -1,10 +1,12 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { Database } from "@repo/db";
-import { notification, site } from "@repo/db/schema";
+import { notification, site, subscription } from "@repo/db/schema";
+import { planAllowsNotificationType, type Plan } from "@repo/contracts/billing";
 import type {
   CreateNotificationInput,
   Notification,
   NotificationConfig,
+  NotificationType,
   UpdateNotificationInput,
 } from "@repo/contracts/notifications";
 
@@ -43,7 +45,17 @@ function toExtra(config: NotificationConfig): Record<string, unknown> | null {
 export function createNotificationsService(
   db: Pick<Database, "select" | "insert" | "update" | "delete">,
 ) {
-  return { list, get, create, update, remove };
+  return { list, get, create, update, remove, planAllows };
+
+  // Plan gate (FR-BIL-03): the org's plan must permit the notification type.
+  async function planAllows(organizationId: string, type: NotificationType): Promise<boolean> {
+    const [row] = await db
+      .select({ plan: subscription.plan })
+      .from(subscription)
+      .where(eq(subscription.organizationId, organizationId))
+      .limit(1);
+    return planAllowsNotificationType((row?.plan ?? "free") as Plan, type);
+  }
 
   // Guard: the site must belong to the organization before we touch its data.
   async function assertSiteInOrg(organizationId: string, siteId: string): Promise<boolean> {

@@ -91,4 +91,17 @@ describe("notifications service", () => {
     expect(toggled?.isActive).toBe(false);
     expect((await notifications.list(ORG_A, site.id))?.length).toBe(1);
   });
+
+  it("gates notification types by plan (FR-BIL-03)", async () => {
+    // No subscription row → treated as Free: conversion types are blocked.
+    expect(await notifications.planAllows("org-free", "popup")).toBe(false);
+    expect(await notifications.planAllows("org-free", "recent_sales")).toBe(true);
+
+    await db
+      .insert(schema.subscription)
+      .values({ organizationId: "org-paid", plan: "growth", trafficQuota: 100_000 })
+      .onConflictDoNothing();
+    expect(await notifications.planAllows("org-paid", "popup")).toBe(true);
+    expect(await notifications.planAllows("org-paid", "spin_to_win")).toBe(true);
+  });
 });

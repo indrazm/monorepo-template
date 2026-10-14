@@ -115,6 +115,8 @@ export function createWidgetService(
     url: string;
     origin: string | null;
     requestIp?: string | null;
+    country?: string | null;
+    locale?: string | null;
   }): Promise<PayloadResult> {
     const [siteRow] = await db.select().from(site).where(eq(site.siteKey, input.siteKey)).limit(1);
     if (!siteRow) return { kind: "not_found" };
@@ -158,7 +160,9 @@ export function createWidgetService(
       for (const row of activeRows) {
         const config = toConfig(row);
         if (!matchUrl(config.display.url, input.url)) continue;
-        const rendered = await renderNotification(siteRow.id, row, config);
+        // Country targeting (FR-NGS-07): a known country must be in the list.
+        if (!countryAllowed(config.display.countries, input.country)) continue;
+        const rendered = await renderNotification(siteRow.id, row, config, input.locale);
         if (rendered) {
           if (privacy.filterProfanity) rendered.message = maskProfanity(rendered.message);
           notifications.push(rendered);
@@ -190,6 +194,7 @@ export function createWidgetService(
     siteId: string,
     row: NotificationRow,
     config: NotificationConfig,
+    locale?: string | null,
   ): Promise<WidgetNotification | null> {
     const base = {
       id: row.id,
@@ -198,17 +203,23 @@ export function createWidgetService(
       style: config.style as NotificationStyle,
       timing: config.timing as NotificationTiming,
     };
+    const render = (vars: Parameters<typeof renderMessage>[1] = {}) =>
+      renderMessage(config.message as NotificationMessage, vars, locale);
 
     switch (row.type) {
       case "custom":
-        return { ...base, message: renderMessage(config.message as NotificationMessage, {}) };
+      case "popup":
+      case "bar":
+      case "spin_to_win":
+        // Conversion widgets (F69) render a static message/CTA.
+        return { ...base, message: render() };
       case "countdown": {
         // Static urgency message + a live countdown rendered by the pixel.
         const endsAt = config.countdown?.endsAt;
         if (!endsAt || new Date(endsAt).getTime() <= Date.now()) return null;
         return {
           ...base,
-          message: renderMessage(config.message as NotificationMessage, {}),
+          message: render(),
           countdownEndsAt: endsAt,
         };
       }
@@ -217,7 +228,7 @@ export function createWidgetService(
         const stock = config.fomo?.stock ?? 0;
         return {
           ...base,
-          message: renderMessage(config.message as NotificationMessage, { count: stock }),
+          message: render({ count: stock }),
         };
       }
       case "counter": {
@@ -231,7 +242,7 @@ export function createWidgetService(
         if (count === 0) return null;
         return {
           ...base,
-          message: renderMessage(config.message as NotificationMessage, { count }),
+          message: render({ count }),
         };
       }
       case "combo": {
@@ -244,7 +255,7 @@ export function createWidgetService(
         if (count === 0) return null;
         return {
           ...base,
-          message: renderMessage(config.message as NotificationMessage, { count }),
+          message: render({ count }),
         };
       }
       case "live_visitors": {
@@ -254,7 +265,7 @@ export function createWidgetService(
             : await countEvents(siteId, ["visit"], LIVE_WINDOW_MS);
         return {
           ...base,
-          message: renderMessage(config.message as NotificationMessage, { count }),
+          message: render({ count }),
         };
       }
       case "review": {
@@ -274,7 +285,7 @@ export function createWidgetService(
         // recent_sales / review / others: latest matching event.
         const latest = await latestEvent(siteId, eventTypesOf(config.dataSource));
         if (!latest) return null;
-        const message = renderMessage(config.message as NotificationMessage, {
+        const message = render({
           first_name: latest.displayName,
           city: latest.city,
           product: productOf(latest),
@@ -371,6 +382,19 @@ function timeAgoLabel(occurredAt: Date): string {
   if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
   const days = Math.floor(hours / 24);
   return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+// Country targeting (FR-NGS-07). No country list → show everywhere; country
+// list set but geo unknown → allow (fail-open, we cannot filter reliably).
+function countryAllowed(
+  countries: string[] | undefined,
+  country: string | null | undefined,
+): boolean {
+  if (!countries || countries.length === 0) return true;
+  if (!country) return true;
+  const code = country.trim().toUpperCase();
+  if (code === "XX" || code === "T1") return true; // Cloudflare unknown / Tor
+  return countries.some((entry) => entry.toUpperCase() === code);
 }
 
 function originAllowed(origin: string | null, domain: string): boolean {

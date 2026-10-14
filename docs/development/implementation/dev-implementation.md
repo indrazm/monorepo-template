@@ -42,19 +42,20 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 | EPIK J  | Onboarding & Acceptance MVP | F54–F57 |
 | EPIK K+ | Fase 2–4 (ringkas)          | F58+    |
 
-### Status progres — MVP + Fase 2 + Fase 3 (inti) SELESAI ✅
+### Status progres — MVP + Fase 2 + Fase 3 + Fase 4 (inti) SELESAI ✅
 
-Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker, + prod compose/Caddy): **sign-up / Google OAuth / reset password → Org default + Team → Site + snippet + verifikasi pixel → editor notifikasi (recent_sales, counter, combo, live_visitors, review, custom, low_stock/FOMO, countdown) + preview → `t.js` (shadow DOM, 3.5 KB gzip) render + custom CSS + passthrough GA/GTM/FB/Mixpanel → ingest (pixel capture / API key / custom webhook + Stripe/Shopify/WooCommerce/Zapier terverifikasi + data filter) → **worker BullMQ: webhook→event durabel, flush buffer impression Redis→Postgres, recompute counter ke cache Redis** → analytics (impression/klik/CTR + events feed) + Goals (konversi) → Billing freemium + Stripe checkout/webhook + badge → anti-abuse (block IP, profanity, rate-limit) → Overview + onboarding.**
+Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker, + prod compose/Caddy): **sign-up / Google OAuth / reset password → Org default + Team → Site + snippet + verifikasi pixel → editor notifikasi (recent_sales, counter, combo, live_visitors, review, custom, low_stock/FOMO, countdown, popup/bar/spin-to-win) + preview + terjemahan → `t.js` (shadow DOM, ≈4.9 KB gzip) render + conversion widgets + custom CSS + passthrough GA/GTM/FB/Mixpanel → ingest (pixel capture / API key / custom webhook + 30+ konektor terverifikasi + data filter) → **worker BullMQ: webhook→event durabel, flush buffer impression Redis→Postgres, recompute counter ke cache Redis** → analytics (impression/klik/CTR + events feed) + Goals (konversi) → Billing freemium + Stripe checkout/webhook + badge → anti-abuse (block IP, profanity, country, rate-limit) → Overview + onboarding.**
 
 - ✅ **MVP (EPIK A–J, F1–F57)** lengkap.
 - ✅ **Fase 2:** F58 Google OAuth + reset password · F59 Stripe billing (checkout + webhook) · F60 konektor Stripe/Shopify/WooCommerce · F61 Zapier/Make · F63 Goals · F64 data filtering integrasi · F65 custom CSS + domain settings + passthrough analytics · F16 Team (undang anggota) · F37 tipe Review.
-- ✅ **Fase 3 (inti):** F66 Combo/Low-stock/Countdown · F67 block IP + profanity filter.
+- ✅ **Fase 3:** F66 Combo/Low-stock/Countdown · F67 block IP + profanity filter · **F68 katalog integrasi** (33 provider: BigCommerce, Wix, SquareSpace, Ecwid, PrestaShop, Magento, Paddle, Lemon Squeezy, Gumroad, SendOwl, Recharge, HubSpot, Typeform, Jotform, Formspree, Calendly, Kajabi, Teachable, Thinkific, Memberful, Circle, Kit, Mailchimp, ActiveCampaign, WordPress, Webflow, …) + **FR-NGS-07 country display** (geo dari header CDN) + **FR-NED-12 terjemahan template**.
+- ✅ **Fase 4 (inti):** **F69 conversion widgets** — tipe `popup`, `bar`, `spin_to_win` (render di `t.js`, posisi `center`/`top-bar`/`bottom-bar`, editor + preview) + gating tipe per paket (FR-BIL-03).
 - ✅ **Durabilitas worker + Redis (F43/F46/F47 + cache F32/F33):** API enqueue webhook ke BullMQ (worker menulis `event` terverifikasi, idempoten); impression di-buffer Redis (RPUSH) oleh API lalu di-flush worker terjadwal ke Postgres; live-visitors dihitung via Redis ZSET; counter/combo di-cache Redis + recompute oleh worker. Fallback sinkron dipertahankan untuk test/unit.
-- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; **80 test** (Vitest + integrasi pglite + e2e HTTP widget/billing + processor worker) lulus; `t.js` 3.5 KB gzip; build web+widget + build image Docker prod lolos.
+- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; **90+ test** (Vitest + integrasi pglite + e2e HTTP widget/billing + processor worker) lulus; `t.js` ≈4.9 KB gzip; build web+widget + build image Docker prod lolos.
 - **Dibatalkan (keputusan produk):** import review Facebook/YouTube/Google Places (F62) — hanya integrasi inti Tacto yang disisakan.
-- **Sengaja ditunda:**
-  - **F68** katalog integrasi diperluas (BigCommerce/Wix/HubSpot/…) · **F69** conversion widgets (popup/spin-to-win/bar, Fase 4) · **FR-NED-12** terjemahan template · **FR-NGS** country-specific display (perlu geo-IP) — semua butuh dep eksternal / di luar inti.
-- **Credential yang perlu diisi di `.env`:** `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` (diisi), `GOOGLE_CLIENT_ID`/`SECRET` (diisi), `SMTP_*` (opsional — tanpa itu link email di-log).
+- **Ditunda (opsional, butuh dep/geo eksternal atau perlu data):**
+  - **F70** optimisasi performa/biaya + penyempurnaan onboarding berbasis data aktivasi · perluasan katalog integrasi lebih lanjut.
+- **Credential yang perlu diisi di `.env`:** `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` (diisi), `GOOGLE_CLIENT_ID`/`SECRET` (diisi), `SMTP_*` (opsional — tanpa itu link email di-log), `HUBSPOT_*`/`SHOPIFY_*` (placeholder opsional untuk konektor OAuth mendatang; integrasi webhook memakai secret per-integrasi di dashboard).
 
 ---
 
@@ -410,13 +411,13 @@ Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker,
 ### Fase 3 — suite lengkap
 
 - **F66** Tipe: Combo ✅, Low stock (FOMO) ✅, Countdown ✅ (Social/YouTube dilewati — integrasi tak dipakai). — FR-NOT-06/07
-- **F67** Privacy/anti-abuse: block IP ✅ + profanity filter ✅ (country-display - **F67** Privacy lanjut: profanity filter, block IP, country display, cegah duplikat; terjemahan template. — FR-NGS-07, FR-NED-12 terjemahan template ditunda — perlu geo/i18n). — FR-NGS-07, FR-NED-12
-- **F68** Katalog integrasi diperluas (BigCommerce/Wix/HubSpot/Typeform/Kajabi).
+- **F67** Privacy/anti-abuse: block IP ✅ + profanity filter ✅ + **country display ✅** (geo dari header CDN `cf-ipcountry`/`x-vercel-ip-country`; fail-open bila tak diketahui) + **cegah duplikat ✅** (dedupeKey) + **terjemahan template ✅** (FR-NED-12, template per-locale). — FR-NGS-07, FR-NED-12
+- **F68** Katalog integrasi diperluas ✅ — 33 provider (e-commerce, pembayaran, form/CRM, kursus, komunitas) via framework konektor generik + signature toleran (Lihat EPIK G). — FR-INT-02
 
 ### Fase 4 — ekspansi
 
-- **F69** Conversion widgets (popup, spin-to-win, bar) — arah "Boost".
-- **F70** Optimisasi performa/biaya + penyempurnaan onboarding berbasis data aktivasi.
+- **F69** Conversion widgets ✅ (popup, notification bar, spin-to-win): tipe notifikasi baru, posisi `center`/`top-bar`/`bottom-bar`, render di `t.js`, editor + preview, gating per paket. — PRD Fase 4
+- **F70** Optimisasi performa/biaya + penyempurnaan onboarding berbasis data aktivasi. — (ditunda, opsional)
 
 ---
 

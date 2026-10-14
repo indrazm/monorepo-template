@@ -8,6 +8,11 @@ const TYPE_ICON: Record<string, string> = {
   counter: "📈",
   combo: "📈",
   custom: "💬",
+  countdown: "⏳",
+  low_stock: "🔥",
+  popup: "🎉",
+  bar: "📣",
+  spin_to_win: "🎁",
 };
 
 // Sample values so the template reads realistically in the editor preview.

@@ -11,17 +11,42 @@ export type TemplateVars = {
 const VARIABLE = /\{\{\s*(first_name|city|product|time_ago|count)\s*\}\}/g;
 
 // Resolves a notification message template into display text. Only a first name
-// and city are ever shown (GDPR data minimization, SRS FR-NED-01/02/04,
-// NFR-PRIV-01). Empty variables use the configured fallback, else drop out.
-export function renderMessage(message: NotificationMessage, vars: TemplateVars): string {
+// and city are ever shown (GDPR data minimization, SRS FR-NED-01/02/04/12,
+// NFR-PRIV-01). Empty variables use the configured fallback, else drop out. A
+// translated template is used when `locale` matches one of `message.translations`.
+export function renderMessage(
+  message: NotificationMessage,
+  vars: TemplateVars,
+  locale?: string | null,
+): string {
+  const source = selectTranslation(message, locale);
   const hideAfter = message.hideTimeAgoAfterDays;
-  const resolved = message.template.replace(VARIABLE, (_match, key: string) => {
+  const resolved = source.template.replace(VARIABLE, (_match, key: string) => {
     const value = resolveVariable(key, vars, hideAfter);
     if (value && value.length > 0) return value;
-    return message.fallbacks[key] ?? "";
+    return source.fallbacks[key] ?? message.fallbacks[key] ?? "";
   });
   // Collapse the whitespace left by any dropped variables.
   return resolved.replace(/\s{2,}/g, " ").trim();
+}
+
+// Picks the best translation for a locale ("pt-BR" → "pt-br" → "pt" → base).
+function selectTranslation(
+  message: NotificationMessage,
+  locale: string | null | undefined,
+): { template: string; fallbacks: Record<string, string> } {
+  const base = { template: message.template, fallbacks: message.fallbacks };
+  if (!locale || !message.translations) return base;
+  const tags = [locale.toLowerCase(), locale.toLowerCase().split("-")[0] ?? ""];
+  for (const tag of tags) {
+    if (!tag) continue;
+    const key = Object.keys(message.translations).find((entry) => entry.toLowerCase() === tag);
+    if (key) {
+      const translation = message.translations[key];
+      if (translation) return translation;
+    }
+  }
+  return base;
 }
 
 function resolveVariable(

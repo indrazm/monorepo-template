@@ -20,13 +20,27 @@ export function createWidgetRouter(
         if (!result.success) return c.json(apiError("validation_error"), 400);
       }),
       async (c) => {
-        const { site, url } = c.req.valid("query");
+        const { site, url, lang } = c.req.valid("query");
         const origin = c.req.header("origin") ?? c.req.header("referer") ?? null;
         const requestIp =
           c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
           c.req.header("x-real-ip") ??
           null;
-        const result = await service.getPayload({ siteKey: site, url, origin, requestIp });
+        // Country from the CDN/proxy edge (no IP database needed on our side).
+        const country =
+          c.req.header("cf-ipcountry") ??
+          c.req.header("x-vercel-ip-country") ??
+          c.req.header("x-geo-country") ??
+          c.req.header("x-country") ??
+          null;
+        const result = await service.getPayload({
+          siteKey: site,
+          url,
+          origin,
+          requestIp,
+          country,
+          locale: lang ?? null,
+        });
         if (result.kind === "not_found") return c.json(apiError("site_not_found"), 404);
         if (result.kind === "forbidden") return c.json(apiError("forbidden"), 403);
         onPageview?.(site, url);

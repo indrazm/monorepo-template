@@ -190,6 +190,108 @@ describe("widget payload service", () => {
     expect(byType.countdown?.countdownEndsAt).toBe(endsAt);
   });
 
+  it("renders conversion widgets (bar, popup, spin_to_win) with static messages", async () => {
+    const created = await seedSite();
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "Bar",
+      type: "bar",
+      isActive: true,
+      config: config({
+        message: { template: "Free shipping today", fallbacks: {} },
+        style: {
+          position: "bottom-bar",
+          accent: "#3B82F6",
+          shape: "rounded",
+          size: "md",
+          animation: "slide",
+        },
+      }),
+    });
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "Popup",
+      type: "popup",
+      isActive: true,
+      config: config({
+        message: { template: "Get 10% off", fallbacks: {} },
+        style: {
+          position: "center",
+          accent: "#3B82F6",
+          shape: "rounded",
+          size: "md",
+          animation: "slide",
+        },
+      }),
+    });
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "Spin",
+      type: "spin_to_win",
+      isActive: true,
+      config: config({
+        message: { template: "WIN10", fallbacks: {} },
+        style: {
+          position: "center",
+          accent: "#3B82F6",
+          shape: "rounded",
+          size: "md",
+          animation: "slide",
+        },
+      }),
+    });
+
+    const result = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+    });
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    const byType = Object.fromEntries(result.payload.notifications.map((n) => [n.type, n]));
+    expect(byType.bar?.message).toBe("Free shipping today");
+    expect(byType.bar?.style.position).toBe("bottom-bar");
+    expect(byType.popup?.message).toBe("Get 10% off");
+    expect(byType.spin_to_win?.message).toBe("WIN10");
+  });
+
+  it("filters by country when geo is known, fails open when unknown (FR-NGS-07)", async () => {
+    const created = await seedSite();
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "US only",
+      type: "custom",
+      isActive: true,
+      config: config({
+        message: { template: "Hello US", fallbacks: {} },
+        display: { url: { mode: "all" }, countries: ["US"] },
+      }),
+    });
+
+    const us = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+      country: "US",
+    });
+    const de = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+      country: "DE",
+    });
+    const unknown = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+      country: null,
+    });
+
+    expect(us.kind === "ok" && us.payload.notifications).toHaveLength(1);
+    expect(de.kind === "ok" && de.payload.notifications).toHaveLength(0);
+    expect(unknown.kind === "ok" && unknown.payload.notifications).toHaveLength(1);
+  });
+
   it("blocks listed IPs and masks profanity (FR-NGS-07)", async () => {
     const created = await seedSite();
     await notifications.create(ORG, {

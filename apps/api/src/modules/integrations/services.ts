@@ -2,10 +2,11 @@ import { randomBytes } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import type { Database } from "@repo/db";
 import { integration } from "@repo/db/schema";
-import type {
-  CreateIntegrationInput,
-  Integration,
-  IntegrationConfig,
+import {
+  integrationMeta,
+  type CreateIntegrationInput,
+  type Integration,
+  type IntegrationConfig,
 } from "@repo/contracts/integrations";
 
 type IntegrationRow = typeof integration.$inferSelect;
@@ -33,13 +34,14 @@ export function createIntegrationsService(db: Pick<Database, "select" | "insert"
     return rows.map(toIntegration);
   }
 
-  // Creating a webhook/zapier integration auto-generates a signing secret when
-  // the caller did not supply one, so the UI can reveal it immediately.
+  // Generic/automation providers get a signing secret minted for them (shown in
+  // the UI); providers with their own signing secret (Stripe, Shopify, …) use
+  // the value pasted by the user (catalog metadata, FR-INT-02).
   async function create(
     organizationId: string,
     input: CreateIntegrationInput,
   ): Promise<Integration> {
-    const needsSecret = input.provider === "webhook" || input.provider === "zapier";
+    const needsSecret = integrationMeta[input.provider].secret === "generated";
     const config: IntegrationConfig = {
       ...input.config,
       secret: input.config.secret ?? (needsSecret ? randomBytes(24).toString("hex") : undefined),
