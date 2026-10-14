@@ -44,15 +44,15 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 
 ### Status progres — MVP + Fase 2 + Fase 3 (inti) SELESAI ✅
 
-Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker, + prod compose/Caddy): **sign-up / Google OAuth / reset password → Org default + Team → Site + snippet + verifikasi pixel → editor notifikasi (recent_sales, counter, combo, live_visitors, review, custom, low_stock/FOMO, countdown) + preview → `t.js` (shadow DOM, 3.4 KB gzip) render + custom CSS + passthrough GA/GTM/FB/Mixpanel → ingest (pixel capture / API key / custom webhook + Stripe/Shopify/WooCommerce/Zapier terverifikasi + data filter) → analytics (impression/klik/CTR + events feed) + Goals (konversi) → Billing freemium + Stripe checkout/webhook + badge → anti-abuse (block IP, profanity, rate-limit) → Overview + onboarding.**
+Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker, + prod compose/Caddy): **sign-up / Google OAuth / reset password → Org default + Team → Site + snippet + verifikasi pixel → editor notifikasi (recent_sales, counter, combo, live_visitors, review, custom, low_stock/FOMO, countdown) + preview → `t.js` (shadow DOM, 3.5 KB gzip) render + custom CSS + passthrough GA/GTM/FB/Mixpanel → ingest (pixel capture / API key / custom webhook + Stripe/Shopify/WooCommerce/Zapier terverifikasi + data filter) → **worker BullMQ: webhook→event durabel, flush buffer impression Redis→Postgres, recompute counter ke cache Redis** → analytics (impression/klik/CTR + events feed) + Goals (konversi) → Billing freemium + Stripe checkout/webhook + badge → anti-abuse (block IP, profanity, rate-limit) → Overview + onboarding.**
 
 - ✅ **MVP (EPIK A–J, F1–F57)** lengkap.
 - ✅ **Fase 2:** F58 Google OAuth + reset password · F59 Stripe billing (checkout + webhook) · F60 konektor Stripe/Shopify/WooCommerce · F61 Zapier/Make · F63 Goals · F64 data filtering integrasi · F65 custom CSS + domain settings + passthrough analytics · F16 Team (undang anggota) · F37 tipe Review.
 - ✅ **Fase 3 (inti):** F66 Combo/Low-stock/Countdown · F67 block IP + profanity filter.
-- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; **73 test** (Vitest + integrasi pglite + e2e HTTP widget/billing) lulus; `t.js` 3.4 KB gzip; build web+widget + build image Docker prod lolos.
+- ✅ **Durabilitas worker + Redis (F43/F46/F47 + cache F32/F33):** API enqueue webhook ke BullMQ (worker menulis `event` terverifikasi, idempoten); impression di-buffer Redis (RPUSH) oleh API lalu di-flush worker terjadwal ke Postgres; live-visitors dihitung via Redis ZSET; counter/combo di-cache Redis + recompute oleh worker. Fallback sinkron dipertahankan untuk test/unit.
+- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; **80 test** (Vitest + integrasi pglite + e2e HTTP widget/billing + processor worker) lulus; `t.js` 3.5 KB gzip; build web+widget + build image Docker prod lolos.
 - **Dibatalkan (keputusan produk):** import review Facebook/YouTube/Google Places (F62) — hanya integrasi inti Tacto yang disisakan.
 - **Sengaja ditunda:**
-  - **F43/F46/F47** pindah webhook & agregasi analytics/counter ke worker BullMQ + buffer Redis (kini sinkron/DB langsung — fungsional, ini optimisasi durabilitas/skala).
   - **F68** katalog integrasi diperluas (BigCommerce/Wix/HubSpot/…) · **F69** conversion widgets (popup/spin-to-win/bar, Fase 4) · **FR-NED-12** terjemahan template · **FR-NGS** country-specific display (perlu geo-IP) — semua butuh dep eksternal / di luar inti.
 - **Credential yang perlu diisi di `.env`:** `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` (diisi), `GOOGLE_CLIENT_ID`/`SECRET` (diisi), `SMTP_*` (opsional — tanpa itu link email di-log).
 
@@ -239,13 +239,15 @@ Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker,
 
 > **File:** `.../widget/sources/recent-sales.ts`. **Kerjakan:** `event` terbaru sesuai dataSource → widgetNotification. **FR:** FR-NOT-01.
 
-## Fase 32 — Tipe: Counter ✅ (via DB; worker/Redis menyusul)
+## Fase 32 — Tipe: Counter ✅ (worker + Redis cache)
 
-> **File:** `apps/worker/src/processors/counter-recompute.ts` + Redis. **Kerjakan:** agregat event/periode → Redis `counter:{notificationId}`. **FR:** FR-NOT-02, FR-ANL-05.
+> **File:** `apps/worker/src/processors/counter-recompute.ts`, `packages/queue/src/index.ts` (`createRealtimeStore`), `apps/api/src/modules/widget/services.ts`.
+> **Kerjakan:** worker mengagregasi event/periode tiap tipe `counter`/`combo` per site → Redis `counter:{notificationId}` (TTL 60s); widget membaca cache, backfill dari DB saat miss. **FR:** FR-NOT-02, FR-ANL-05.
 
-## Fase 33 — Tipe: Live Visitors ✅ (via DB window; Redis menyusul)
+## Fase 33 — Tipe: Live Visitors ✅ (Redis ZSET)
 
-> **File:** `.../widget/sources/live-visitors.ts`. **Kerjakan:** beacon view → `ZADD visitors:{siteId}`; window 5 menit. **Cek:** 2 tab → ≥2. **FR:** FR-NOT-03.
+> **File:** `packages/queue/src/index.ts` (`recordVisit`/`countVisitors`), `apps/api/src/modules/widget/`, `apps/widget/src/track.ts`.
+> **Kerjakan:** beacon view → `ZADD tacto:live-visitors:{siteId}` (member = `visitorId` stable per-browser, fallback IP) + window 5 menit; payload membaca `ZCOUNT`. **Cek:** 2 visitor → ≥2. **FR:** FR-NOT-03.
 
 ## Fase 34 — Tipe: Custom/Informational ✅
 
@@ -293,10 +295,11 @@ Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker,
 > **File:** `apps/api/src/modules/ingest/webhook.ts`. **Kerjakan:** verifikasi signature → `webhookQueue.add` → 202.
 > **Cek:** signature salah → 401. **FR:** FR-ING-03/04.
 
-## Fase 43 — Worker webhook → event
+## Fase 43 — Worker webhook → event ✅
 
-> **File:** `apps/worker/src/processors/webhook.ts`. **Kerjakan:** map payload → `event`; sumber tepercaya `verified=true`.
-> **Cek:** job → event → notifikasi. **FR:** FR-ING-03, FR-VER-01.
+> **File:** `apps/worker/src/processors/webhook.ts`, `apps/api/src/modules/ingest/services.ts`, `packages/contracts/src/jobs.ts`.
+> **Kerjakan:** API verifikasi signature + map via konektor → `webhookQueue.add({provider,siteId,receivedAt,event})` → 202; worker menulis `event` terverifikasi (`source=provider`), idempoten via `dedupeKey`, lalu enqueue recompute counter. Peta payload dipindah ke job ter-normalisasi; fallback sinkron bila queue tak dikonfigurasi (test).
+> **Cek:** signature salah → 401; job → `event` → notifikasi. **FR:** FR-ING-03, FR-VER-01.
 
 ---
 
@@ -318,15 +321,16 @@ Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker,
 
 # EPIK H — Analytics & Goals
 
-## Fase 46 — Tulis impression (hot-path Redis)
+## Fase 46 — Tulis impression (hot-path Redis) ✅
 
-> **File:** `apps/api/src/modules/widget/router.ts` (`/widget/v1/track`). **Kerjakan:** validasi `trackEventSchema` → buffer Redis.
+> **File:** `apps/api/src/modules/widget/router.ts` + `services.ts` (`/widget/v1/track`), `packages/queue/src/index.ts`.
+> **Kerjakan:** validasi `trackEventSchema` → `store.pushImpression` (RPUSH `tacto:analytics:impressions`); view juga `recordVisit` live window. Fallback insert DB bila store tak ada.
 > **Cek:** track cepat; buffer bertambah. **FR:** FR-ANL-01.
 
-## Fase 47 — Tabel `goal` ✅ (worker agregasi analytics menyusul)
+## Fase 47 — Flush analytics + tabel `goal` ✅
 
-> **File:** `apps/worker/src/processors/analytics-aggregate.ts`; `schema.ts` (+`goal`, migrasi).
-> **Kerjakan:** flush buffer Redis → `impression` + rollup. Tambah tabel `goal` (dipakai penuh di Fase 2).
+> **File:** `apps/worker/src/processors/analytics-aggregate.ts` (+ `worker.ts`), `schema.ts` (+`goal`, migrasi).
+> **Kerjakan:** worker menjadwalkan flush berkala (`upsertJobScheduler`, 5 dtk) → drain buffer Redis (`LRANGE`+`LTRIM`) → insert `impression`; entri site terhapus di-drop. Tabel `goal` dipakai penuh di Fase 2.
 > **Cek:** impression muncul di Postgres. **FR:** FR-ANL-05 (+ANL-03 dasar).
 
 ## Fase 48 — Endpoint ringkasan analytics ✅

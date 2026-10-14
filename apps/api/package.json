@@ -23,6 +23,7 @@
     "@repo/config": "workspace:*",
     "@repo/contracts": "workspace:*",
     "@repo/db": "workspace:*",
+    "@repo/queue": "workspace:*",
     "better-auth": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",

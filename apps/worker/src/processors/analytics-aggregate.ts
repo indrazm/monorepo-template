@@ -1,8 +1,29 @@
 import { analyticsJobSchema } from "@repo/contracts/jobs";
+import type { Database } from "@repo/db";
+import { impression } from "@repo/db/schema";
+import type { RealtimeStore } from "@repo/queue";
 
-// Flushes buffered impressions from Redis into Postgres rollups (SRS FR-ANL-05).
-// Full flush logic lands in EPIK H (F47); this validates the payload.
-export async function processAnalyticsJob(job: { data: unknown }): Promise<void> {
-  const payload = analyticsJobSchema.parse(job.data);
-  console.info("analytics-aggregate job received", { siteId: payload.siteId ?? "all" });
+// Flushes impressions buffered in Redis into Postgres (SRS FR-ANL-01/05). Runs
+// as a repeatable job scheduled in worker.ts, so the API hot path only does an
+// RPUSH. A stale entry (site deleted) is dropped rather than failing the batch.
+export function createAnalyticsProcessor(
+  db: Pick<Database, "insert">,
+  store: Pick<RealtimeStore, "drainImpressions">,
+) {
+  return async function processAnalyticsJob(job: { data: unknown }): Promise<void> {
+    analyticsJobSchema.parse(job.data);
+    const entries = await store.drainImpressions(1000);
+    for (const entry of entries) {
+      try {
+        await db.insert(impression).values({
+          siteId: entry.siteId,
+          refId: entry.refId,
+          kind: entry.kind,
+          createdAt: new Date(entry.createdAt),
+        });
+      } catch {
+        // Foreign-key violation for a removed site — drop the buffered row.
+      }
+    }
+  };
 }

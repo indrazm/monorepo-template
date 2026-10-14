@@ -40,7 +40,14 @@ export function createWidgetRouter(
         if (!result.success) return c.json(apiError("validation_error"), 400);
       }),
       async (c) => {
-        await service.recordImpression(c.req.valid("json"));
+        const input = c.req.valid("json");
+        // Fall back to the request IP as the visitor member for the live window.
+        const visitorId =
+          input.visitorId ??
+          c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+          c.req.header("x-real-ip") ??
+          undefined;
+        await service.recordImpression(input, { visitorId });
         return c.body(null, 204); // best-effort beacon; always ack
       },
     )

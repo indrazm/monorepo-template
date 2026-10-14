@@ -2,7 +2,9 @@ import { apiError } from "@repo/contracts/errors";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
+import type { WebhookJob } from "@repo/contracts/jobs";
 import type { Database } from "@repo/db";
+import type { RealtimeStore } from "@repo/queue";
 import type { createApiConfig } from "./config";
 import {
   type AuthVariables,
@@ -30,15 +32,28 @@ import { createSitesService } from "./modules/sites/services";
 import { createUsersRouter } from "./modules/users/router";
 import { createUsersService } from "./modules/users/services";
 
+// Optional async infrastructure: when present, hot-path work is buffered in
+// Redis (impressions) or handed to the worker (webhook events, counter
+// recompute). Omitted in unit tests, which fall back to synchronous DB writes.
+export type AppAsyncDeps = {
+  store?: RealtimeStore;
+  enqueue?: {
+    webhook?: (job: WebhookJob) => Promise<void>;
+    counter?: (siteId: string) => Promise<void>;
+  };
+};
+
 export function createApp({
   auth,
   db,
   config,
+  store,
+  enqueue,
 }: {
   auth: AuthProvider;
   db: Database;
   config: Pick<ReturnType<typeof createApiConfig>, "clientOrigins" | "stripe">;
-}) {
+} & AppAsyncDeps) {
   const loadSession = createSessionMiddleware(auth, db);
   const goalsService = createGoalsService(db);
   // Dashboard/auth: credentialed CORS restricted to the configured origins.
@@ -101,11 +116,22 @@ export function createApp({
       .route("/api/v1/goals", createGoalsRouter(goalsService))
       .route(
         "/widget",
-        createWidgetRouter(createWidgetService(db), (siteKey, url) => {
-          void goalsService.recordConversions(siteKey, url).catch(() => undefined);
-        }),
+        createWidgetRouter(
+          createWidgetService(db, { store, enqueueCounter: enqueue?.counter }),
+          (siteKey, url) => {
+            void goalsService.recordConversions(siteKey, url).catch(() => undefined);
+          },
+        ),
       )
-      .route("/ingest", createIngestRouter(createIngestService(db)))
+      .route(
+        "/ingest",
+        createIngestRouter(
+          createIngestService(db, {
+            enqueueWebhook: enqueue?.webhook,
+            enqueueCounter: enqueue?.counter,
+          }),
+        ),
+      )
   );
 }
 export type AppType = ReturnType<typeof createApp>;

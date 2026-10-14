@@ -56,6 +56,8 @@ export const trackEventSchema = z.object({
   site: z.string().trim().min(1),
   refId: z.string().trim().min(1),
   kind: z.enum(["view", "click"]),
+  // Stable per-browser id used only to count distinct live visitors (F33).
+  visitorId: z.string().trim().min(1).max(128).optional(),
 });
 
 // ---------- pixel auto-capture (POST /widget/v1/capture) ----------

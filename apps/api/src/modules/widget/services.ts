@@ -10,6 +10,7 @@ import {
 } from "@repo/db/schema";
 import type { CaptureEventInput, TrackEventInput } from "@repo/contracts/widget";
 import { planLimits, type Plan } from "@repo/contracts/billing";
+import type { RealtimeStore } from "@repo/queue";
 import { analyticsPassthroughSchema, domainPrivacySchema } from "@repo/contracts/sites";
 import type { DomainLoopSettings } from "@repo/contracts/sites";
 import { maskProfanity } from "./profanity";
@@ -39,21 +40,48 @@ export type PayloadResult =
   | { kind: "not_found" }
   | { kind: "forbidden" };
 
-export function createWidgetService(db: Pick<Database, "select" | "update" | "insert">) {
+// Optional async infra. With `store`, impressions are buffered in Redis (F46)
+// and live-visitor/counter reads are served from Redis; without it the service
+// falls back to direct Postgres writes (used by unit tests).
+export type WidgetServiceDeps = {
+  store?: RealtimeStore;
+  enqueueCounter?: (siteId: string) => Promise<void> | void;
+};
+
+export function createWidgetService(
+  db: Pick<Database, "select" | "update" | "insert">,
+  deps: WidgetServiceDeps = {},
+) {
   return { getPayload, recordImpression, capture };
 
-  // Records a view/click impression (SRS FR-ANL-01). Hot-path Redis buffering
-  // is a later optimization (F46/F47); for now we insert directly.
-  async function recordImpression(input: TrackEventInput): Promise<boolean> {
+  // Records a view/click impression (SRS FR-ANL-01). Buffered in Redis on the
+  // hot path and flushed to Postgres by the worker (F46/F47); fallback inserts.
+  async function recordImpression(
+    input: TrackEventInput,
+    meta: { visitorId?: string } = {},
+  ): Promise<boolean> {
     const [siteRow] = await db
       .select({ id: site.id })
       .from(site)
       .where(eq(site.siteKey, input.site))
       .limit(1);
     if (!siteRow) return false;
-    await db
-      .insert(impression)
-      .values({ siteId: siteRow.id, refId: input.refId, kind: input.kind });
+    if (deps.store) {
+      await deps.store.pushImpression({
+        siteId: siteRow.id,
+        refId: input.refId,
+        kind: input.kind,
+        createdAt: new Date().toISOString(),
+      });
+      // A view also marks the visitor present for the live-visitor window (F33).
+      if (input.kind === "view" && meta.visitorId) {
+        await deps.store.recordVisit(siteRow.id, meta.visitorId);
+      }
+    } else {
+      await db
+        .insert(impression)
+        .values({ siteId: siteRow.id, refId: input.refId, kind: input.kind });
+    }
     return true;
   }
 
@@ -78,6 +106,7 @@ export function createWidgetService(db: Pick<Database, "select" | "update" | "in
       payload: { url: input.url },
       occurredAt: new Date(),
     });
+    await notifyCounter(siteRow.id);
     return true;
   }
 
@@ -192,7 +221,13 @@ export function createWidgetService(db: Pick<Database, "select" | "update" | "in
         };
       }
       case "counter": {
-        const count = await countEvents(siteId, eventTypesOf(config.dataSource), COUNTER_WINDOW_MS);
+        // Prefer the worker-maintained Redis cache (F32); fill it on miss.
+        const count = await cachedCount(
+          row.id,
+          siteId,
+          eventTypesOf(config.dataSource),
+          COUNTER_WINDOW_MS,
+        );
         if (count === 0) return null;
         return {
           ...base,
@@ -200,7 +235,12 @@ export function createWidgetService(db: Pick<Database, "select" | "update" | "in
         };
       }
       case "combo": {
-        const count = await countEvents(siteId, eventTypesOf(config.dataSource), COMBO_WINDOW_MS);
+        const count = await cachedCount(
+          row.id,
+          siteId,
+          eventTypesOf(config.dataSource),
+          COMBO_WINDOW_MS,
+        );
         if (count === 0) return null;
         return {
           ...base,
@@ -208,7 +248,10 @@ export function createWidgetService(db: Pick<Database, "select" | "update" | "in
         };
       }
       case "live_visitors": {
-        const count = await countEvents(siteId, ["visit"], LIVE_WINDOW_MS);
+        const count =
+          deps.store !== undefined
+            ? await deps.store.countVisitors(siteId)
+            : await countEvents(siteId, ["visit"], LIVE_WINDOW_MS);
         return {
           ...base,
           message: renderMessage(config.message as NotificationMessage, { count }),
@@ -269,6 +312,32 @@ export function createWidgetService(db: Pick<Database, "select" | "update" | "in
         and(eq(event.siteId, siteId), inArray(event.type, types), gte(event.occurredAt, since)),
       );
     return res?.count ?? 0;
+  }
+
+  // Reads a counter from the worker-maintained Redis cache, filling it on a
+  // miss so the widget stays correct even before the worker recomputes (F32).
+  async function cachedCount(
+    notificationId: string,
+    siteId: string,
+    types: EventType[],
+    windowMs: number,
+  ): Promise<number> {
+    if (deps.store) {
+      const cached = await deps.store.getCounter(notificationId);
+      if (cached !== null) return cached;
+    }
+    const count = await countEvents(siteId, types, windowMs);
+    if (deps.store) await deps.store.setCounter(notificationId, count, 60);
+    return count;
+  }
+
+  async function notifyCounter(siteId: string): Promise<void> {
+    if (!deps.enqueueCounter) return;
+    try {
+      await deps.enqueueCounter(siteId);
+    } catch {
+      // Best-effort: a failed enqueue must not affect ingestion.
+    }
   }
 }
 

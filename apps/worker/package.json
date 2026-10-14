@@ -13,12 +13,15 @@
   "dependencies": {
     "@repo/config": "workspace:*",
     "@repo/contracts": "workspace:*",
+    "@repo/db": "workspace:*",
     "@repo/queue": "workspace:*",
     "bullmq": "catalog:",
+    "drizzle-orm": "catalog:",
     "ioredis": "^5.11.1",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"

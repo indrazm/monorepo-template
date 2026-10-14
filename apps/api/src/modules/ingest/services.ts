@@ -3,6 +3,7 @@ import type { Database } from "@repo/db";
 import { event, integration, site } from "@repo/db/schema";
 import type { IntegrationConfig } from "@repo/contracts/integrations";
 import type { IngestEventInput } from "@repo/contracts/events";
+import type { WebhookJob } from "@repo/contracts/jobs";
 import { getConnector } from "../integrations/connectors";
 
 const UNIQUE_VIOLATION = "23505";
@@ -32,13 +33,24 @@ function firstName(value: string | undefined): string | null {
   return value.trim().split(/\s+/)[0] ?? null;
 }
 
-export function createIngestService(db: Pick<Database, "select" | "insert">) {
+// Optional async infra. With `enqueueWebhook`, verified webhooks are handed to
+// the worker for durable persistence (F43); without it the service writes the
+// event synchronously (used by unit tests).
+export type IngestServiceDeps = {
+  enqueueWebhook?: (job: WebhookJob) => Promise<void>;
+  enqueueCounter?: (siteId: string) => Promise<void> | void;
+};
+
+export function createIngestService(
+  db: Pick<Database, "select" | "insert">,
+  deps: IngestServiceDeps = {},
+) {
   return { resolveSiteByApiKey, ingestEvent, processWebhook };
 
   // Handles an inbound provider webhook: resolve site, verify signature against
-  // the configured integration secret, map via the connector, and store a
-  // verified event (SRS FR-ING-03/04, FR-VER-01). Processed synchronously for
-  // now; can move to the BullMQ worker (F43) for durability without API change.
+  // the configured integration secret, map via the connector, then hand a
+  // normalized event to the worker queue (F43, durable/retried) — or store it
+  // synchronously when no queue is configured (SRS FR-ING-03/04, FR-VER-01).
   async function processWebhook(input: {
     siteKey: string;
     provider: string;
@@ -85,6 +97,23 @@ export function createIngestService(db: Pick<Database, "select" | "insert">) {
     const mapped = connector.mapToEvent(raw);
     if (!mapped) return "invalid";
 
+    if (deps.enqueueWebhook) {
+      await deps.enqueueWebhook({
+        provider: input.provider,
+        siteId: siteRow.id,
+        receivedAt: new Date().toISOString(),
+        event: {
+          type: mapped.type,
+          displayName: mapped.displayName,
+          city: mapped.city,
+          product: mapped.product,
+          dedupeKey: mapped.dedupeKey,
+          occurredAt: mapped.occurredAt.toISOString(),
+        },
+      });
+      return "created";
+    }
+
     try {
       await db.insert(event).values({
         siteId: siteRow.id,
@@ -97,6 +126,7 @@ export function createIngestService(db: Pick<Database, "select" | "insert">) {
         dedupeKey: mapped.dedupeKey,
         occurredAt: mapped.occurredAt,
       });
+      await notifyCounter(siteRow.id);
       return "created";
     } catch (error) {
       if (isUniqueViolation(error)) return "duplicate";
@@ -132,10 +162,21 @@ export function createIngestService(db: Pick<Database, "select" | "insert">) {
         dedupeKey: input.dedupeKey ?? null,
         occurredAt: input.occurredAt ? new Date(input.occurredAt) : new Date(),
       });
+      await notifyCounter(siteId);
       return "created";
     } catch (error) {
       if (isUniqueViolation(error)) return "duplicate";
       throw error;
+    }
+  }
+
+  // Best-effort: ask the worker to refresh counter/combo caches for the site.
+  async function notifyCounter(siteId: string): Promise<void> {
+    if (!deps.enqueueCounter) return;
+    try {
+      await deps.enqueueCounter(siteId);
+    } catch {
+      // A failed enqueue must not affect ingestion success.
     }
   }
 }

@@ -20,6 +20,16 @@ export const eventsFeedQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
+// Hot-path impression buffered in Redis and flushed to Postgres by the worker
+// (SRS FR-ANL-01/05). Shared by the API producer and the worker consumer.
+export const bufferedImpressionSchema = z.object({
+  siteId: z.string().trim().min(1),
+  refId: z.string().trim().min(1),
+  kind: z.enum(["view", "click"]),
+  createdAt: z.iso.datetime(),
+});
+
 export type AnalyticsQuery = z.output<typeof analyticsQuerySchema>;
 export type AnalyticsSummary = z.output<typeof analyticsSummarySchema>;
 export type EventsFeedQuery = z.output<typeof eventsFeedQuerySchema>;
+export type BufferedImpression = z.output<typeof bufferedImpressionSchema>;
