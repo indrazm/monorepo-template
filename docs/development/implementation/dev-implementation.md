@@ -42,17 +42,19 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 | EPIK J  | Onboarding & Acceptance MVP | F54–F57 |
 | EPIK K+ | Fase 2–4 (ringkas)          | F58+    |
 
-### Status progres — MVP inti SELESAI ✅
+### Status progres — MVP + Fase 2 + Fase 3 (inti) SELESAI ✅
 
-Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet pixel + verifikasi → buat notifikasi (editor + preview) → `t.js` render di situs (shadow DOM, 2.9 KB gzip) → ingest (pixel capture / manual API / custom webhook terverifikasi) → analytics (impression/klik/CTR + events feed) → batas paket Free + badge "Powered by Tacto" → Overview + onboarding checklist.**
+Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker, + prod compose/Caddy): **sign-up / Google OAuth / reset password → Org default + Team → Site + snippet + verifikasi pixel → editor notifikasi (recent_sales, counter, combo, live_visitors, review, custom, low_stock/FOMO, countdown) + preview → `t.js` (shadow DOM, 3.4 KB gzip) render + custom CSS + passthrough GA/GTM/FB/Mixpanel → ingest (pixel capture / API key / custom webhook + Stripe/Shopify/WooCommerce/Zapier terverifikasi + data filter) → analytics (impression/klik/CTR + events feed) + Goals (konversi) → Billing freemium + Stripe checkout/webhook + badge → anti-abuse (block IP, profanity, rate-limit) → Overview + onboarding.**
 
-- ✅ **EPIK A Fondasi (F1–F12)** · ✅ **EPIK B Auth/Org (F13–F15)** · ✅ **EPIK C Site & Pixel (F17–F21)** · ✅ **EPIK D Widget `t.js` (F22–F27)** · ✅ **EPIK E Notifikasi (F28–F36)** · ✅ **EPIK F Ingestion (F38–F42)** · ✅ **EPIK G Integrasi framework (F44)** · ✅ **EPIK H Analytics (F48–F49)** · ✅ **EPIK I Billing (F51–F53)** · ✅ **EPIK J Onboarding/E2E (F54–F57)**.
-- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; 50 test (Vitest + integrasi pglite + 1 e2e HTTP) lulus; `t.js` 2.9 KB gzip.
-- **Sengaja ditunda (bukan blocker MVP):**
-  - **F16** UI undang anggota (opsional) · **F37** tipe Review (Should/Fase 2) · **F45** katalog integrasi UI (Should/Fase 2).
-  - **F43/F47** pindah webhook & agregasi analytics ke worker BullMQ (kini sinkron/langsung) · **F32/F33** counter & live-visitors via Redis (kini via query DB) · **F41** rate-limit via Redis multi-instance (kini in-memory). Semua jalan secara fungsional; optimisasi/durabilitas menyusul saat Redis di-wire ke produser API.
-- **Verifikasi runtime (Docker):** `docker-compose.dev.yaml` (Postgres + Redis) dinyalakan, `pnpm db:deploy` menerapkan migrasi ke Postgres nyata, API + worker jalan. Smoke test HTTP end-to-end lulus: register → Org default → site → ingest (+dedupe 409) → notifikasi → payload widget (pesan ter-resolve + badge) → origin guard 403 → track → analytics; **custom webhook** (integrasi via UI) signed→202, bad-sig→401, event tersimpan `verified=true` & teranonim; worker connect Redis (4 queue "listening"); security headers aktif. Prod `docker-compose.yaml` (build image api/worker + Caddy proxy) belum di-build-runtime di sesi ini.
-- Prasyarat (di luar penomoran): perbaikan tooling lintas-OS + `.gitattributes` (commit `chore`), dokumen dev (commit `docs`).
+- ✅ **MVP (EPIK A–J, F1–F57)** lengkap.
+- ✅ **Fase 2:** F58 Google OAuth + reset password · F59 Stripe billing (checkout + webhook) · F60 konektor Stripe/Shopify/WooCommerce · F61 Zapier/Make · F63 Goals · F64 data filtering integrasi · F65 custom CSS + domain settings + passthrough analytics · F16 Team (undang anggota) · F37 tipe Review.
+- ✅ **Fase 3 (inti):** F66 Combo/Low-stock/Countdown · F67 block IP + profanity filter.
+- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; **73 test** (Vitest + integrasi pglite + e2e HTTP widget/billing) lulus; `t.js` 3.4 KB gzip; build web+widget + build image Docker prod lolos.
+- **Dibatalkan (keputusan produk):** import review Facebook/YouTube/Google Places (F62) — hanya integrasi inti Tacto yang disisakan.
+- **Sengaja ditunda:**
+  - **F43/F46/F47** pindah webhook & agregasi analytics/counter ke worker BullMQ + buffer Redis (kini sinkron/DB langsung — fungsional, ini optimisasi durabilitas/skala).
+  - **F68** katalog integrasi diperluas (BigCommerce/Wix/HubSpot/…) · **F69** conversion widgets (popup/spin-to-win/bar, Fase 4) · **FR-NED-12** terjemahan template · **FR-NGS** country-specific display (perlu geo-IP) — semua butuh dep eksternal / di luar inti.
+- **Credential yang perlu diisi di `.env`:** `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` (diisi), `GOOGLE_CLIENT_ID`/`SECRET` (diisi), `SMTP_*` (opsional — tanpa itu link email di-log).
 
 ---
 
