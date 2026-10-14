@@ -37,6 +37,7 @@ const TYPES: { value: NotificationType; label: string }[] = [
   { value: "recent_sales", label: "Recent sales" },
   { value: "counter", label: "Counter" },
   { value: "live_visitors", label: "Live visitors" },
+  { value: "review", label: "Review" },
   { value: "custom", label: "Custom" },
 ];
 
@@ -64,6 +65,7 @@ function defaultConfig(): NotificationConfig {
 
 function eventTypesForType(type: NotificationType): NotificationConfig["dataSource"]["eventTypes"] {
   if (type === "live_visitors") return ["visit"];
+  if (type === "review") return ["review"];
   if (type === "custom") return [];
   return ["purchase"];
 }

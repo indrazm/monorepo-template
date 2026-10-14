@@ -259,7 +259,7 @@ Jalur ujung-ke-ujung hidup: **sign-up → Org default → buat Site → snippet 
 
 > **File:** `.../notifications/components/preview.tsx`. **Kerjakan:** preview desktop/mobile dari state editor. **FR:** FR-NED-10.
 
-## Fase 37 — Tipe: Review (Should → Fase 2)
+## Fase 37 — Tipe: Review ✅
 
 > **File:** `.../widget/sources/review.ts`. **Kerjakan:** sumber review dari **event review / integrasi import** (bukan testimonial engine). **FR:** FR-NOT-05 (S).
 

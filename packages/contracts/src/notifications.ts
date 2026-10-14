@@ -14,7 +14,14 @@ export const notificationTypes = [
 ] as const;
 export const notificationTypeSchema = z.enum(notificationTypes);
 
-export const eventTypes = ["purchase", "signup", "visit", "form_submit", "custom"] as const;
+export const eventTypes = [
+  "purchase",
+  "signup",
+  "visit",
+  "form_submit",
+  "custom",
+  "review",
+] as const;
 export const eventTypeSchema = z.enum(eventTypes);
 
 const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/i, "Expected a hex color like #3B82F6.");

@@ -175,6 +175,19 @@ export function createWidgetService(db: Pick<Database, "select" | "update" | "in
           message: renderMessage(config.message as NotificationMessage, { count }),
         };
       }
+      case "review": {
+        // Latest review event rendered as stars + quote + first name.
+        const latest = await latestEvent(siteId, ["review"]);
+        if (!latest) return null;
+        const review = (latest.payload ?? {}) as { rating?: unknown; text?: unknown };
+        const rating =
+          typeof review.rating === "number" ? Math.max(1, Math.min(5, review.rating)) : 5;
+        const stars = "★".repeat(rating) + "☆".repeat(5 - rating);
+        const text = typeof review.text === "string" ? review.text.slice(0, 160) : "";
+        const author = latest.displayName ?? "A customer";
+        const message = text ? `${stars} "${text}" — ${author}` : `${stars} — ${author}`;
+        return { ...base, message, timeAgo: timeAgoLabel(latest.occurredAt) };
+      }
       default: {
         // recent_sales / review / others: latest matching event.
         const latest = await latestEvent(siteId, eventTypesOf(config.dataSource));

@@ -200,6 +200,7 @@ export const eventTypeEnum = pgEnum("event_type", [
   "visit",
   "form_submit",
   "custom",
+  "review",
 ]);
 export const formPageKindEnum = pgEnum("form_page_kind", [
   "rating",
