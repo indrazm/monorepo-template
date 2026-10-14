@@ -40,8 +40,8 @@ export function startScheduler(options: {
   siteKey: string;
   notifications: WidgetNotification[];
   settings: WidgetSettings;
-  onView: (refId: string) => void;
-  onClick: (refId: string) => void;
+  onView: (refId: string, variantId?: string) => void;
+  onClick: (refId: string, variantId?: string) => void;
 }): () => void {
   const { host, siteKey, notifications, settings, onView, onClick } = options;
   let stopped = false;
@@ -72,10 +72,10 @@ export function startScheduler(options: {
         showBadge: settings.showBadge,
       });
       host.stack.appendChild(card);
-      onView(notification.id);
+      onView(notification.id, notification.variantId);
       card.addEventListener("click", (domEvent) => {
         if (close && domEvent.target === close) return;
-        onClick(notification.id);
+        onClick(notification.id, notification.variantId);
       });
       close?.addEventListener("click", () => {
         snooze(siteKey, settings.closeForDays || 1);

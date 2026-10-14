@@ -101,6 +101,15 @@ export const notificationTimingSchema = z.object({
 export const countdownConfigSchema = z.object({ endsAt: z.iso.datetime() });
 export const fomoConfigSchema = z.object({ stock: z.number().int().min(0).max(1_000_000) });
 
+// A/B testing (FR-ANL-04): each variant is an alternative message (and
+// optionally style). Variants are shown deterministically per visitor by weight.
+export const notificationVariantSchema = z.object({
+  id: z.string().trim().min(1).max(40),
+  weight: z.number().int().min(1).max(100).default(50),
+  message: notificationMessageSchema,
+  style: notificationStyleSchema.optional(),
+});
+
 export const notificationConfigSchema = z.object({
   message: notificationMessageSchema,
   style: notificationStyleSchema,
@@ -109,6 +118,7 @@ export const notificationConfigSchema = z.object({
   timing: notificationTimingSchema,
   countdown: countdownConfigSchema.optional(),
   fomo: fomoConfigSchema.optional(),
+  variants: z.array(notificationVariantSchema).min(2).max(6).optional(),
 });
 
 export const createNotificationSchema = z.object({
@@ -143,6 +153,7 @@ export type NotificationDisplay = z.output<typeof notificationDisplaySchema>;
 export type NotificationDataSource = z.output<typeof notificationDataSourceSchema>;
 export type NotificationTiming = z.output<typeof notificationTimingSchema>;
 export type NotificationConfig = z.output<typeof notificationConfigSchema>;
+export type NotificationVariant = z.output<typeof notificationVariantSchema>;
 export type CreateNotificationInput = z.output<typeof createNotificationSchema>;
 export type UpdateNotificationInput = z.output<typeof updateNotificationSchema>;
 export type Notification = z.output<typeof notificationSchema>;

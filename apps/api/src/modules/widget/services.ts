@@ -22,6 +22,7 @@ import type {
   NotificationStyle,
   NotificationTiming,
   NotificationType,
+  NotificationVariant,
 } from "@repo/contracts/notifications";
 import type { WidgetNotification, WidgetPayloadResponse } from "@repo/contracts/widget";
 import { renderMessage } from "./template";
@@ -71,6 +72,7 @@ export function createWidgetService(
         siteId: siteRow.id,
         refId: input.refId,
         kind: input.kind,
+        variantId: input.variantId,
         createdAt: new Date().toISOString(),
       });
       // A view also marks the visitor present for the live-visitor window (F33).
@@ -78,9 +80,12 @@ export function createWidgetService(
         await deps.store.recordVisit(siteRow.id, meta.visitorId);
       }
     } else {
-      await db
-        .insert(impression)
-        .values({ siteId: siteRow.id, refId: input.refId, kind: input.kind });
+      await db.insert(impression).values({
+        siteId: siteRow.id,
+        refId: input.refId,
+        kind: input.kind,
+        variant: input.variantId ?? null,
+      });
     }
     return true;
   }
@@ -117,6 +122,7 @@ export function createWidgetService(
     requestIp?: string | null;
     country?: string | null;
     locale?: string | null;
+    visitorKey?: string | null;
   }): Promise<PayloadResult> {
     const [siteRow] = await db.select().from(site).where(eq(site.siteKey, input.siteKey)).limit(1);
     if (!siteRow) return { kind: "not_found" };
@@ -162,7 +168,13 @@ export function createWidgetService(
         if (!matchUrl(config.display.url, input.url)) continue;
         // Country targeting (FR-NGS-07): a known country must be in the list.
         if (!countryAllowed(config.display.countries, input.country)) continue;
-        const rendered = await renderNotification(siteRow.id, row, config, input.locale);
+        const rendered = await renderNotification(
+          siteRow.id,
+          row,
+          config,
+          input.locale,
+          input.visitorKey,
+        );
         if (rendered) {
           if (privacy.filterProfanity) rendered.message = maskProfanity(rendered.message);
           notifications.push(rendered);
@@ -195,16 +207,21 @@ export function createWidgetService(
     row: NotificationRow,
     config: NotificationConfig,
     locale?: string | null,
+    visitorKey?: string | null,
   ): Promise<WidgetNotification | null> {
+    // A/B testing (FR-ANL-04): pick a variant deterministically per visitor.
+    const variant = pickVariant(config.variants, visitorKey);
     const base = {
       id: row.id,
       type: row.type as NotificationType,
       verified: row.verified,
-      style: config.style as NotificationStyle,
+      style: (variant?.style ?? config.style) as NotificationStyle,
       timing: config.timing as NotificationTiming,
+      ...(variant ? { variantId: variant.id } : {}),
     };
+    const message = (variant?.message ?? config.message) as NotificationMessage;
     const render = (vars: Parameters<typeof renderMessage>[1] = {}) =>
-      renderMessage(config.message as NotificationMessage, vars, locale);
+      renderMessage(message, vars, locale);
 
     switch (row.type) {
       case "custom":
@@ -356,8 +373,38 @@ function eventTypesOf(dataSource: NotificationDataSource): EventType[] {
   return dataSource.eventTypes.length > 0 ? dataSource.eventTypes : ["purchase"];
 }
 
+// Deterministic FNV-1a → [0,1). Same visitor always maps to the same variant.
+function hashToUnit(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return ((hash >>> 0) % 100000) / 100000;
+}
+
+// Weighted A/B variant selection (FR-ANL-04).
+function pickVariant(
+  variants: NotificationVariant[] | undefined,
+  visitorKey: string | null | undefined,
+): NotificationVariant | null {
+  if (!variants || variants.length === 0) return null;
+  const total = variants.reduce((sum, variant) => sum + variant.weight, 0);
+  const roll = visitorKey ? hashToUnit(visitorKey) * total : Math.random() * total;
+  let acc = 0;
+  for (const variant of variants) {
+    acc += variant.weight;
+    if (roll < acc) return variant;
+  }
+  return variants[variants.length - 1] ?? null;
+}
+
 function toConfig(row: NotificationRow): NotificationConfig {
-  const extra = (row.extra ?? {}) as { countdown?: unknown; fomo?: unknown };
+  const extra = (row.extra ?? {}) as {
+    countdown?: unknown;
+    fomo?: unknown;
+    variants?: unknown;
+  };
   return {
     message: row.message,
     style: row.style,
@@ -366,6 +413,7 @@ function toConfig(row: NotificationRow): NotificationConfig {
     timing: row.timing,
     ...(extra.countdown ? { countdown: extra.countdown } : {}),
     ...(extra.fomo ? { fomo: extra.fomo } : {}),
+    ...(extra.variants ? { variants: extra.variants } : {}),
   } as NotificationConfig;
 }
 

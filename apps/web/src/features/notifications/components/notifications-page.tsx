@@ -294,6 +294,37 @@ function NotificationEditorDialog({
     setTranslations(next);
   }
 
+  // A/B variants (FR-ANL-04): 2+ alternative messages, bucketed per visitor.
+  const variants = config.variants ?? [];
+  function setVariants(next: NonNullable<NotificationConfig["variants"]>) {
+    patchConfig({ variants: next.length >= 2 ? next : undefined });
+  }
+  function addVariant() {
+    if (variants.length === 0) {
+      setVariants([
+        { id: "A", weight: 50, message: config.message },
+        { id: "B", weight: 50, message: config.message },
+      ]);
+      return;
+    }
+    if (variants.length >= 6) return;
+    setVariants([
+      ...variants,
+      { id: String.fromCharCode(65 + variants.length), weight: 50, message: config.message },
+    ]);
+  }
+  function patchVariantTemplate(id: string, template: string) {
+    setVariants(
+      variants.map((v) => (v.id === id ? { ...v, message: { ...v.message, template } } : v)),
+    );
+  }
+  function patchVariantWeight(id: string, weight: number) {
+    setVariants(variants.map((v) => (v.id === id ? { ...v, weight } : v)));
+  }
+  function removeVariant(id: string) {
+    setVariants(variants.filter((v) => v.id !== id));
+  }
+
   function handleSubmit(formEvent: FormEvent) {
     formEvent.preventDefault();
     const payloadConfig: NotificationConfig = {
@@ -426,6 +457,57 @@ function NotificationEditorDialog({
                   size="sm"
                   className="text-destructive hover:text-destructive"
                   onClick={() => removeTranslation(locale)}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-2 rounded-md border p-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">A/B variants</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={addVariant}
+                disabled={variants.length >= 6}
+              >
+                <PlusIcon className="size-4" /> Add
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Two or more message variants, bucketed per visitor. Results appear in Analytics.
+            </p>
+            {variants.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No variants — showing the message above.
+              </p>
+            ) : null}
+            {variants.map((variant) => (
+              <div key={variant.id} className="grid gap-2 sm:grid-cols-[80px_90px_1fr_auto]">
+                <Input aria-label="Variant id" value={variant.id} readOnly />
+                <Input
+                  aria-label={`${variant.id} weight`}
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={variant.weight}
+                  onChange={(e) => patchVariantWeight(variant.id, Number(e.target.value) || 1)}
+                />
+                <Textarea
+                  aria-label={`${variant.id} template`}
+                  rows={2}
+                  value={variant.message.template}
+                  onChange={(e) => patchVariantTemplate(variant.id, e.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => removeVariant(variant.id)}
                 >
                   Remove
                 </Button>

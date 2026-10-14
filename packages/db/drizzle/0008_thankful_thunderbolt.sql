@@ -1,0 +1,1 @@
+ALTER TABLE "impression" ADD COLUMN "variant" text;

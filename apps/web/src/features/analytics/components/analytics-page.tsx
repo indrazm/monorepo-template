@@ -1,6 +1,12 @@
 import type { EventRecord } from "@repo/contracts/events";
 import { Badge } from "@repo/ui/components/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@repo/ui/components/card";
 import { Label } from "@repo/ui/components/label";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3Icon, MousePointerClickIcon, PercentIcon, EyeIcon } from "lucide-react";
@@ -68,6 +74,46 @@ export function AnalyticsPage() {
               />
               <StatTile label="CTR" value={ctr} icon={<PercentIcon className="size-4" />} />
             </div>
+
+            {summary.data && summary.data.variants.length > 0 ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">A/B variants</CardTitle>
+                  <CardDescription>Views, clicks and CTR per variant.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-muted-foreground">
+                        <th className="pb-2">Variant</th>
+                        <th className="pb-2">Notification</th>
+                        <th className="pb-2 text-right">Views</th>
+                        <th className="pb-2 text-right">Clicks</th>
+                        <th className="pb-2 text-right">CTR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summary.data.variants.map((variant) => (
+                        <tr
+                          key={`${variant.notificationId}:${variant.variantId}`}
+                          className="border-t"
+                        >
+                          <td className="py-2 font-medium">{variant.variantId}</td>
+                          <td className="py-2 text-muted-foreground">
+                            {variant.notificationId.slice(0, 8)}
+                          </td>
+                          <td className="py-2 text-right tabular-nums">{variant.views}</td>
+                          <td className="py-2 text-right tabular-nums">{variant.clicks}</td>
+                          <td className="py-2 text-right tabular-nums">
+                            {(variant.ctr * 100).toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            ) : null}
 
             <Card>
               <CardHeader>

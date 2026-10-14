@@ -13,6 +13,16 @@ export const analyticsSummarySchema = z.object({
   perDay: z.array(
     z.object({ date: z.string(), views: z.number().int(), clicks: z.number().int() }),
   ),
+  // Per-variant breakdown for A/B tests (FR-ANL-04).
+  variants: z.array(
+    z.object({
+      variantId: z.string(),
+      notificationId: z.string(),
+      views: z.number().int(),
+      clicks: z.number().int(),
+      ctr: z.number(),
+    }),
+  ),
 });
 
 export const eventsFeedQuerySchema = z.object({
@@ -26,6 +36,7 @@ export const bufferedImpressionSchema = z.object({
   siteId: z.string().trim().min(1),
   refId: z.string().trim().min(1),
   kind: z.enum(["view", "click"]),
+  variantId: z.string().optional(),
   createdAt: z.iso.datetime(),
 });
 

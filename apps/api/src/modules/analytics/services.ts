@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "@repo/db";
 import { event, impression, site } from "@repo/db/schema";
 import type { AnalyticsSummary } from "@repo/contracts/analytics";
@@ -53,7 +53,48 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, value]) => ({ date, views: value.views, clicks: value.clicks }));
 
-    return { views, clicks, ctr: views > 0 ? clicks / views : 0, days, perDay };
+    // Per-variant breakdown for A/B tests (FR-ANL-04).
+    const variantRows = await db
+      .select({
+        refId: impression.refId,
+        variant: impression.variant,
+        kind: impression.kind,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(impression)
+      .where(
+        and(
+          eq(impression.siteId, siteId),
+          gte(impression.createdAt, since),
+          isNotNull(impression.variant),
+        ),
+      )
+      .groupBy(impression.refId, impression.variant, impression.kind);
+
+    const variantMap = new Map<
+      string,
+      { notificationId: string; variantId: string; views: number; clicks: number }
+    >();
+    for (const row of variantRows) {
+      const variantId = row.variant;
+      if (!variantId) continue;
+      const key = `${row.refId}\u0000${variantId}`;
+      const bucket = variantMap.get(key) ?? {
+        notificationId: row.refId,
+        variantId,
+        views: 0,
+        clicks: 0,
+      };
+      if (row.kind === "click") bucket.clicks += row.count;
+      else bucket.views += row.count;
+      variantMap.set(key, bucket);
+    }
+    const variants = [...variantMap.values()].map((bucket) => ({
+      ...bucket,
+      ctr: bucket.views > 0 ? bucket.clicks / bucket.views : 0,
+    }));
+
+    return { views, clicks, ctr: views > 0 ? clicks / views : 0, days, perDay, variants };
   }
 
   async function eventsFeed(

@@ -10,6 +10,8 @@ export const widgetNotificationSchema = z.object({
   timeAgo: z.string().optional(),
   mediaUrl: z.string().optional(),
   countdownEndsAt: z.string().optional(),
+  // Which A/B variant produced this notification, if any (FR-ANL-04).
+  variantId: z.string().optional(),
   style: z.object({
     position: notificationPositionSchema,
     accent: z.string(),
@@ -51,6 +53,8 @@ export const widgetPayloadQuerySchema = z.object({
   url: z.string().trim().min(1),
   // Visitor language (e.g. "pt-BR"), used to pick a translated template.
   lang: z.string().trim().max(35).optional(),
+  // Stable per-browser id, used to bucket A/B variants deterministically.
+  vid: z.string().trim().max(128).optional(),
 });
 
 // ---------- telemetry (POST /widget/v1/track, beacon) ----------
@@ -60,6 +64,8 @@ export const trackEventSchema = z.object({
   kind: z.enum(["view", "click"]),
   // Stable per-browser id used only to count distinct live visitors (F33).
   visitorId: z.string().trim().min(1).max(128).optional(),
+  // A/B variant that produced the shown notification, for per-variant analytics.
+  variantId: z.string().trim().max(40).optional(),
 });
 
 // ---------- pixel auto-capture (POST /widget/v1/capture) ----------

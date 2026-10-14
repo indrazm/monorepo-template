@@ -426,6 +426,8 @@ export const impression = pgTable(
       .notNull()
       .references(() => site.id, { onDelete: "cascade" }),
     kind: text("kind").notNull(),
+    // A/B variant id, when the notification is running a variant test (FR-ANL-04).
+    variant: text("variant"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("impression_site_created_idx").on(t.siteId, t.createdAt)],

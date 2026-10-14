@@ -255,6 +255,52 @@ describe("widget payload service", () => {
     expect(byType.spin_to_win?.message).toBe("WIN10");
   });
 
+  it("buckets A/B variants deterministically per visitor (FR-ANL-04)", async () => {
+    const created = await seedSite();
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "AB",
+      type: "recent_sales",
+      isActive: true,
+      config: config({
+        variants: [
+          { id: "A", weight: 50, message: { template: "Variant A {{product}}", fallbacks: {} } },
+          { id: "B", weight: 50, message: { template: "Variant B {{product}}", fallbacks: {} } },
+        ],
+      }),
+    });
+    await db.insert(event).values({
+      siteId: created.id,
+      type: "purchase",
+      source: "manual",
+      verified: true,
+      displayName: "mike",
+      payload: { product: "Nike" },
+      occurredAt: new Date(),
+    });
+
+    const first = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+      visitorKey: "visitor-123",
+    });
+    const second = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+      visitorKey: "visitor-123",
+    });
+    expect(first.kind).toBe("ok");
+    if (first.kind !== "ok" || second.kind !== "ok") return;
+    const a = first.payload.notifications[0];
+    const b = second.payload.notifications[0];
+    expect(a?.variantId).toBeDefined();
+    expect(a?.variantId).toBe(b?.variantId); // deterministic per visitor
+    expect(["A", "B"]).toContain(a?.variantId);
+    expect(a?.message).toMatch(/^Variant [AB] Nike$/);
+  });
+
   it("filters by country when geo is known, fails open when unknown (FR-NGS-07)", async () => {
     const created = await seedSite();
     await notifications.create(ORG, {

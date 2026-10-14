@@ -13,7 +13,11 @@ import type {
 type NotificationRow = typeof notification.$inferSelect;
 
 function toNotification(row: NotificationRow): Notification {
-  const extra = (row.extra ?? {}) as { countdown?: unknown; fomo?: unknown };
+  const extra = (row.extra ?? {}) as {
+    countdown?: unknown;
+    fomo?: unknown;
+    variants?: unknown;
+  };
   return {
     id: row.id,
     siteId: row.siteId,
@@ -30,6 +34,7 @@ function toNotification(row: NotificationRow): Notification {
       timing: row.timing,
       ...(extra.countdown ? { countdown: extra.countdown } : {}),
       ...(extra.fomo ? { fomo: extra.fomo } : {}),
+      ...(extra.variants ? { variants: extra.variants } : {}),
     } as NotificationConfig,
   };
 }
@@ -39,6 +44,7 @@ function toExtra(config: NotificationConfig): Record<string, unknown> | null {
   const extra: Record<string, unknown> = {};
   if (config.countdown) extra.countdown = config.countdown;
   if (config.fomo) extra.fomo = config.fomo;
+  if (config.variants) extra.variants = config.variants;
   return Object.keys(extra).length > 0 ? extra : null;
 }
 

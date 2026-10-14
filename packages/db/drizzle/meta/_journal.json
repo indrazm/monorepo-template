@@ -57,6 +57,13 @@
       "when": 1791973956268,
       "tag": "0007_wide_scarlet_spider",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791975487917,
+      "tag": "0008_thankful_thunderbolt",
+      "breakpoints": true
     }
   ]
 }

@@ -38,12 +38,12 @@ async function boot(): Promise<void> {
     siteKey,
     notifications: payload.notifications,
     settings: payload.settings,
-    onView: (refId) => {
-      track(apiBase, { site: siteKey, refId, kind: "view" });
+    onView: (refId, variantId) => {
+      track(apiBase, { site: siteKey, refId, kind: "view", variantId });
       forwardAnalytics(payload.settings, "view", refId);
     },
-    onClick: (refId) => {
-      track(apiBase, { site: siteKey, refId, kind: "click" });
+    onClick: (refId, variantId) => {
+      track(apiBase, { site: siteKey, refId, kind: "click", variantId });
       forwardAnalytics(payload.settings, "click", refId);
     },
   });

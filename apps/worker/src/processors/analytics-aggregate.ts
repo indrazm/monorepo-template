@@ -19,6 +19,7 @@ export function createAnalyticsProcessor(
           siteId: entry.siteId,
           refId: entry.refId,
           kind: entry.kind,
+          variant: entry.variantId ?? null,
           createdAt: new Date(entry.createdAt),
         });
       } catch {

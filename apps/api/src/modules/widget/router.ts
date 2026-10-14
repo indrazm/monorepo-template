@@ -20,7 +20,7 @@ export function createWidgetRouter(
         if (!result.success) return c.json(apiError("validation_error"), 400);
       }),
       async (c) => {
-        const { site, url, lang } = c.req.valid("query");
+        const { site, url, lang, vid } = c.req.valid("query");
         const origin = c.req.header("origin") ?? c.req.header("referer") ?? null;
         const requestIp =
           c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
@@ -40,6 +40,7 @@ export function createWidgetRouter(
           requestIp,
           country,
           locale: lang ?? null,
+          visitorKey: vid ?? null,
         });
         if (result.kind === "not_found") return c.json(apiError("site_not_found"), 404);
         if (result.kind === "forbidden") return c.json(apiError("forbidden"), 403);
