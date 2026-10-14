@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "@repo/db";
 import {
@@ -296,7 +297,13 @@ export function createWidgetService(
         const text = typeof review.text === "string" ? review.text.slice(0, 160) : "";
         const author = latest.displayName ?? "A customer";
         const message = text ? `${stars} "${text}" — ${author}` : `${stars} — ${author}`;
-        return { ...base, message, timeAgo: timeAgoLabel(latest.occurredAt) };
+        const mediaUrl = resolveMedia(latest.payload);
+        return {
+          ...base,
+          message,
+          timeAgo: timeAgoLabel(latest.occurredAt),
+          ...(mediaUrl ? { mediaUrl } : {}),
+        };
       }
       default: {
         // recent_sales / review / others: latest matching event.
@@ -308,10 +315,12 @@ export function createWidgetService(
           product: productOf(latest),
           occurredAt: latest.occurredAt,
         });
+        const mediaUrl = resolveMedia(latest.payload);
         return {
           ...base,
           message,
           timeAgo: timeAgoLabel(latest.occurredAt),
+          ...(mediaUrl ? { mediaUrl } : {}),
         };
       }
     }
@@ -371,6 +380,39 @@ export function createWidgetService(
 
 function eventTypesOf(dataSource: NotificationDataSource): EventType[] {
   return dataSource.eventTypes.length > 0 ? dataSource.eventTypes : ["purchase"];
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+// Media fallback priority (FR-NED-03): image → map → gravatar → flag. The pixel
+// falls back to a type icon when this returns undefined.
+function resolveMedia(payload: unknown): string | undefined {
+  const data = (payload ?? {}) as Record<string, unknown>;
+  const image = firstString(data.image, data.imageUrl, data.avatar, data.photo, data.picture);
+  if (image) return image;
+
+  const lat = Number(data.lat ?? data.latitude);
+  const lng = Number(data.lng ?? data.lon ?? data.longitude);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=12&size=120x120&markers=${lat},${lng},red-pushpin`;
+  }
+
+  const email = firstString(data.email);
+  if (email) {
+    const hash = createHash("md5").update(email.toLowerCase()).digest("hex");
+    return `https://www.gravatar.com/avatar/${hash}?d=identicon&s=80`;
+  }
+
+  const country = firstString(data.country, data.countryCode);
+  if (country && /^[a-z]{2}$/i.test(country)) {
+    return `https://flagcdn.com/w80/${country.toLowerCase()}.png`;
+  }
+  return undefined;
 }
 
 // Deterministic FNV-1a → [0,1). Same visitor always maps to the same variant.

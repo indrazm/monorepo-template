@@ -301,6 +301,74 @@ describe("widget payload service", () => {
     expect(a?.message).toMatch(/^Variant [AB] Nike$/);
   });
 
+  it("resolves event media via fallback priority (FR-NED-03)", async () => {
+    const created = await seedSite();
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "Recent",
+      type: "recent_sales",
+      isActive: true,
+      config: config(),
+    });
+
+    // Image wins when present.
+    await db.insert(event).values({
+      siteId: created.id,
+      type: "purchase",
+      source: "manual",
+      verified: true,
+      displayName: "mike",
+      payload: { product: "Nike", image: "https://cdn.example.com/p.png", email: "a@b.com" },
+      occurredAt: new Date(),
+    });
+    const withImage = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+    });
+    expect(withImage.kind === "ok" && withImage.payload.notifications[0]?.mediaUrl).toBe(
+      "https://cdn.example.com/p.png",
+    );
+
+    // Email → gravatar when there is no image.
+    await db.insert(event).values({
+      siteId: created.id,
+      type: "purchase",
+      source: "manual",
+      verified: true,
+      displayName: "ana",
+      payload: { product: "Bag", email: "Ana@Example.com" },
+      occurredAt: new Date(Date.now() + 1000),
+    });
+    const withEmail = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+    });
+    expect(withEmail.kind === "ok" && withEmail.payload.notifications[0]?.mediaUrl).toContain(
+      "gravatar.com/avatar/",
+    );
+
+    // Country → flag when there is no image/email.
+    await db.insert(event).values({
+      siteId: created.id,
+      type: "purchase",
+      source: "manual",
+      verified: true,
+      displayName: "leo",
+      payload: { product: "Mug", country: "BR" },
+      occurredAt: new Date(Date.now() + 2000),
+    });
+    const withCountry = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+    });
+    expect(withCountry.kind === "ok" && withCountry.payload.notifications[0]?.mediaUrl).toBe(
+      "https://flagcdn.com/w80/br.png",
+    );
+  });
+
   it("filters by country when geo is known, fails open when unknown (FR-NGS-07)", async () => {
     const created = await seedSite();
     await notifications.create(ORG, {

@@ -48,14 +48,14 @@ Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker,
 
 - ✅ **MVP (EPIK A–J, F1–F57)** lengkap.
 - ✅ **Fase 2:** F58 Google OAuth + reset password · F59 Stripe billing (checkout + webhook) · F60 konektor Stripe/Shopify/WooCommerce · F61 Zapier/Make · F63 Goals · F64 data filtering integrasi · F65 custom CSS + domain settings + passthrough analytics · F16 Team (undang anggota) · F37 tipe Review.
-- ✅ **Fase 2 (lanjutan):** **FR-ANL-04 A/B testing varian** — variants per-notifikasi, bucketing deterministik per visitor (`vid`), kolom `impression.variant`, breakdown views/klik/CTR di Analytics + editor varian.
+- ✅ **Fase 2 (lanjutan):** **FR-ANL-04 A/B testing varian** — variants per-notifikasi, bucketing deterministik per visitor (`vid`), kolom `impression.variant`, breakdown views/klik/CTR di Analytics + editor varian · **FR-NED-03 media fallback** (image→map→gravatar→flag, ikon tipe sebagai default).
 - ✅ **Fase 3:** F66 Combo/Low-stock/Countdown · F67 block IP + profanity filter · **F68 katalog integrasi** (33 provider: BigCommerce, Wix, SquareSpace, Ecwid, PrestaShop, Magento, Paddle, Lemon Squeezy, Gumroad, SendOwl, Recharge, HubSpot, Typeform, Jotform, Formspree, Calendly, Kajabi, Teachable, Thinkific, Memberful, Circle, Kit, Mailchimp, ActiveCampaign, WordPress, Webflow, …) + **FR-NGS-07 country display** (geo dari header CDN) + **FR-NED-12 terjemahan template**.
 - ✅ **Fase 4 (inti):** **F69 conversion widgets** — tipe `popup`, `bar`, `spin_to_win` (render di `t.js`, posisi `center`/`top-bar`/`bottom-bar`, editor + preview) + gating tipe per paket (FR-BIL-03).
 - ✅ **Durabilitas worker + Redis (F43/F46/F47 + cache F32/F33):** API enqueue webhook ke BullMQ (worker menulis `event` terverifikasi, idempoten); impression di-buffer Redis (RPUSH) oleh API lalu di-flush worker terjadwal ke Postgres; live-visitors dihitung via Redis ZSET; counter/combo di-cache Redis + recompute oleh worker. Fallback sinkron dipertahankan untuk test/unit.
-- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; **90 test** (Vitest + integrasi pglite + e2e HTTP widget/billing + processor worker) lulus; `t.js` ≈4.9 KB gzip; build web+widget + build image Docker prod lolos.
+- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; **91 test** (Vitest + integrasi pglite + e2e HTTP widget/billing + processor worker) lulus; `t.js` ≈4.9 KB gzip; build web+widget + build image Docker prod lolos.
 - **Dibatalkan (keputusan produk):** import review Facebook/YouTube/Google Places (F62) — hanya integrasi inti Tacto yang disisakan.
 - **Ditunda (opsional, butuh dep/geo eksternal atau perlu data):**
-  - **F70** optimisasi performa/biaya + penyempurnaan onboarding berbasis data aktivasi · **FR-NED-03** media/ikon fallback berprioritas (image→icon→map→gravatar→flag) · perluasan katalog integrasi lebih lanjut.
+  - **F70** optimisasi performa/biaya + penyempurnaan onboarding berbasis data aktivasi · perluasan katalog integrasi lebih lanjut.
 - **Credential yang perlu diisi di `.env`:** `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` (diisi), `GOOGLE_CLIENT_ID`/`SECRET` (diisi), `SMTP_*` (opsional — tanpa itu link email di-log), `HUBSPOT_*`/`SHOPIFY_*` (placeholder opsional untuk konektor OAuth mendatang; integrasi webhook memakai secret per-integrasi di dashboard).
 
 ---
