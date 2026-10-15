@@ -118,7 +118,15 @@
     @apply border-border outline-ring/50;
   }
 
+  /* Accessible base scale. Tailwind's font/icon/spacing utilities are rem-based,
+     so raising the root size grows the whole dashboard proportionally — nothing
+     reads as too small. Tune this single value to taste. */
+  html {
+    font-size: 112.5%;
+  }
+
   body {
     @apply bg-background text-foreground;
+    line-height: 1.55;
   }
 }

@@ -175,7 +175,7 @@ export function IntegrationsPage() {
                         target="_blank"
                         rel="noreferrer"
                       >
-                        {meta.label} setup docs <ExternalLinkIcon className="size-3" />
+                        {meta.label} setup docs <ExternalLinkIcon className="size-3.5" />
                       </a>
                     ) : null}
                   </div>

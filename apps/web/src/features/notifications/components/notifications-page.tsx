@@ -75,7 +75,7 @@ function defaultPositionFor(type: NotificationType): Position {
 }
 
 const selectClass =
-  "border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
+  "border-input bg-background focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
 
 // The editor follows the PRD §5.1 flow as a stepper (FR-NED-01..10).
 const EDITOR_STEPS = ["Type", "Track", "Display", "Message", "Style", "Launch"] as const;
@@ -954,7 +954,7 @@ function NotificationEditorDialog({
                 <Input
                   id="n-accent"
                   type="color"
-                  className="h-9 w-full p-1"
+                  className="h-10 w-full p-1"
                   value={config.style.accent}
                   onChange={(e) =>
                     patchConfig({ style: { ...config.style, accent: e.target.value } })

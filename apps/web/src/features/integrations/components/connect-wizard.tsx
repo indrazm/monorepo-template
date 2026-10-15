@@ -99,7 +99,7 @@ export function ConnectWizard({
                 target="_blank"
                 rel="noreferrer"
               >
-                {meta.label} webhook docs <ExternalLinkIcon className="size-3" />
+                {meta.label} webhook docs <ExternalLinkIcon className="size-4" />
               </a>
             ) : (
               `Set up ${meta.label} as an event source.`
@@ -202,16 +202,16 @@ function modeLabel(mode: ReturnType<typeof integrationGuide>["mode"]): string {
 function stepIcon(action: IntegrationStep["action"]) {
   switch (action) {
     case "copy_url":
-      return <LinkIcon className="size-3.5" />;
+      return <LinkIcon className="size-4" />;
     case "copy_secret":
     case "credentials":
-      return <KeyRoundIcon className="size-3.5" />;
+      return <KeyRoundIcon className="size-4" />;
     case "verify":
-      return <ShieldCheckIcon className="size-3.5" />;
+      return <ShieldCheckIcon className="size-4" />;
     case "mapping":
-      return <ListChecksIcon className="size-3.5" />;
+      return <ListChecksIcon className="size-4" />;
     default:
-      return <CircleDashedIcon className="size-3.5" />;
+      return <CircleDashedIcon className="size-4" />;
   }
 }
 

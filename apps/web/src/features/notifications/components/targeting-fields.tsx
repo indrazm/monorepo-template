@@ -5,7 +5,7 @@ import { Label } from "@repo/ui/components/label";
 import { PlusIcon, XIcon } from "lucide-react";
 
 const selectClass =
-  "border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
+  "border-input bg-background focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
 
 // ---------------------------------------------------------------------------
 // Display targeting (FR-NED-07). Every rule here is executed by the payload

@@ -74,7 +74,7 @@ export function SitesPage() {
                 <CardContent className="flex items-center justify-between gap-3">
                   {site.pixelVerifiedAt ? (
                     <Badge className="gap-1">
-                      <CheckCircle2Icon className="size-3" /> Pixel verified
+                      <CheckCircle2Icon className="size-3.5" /> Pixel verified
                     </Badge>
                   ) : (
                     <Badge variant="secondary">Pixel not detected</Badge>

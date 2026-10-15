@@ -11,7 +11,7 @@ import { AppShell } from "../../app-shell/app-shell";
 import { cancelInvitation, inviteMember, loadTeam, removeMember } from "../services";
 
 const selectClass =
-  "border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
+  "border-input bg-background focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
 
 const teamQueryOptions = queryOptions({ queryKey: ["team"], queryFn: loadTeam });
 

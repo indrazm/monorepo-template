@@ -101,7 +101,7 @@ export function OverviewPage() {
                     {step.done ? (
                       <CheckIcon className="size-4" />
                     ) : (
-                      <CircleIcon className="size-3" />
+                      <CircleIcon className="size-3.5" />
                     )}
                   </span>
                   <span className="min-w-0">

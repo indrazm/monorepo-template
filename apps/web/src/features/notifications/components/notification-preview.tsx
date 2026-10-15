@@ -48,7 +48,7 @@ export function NotificationPreview({
           style={{ borderColor: "#e7e9f0" }}
         >
           <span
-            className="grid size-11 flex-none place-items-center overflow-hidden rounded-xl text-xl"
+            className="grid size-12 flex-none place-items-center overflow-hidden rounded-xl text-xl"
             style={{ background: `${config.style.accent}14` }}
           >
             {config.media?.imageUrl ? (
@@ -58,13 +58,13 @@ export function NotificationPreview({
             )}
           </span>
           <div className="min-w-0 text-[#17181c]">
-            <p className="text-[13.5px] font-bold leading-snug">
+            <p className="text-sm font-bold leading-snug">
               {samplePreview(config, type) || "Your notification message"}
             </p>
             <p className="mt-0.5 text-xs text-[#5b606e]">12 minutes ago</p>
             {verified ? (
-              <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-[#0e9f6e]">
-                <CheckIcon className="size-3" /> Verified by Tacto
+              <span className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-[#0e9f6e]">
+                <CheckIcon className="size-3.5" /> Verified by Tacto
               </span>
             ) : null}
           </div>

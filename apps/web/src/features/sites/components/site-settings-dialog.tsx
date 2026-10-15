@@ -34,7 +34,7 @@ const PLACEHOLDER_JS = [
 ].join("\n");
 
 const selectClass =
-  "border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
+  "border-input bg-background focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
 
 // Per-domain global settings (FR-NGS-01/02/03/05, FR-NGS-04 custom CSS).
 export function SiteSettingsDialog({ siteId }: { siteId: string }) {

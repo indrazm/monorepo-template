@@ -21,7 +21,7 @@ import type { EventsFeedFilters } from "../services";
 import { summaryQueryOptions, useInfiniteEventsFeed } from "../hooks/use-analytics";
 
 const selectClass =
-  "border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
+  "border-input bg-background focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
 
 export function AnalyticsPage() {
   const sites = useQuery(sitesQueryOptions);
