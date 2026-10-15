@@ -53,7 +53,7 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker, + prod compose/Caddy): **sign-up / Google OAuth / reset password → Org default + Team → Site + snippet + verifikasi pixel → editor notifikasi (recent_sales, counter, combo, live_visitors, review, custom, low_stock/FOMO, countdown, popup/bar/spin-to-win) + preview + terjemahan → `t.js` (shadow DOM, ≈5.2 KB gzip) render + conversion widgets + consent GDPR + custom CSS + passthrough GA/GTM/FB/Mixpanel → ingest (pixel capture / API key / custom webhook + 44 konektor terverifikasi + data filter) → **worker BullMQ: webhook→event durabel, flush buffer impression Redis→Postgres, recompute counter ke cache Redis** → analytics (impression/klik/CTR + events feed) + Goals (konversi) → Billing freemium + Stripe checkout/webhook + badge → anti-abuse (block IP, profanity, country, rate-limit) → Overview + onboarding.**
 
 - ✅ **MVP (EPIK A–J, F1–F57)** lengkap.
-- ✅ **Fase 2:** F58 Google OAuth + reset password · F59 Stripe billing (checkout + webhook) · F60 konektor Stripe/Shopify/WooCommerce · F61 Zapier/Make · F63 Goals · F64 data filtering integrasi · F65 custom CSS + domain settings + passthrough analytics · F16 Team (undang anggota) · F37 tipe Review.
+- ✅ **Fase 2:** F58 Google OAuth + reset password · F59 Stripe billing (checkout + webhook) · F60 konektor Stripe/Shopify/WooCommerce · F61 Zapier/Make · F63 Goals · F64 data filtering integrasi · F65 custom CSS + domain settings + passthrough analytics · F16 Team (undang anggota) · ~~F37 tipe Review~~ (dihapus 15 Okt 2026).
 - ✅ **Fase 2 (lanjutan):** **FR-ANL-04 A/B testing varian** — variants per-notifikasi, bucketing deterministik per visitor (`vid`), kolom `impression.variant`, breakdown views/klik/CTR di Analytics + editor varian · **FR-NED-03 media fallback** (image→map→gravatar→flag, ikon tipe sebagai default).
 - ✅ **Fase 3:** F66 Combo/Low-stock/Countdown · F67 block IP + profanity filter · **F68 katalog integrasi** (44 provider: BigCommerce, Wix, SquareSpace, Ecwid, PrestaShop, Magento, Paddle, Lemon Squeezy, Gumroad, SendOwl, Recharge, HubSpot, Typeform, Jotform, Formspree, Calendly, Kajabi, Teachable, Thinkific, Memberful, Circle, Kit, Mailchimp, ActiveCampaign, WordPress, Webflow, …) + **FR-NGS-07 country display** (geo dari header CDN) + **FR-NED-12 terjemahan template**.
 - ✅ **Fase 4 (inti):** **F69 conversion widgets** — tipe `popup`, `bar`, `spin_to_win` (render di `t.js`, posisi `center`/`top-bar`/`bottom-bar`, editor + preview) + gating tipe per paket (FR-BIL-03).
@@ -61,8 +61,9 @@ Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker,
 - ✅ **F70 (inti):** rate-limit ingestion via Redis (multi-instance, fallback in-memory) · endpoint **metrik aktivasi** (`/api/v1/analytics/activation`) + onboarding "First notification shown" & time-to-activation berbasis data nyata.
 - ✅ **Penutupan gap:** **consent GDPR ditegakkan di pixel** (FR-NGS-05) · **cache payload widget di Redis** (NFR-PERF-03) · **Stripe Billing Portal** (FR-BIL-05) · **Events Feed paginasi cursor** (FR-ING-11) · **`storeEmail`** (FR-NGS-05) · **verifikasi Stripe test-mode** (checkout + portal via API Stripe nyata).
 - ✅ **Perbaikan sesuai fungsi sebenarnya:** **Stripe pakai Price ID dari Dashboard** (`STRIPE_PRICE_*`, bukan nominal inline → harga konsisten) · **manualOrder drag-and-drop dihormati** oleh payload (FR-NGS-02) · **pixel kirim `visit` event** sekali per sesi sehingga kuota traffic bulanan terukur nyata (FR-BIL-01) · **integrasi diberi mode direct vs via Zapier/Make + langkah koneksi** (lihat [integrations.md](../integrations.md)).
-- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; **107 test** (Vitest + integrasi pglite + e2e HTTP widget/billing + processor worker) lulus; `t.js` ≈5.3 KB gzip; build web+widget + build image Docker prod lolos.
-- **Dibatalkan (keputusan produk):** import review Facebook/YouTube/Google Places (F62) — hanya integrasi inti Tacto yang disisakan.
+- ✅ **Penyelarasan audit lanjutan (15 Okt 2026):** **RBAC per-role** (owner/admin vs member, `requireRole` di billing/sites/integrations) · **spin-to-win hadiah nyata** (pool hadiah berbobot, pengungkapan kupon/URL, pelacakan klaim) · **Analytics per-notifikasi + klaim** (FR-ANL-02) · **Events Feed filter** type/source/verified/cari (FR-ING-11) · **A/B signifikansi** (Wilson 95% CI + two-proportion z-test, FR-ANL-04) · **Goals event-based + tren harian + atribusi terbantu** (FR-ANL-03) · **Editor wizard 6 langkah + preview device + media eksplisit** (FR-NED-01..10) · **Privasi `trackIpGeo` + ekspor/hapus event** (NFR-PRIV-02/03) · **`/metrics` Prometheus + queue depth** (NFR-OBS-01/02) · **map ber-kunci opsional** (FR-NED-03).
+- **Kualitas:** `pnpm check` + `pnpm typecheck` hijau; **133 test** (Vitest + integrasi pglite + e2e HTTP widget/billing + processor worker) lulus; `t.js` ≈6.9 KB gzip; build web+widget lolos.
+- **Dihapus (keputusan produk, 15 Okt 2026):** **fitur Review dihapus sepenuhnya** — tipe notifikasi `review`, tipe event `review`, dan integrasi Google Places (`google_reviews`) dikeluarkan dari produk; enum DB, kode (API/widget/web), UI, env (`GOOGLE_MAPS_API_KEY`), dan test dibersihkan. Migrasi `0012` menghapus nilai enum + mem-purge baris lama.
 - **Ditunda (opsional):**
   - Perluasan katalog integrasi lebih lanjut & optimisasi biaya/perf lanjutan — opsional.
 - **Credential yang perlu diisi di `.env`:** `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` (diisi), `GOOGLE_CLIENT_ID`/`SECRET` (diisi), `SMTP_*` (opsional — tanpa itu link email di-log), `HUBSPOT_*`/`SHOPIFY_*` (placeholder opsional untuk konektor OAuth mendatang; integrasi webhook memakai secret per-integrasi di dashboard).
@@ -238,51 +239,22 @@ Billing menampilkan dari API; hapus string harga hardcoded.
 
 **FR:** FR-BIL-01/02.
 
-## G. Review: apa maksudnya & belum ada jalur sumbernya (FR-NOT-05)
+## G. Review — DIHAPUS dari produk (keputusan 15 Okt 2026)
 
-**Apa itu tipe "Review" di sini (klarifikasi).** **Bukan** review-management
-(bukan tempat membalas/moderasi ulasan, bukan form testimonial/Wall of Love —
-itu produk terpisah & sudah di luar scope). Ini adalah **notification type
-"Review & rating"**: menampilkan **ulasan/rating pelanggan sebagai social proof**
-di situs — persis seperti WiserNotify "Reviews & ratings" (import Google/Facebook)
-dan ProveSource "Reviews" (Google/Facebook/Trustpilot/Yotpo/Capterra). Yang tampil:
-bintang + kutipan singkat + nama/kota + sumber.
+**Status: fitur dihapus sepenuhnya.** Semula audit ini mengusulkan Review (ulasan/rating
+sebagai social proof) dengan sumber Google Maps/Google Business via Places API.
+Keputusan produk berubah: **Review tidak dipertahankan sama sekali**.
 
-**Kondisi saat ini.** Tipe `review` hanya menampilkan `event` type `review` yang
-datang via webhook/ingest. Import Google/Facebook **dibatalkan** → praktis tipe
-ini kosong tanpa integrasi review.
+**Yang dihapus.** Tipe notifikasi `review`, tipe event `review`, kolom mapping
+`rating`/`text`, integrasi `google_reviews` (katalog, connector, Place Details API,
+refresh terjadwal + endpoint `/:id/refresh`), env `GOOGLE_MAPS_API_KEY`, render review di
+`t.js`, opsi tipe di editor, dan test terkait. Enum DB `notification_type`/`event_type`
+diperbarui lewat migrasi `0012` (nilai `review` dihapus, baris lama di-purge).
 
-**KEPUTUSAN (15 Okt 2026): sumber Review = Google Maps / Google Business.**
-Ini **membalik** keputusan lama F62 ("import Google/Facebook dibatalkan") — khusus
-untuk **Google** kini diaktifkan kembali; Facebook/YouTube tetap di luar scope.
+**Implikasi.** Review tidak lagi menjadi bagian parity. Sumber ulasan pihak ketiga
+(Judge.me/Loox/Yotpo/Trustpilot) maupun entry manual tetap **di luar scope**.
 
-**Batasan nyata yang WAJIB dihormati implementasi.**
-
-- **Jangan scraping Google Maps** (melanggar ToS Google). Jalur sah:
-  1. **Google Places API — Place Details** (`reviews` field): hanya **≤5 review
-     per lokasi**, tak bisa difilter, **tidak real-time** → wajib **cache** di DB
-     - refresh terjadwal (mis. harian via worker). Butuh `GOOGLE_MAPS_API_KEY`.
-  2. **Google Business Profile API**: bisa menampilkan **semua** review bisnis
-     sendiri, tapi perlu **OAuth pemilik bisnis** (verifikasi kepemilikan lokasi)
-     → lebih berat; jadikan Fase lanjutan.
-- Model produk: tipe `review` Google = **"tampilkan beberapa review terbaik
-  (≤5) yang di-cache"**, bukan feed real-time seperti sales pop.
-
-**Tugas implementasi.**
-
-- `apps/api/src/modules/reviews/` (service+router): hubungkan lokasi via
-  `placeId`; worker tarik Place Details → simpan `event`/`review` ter-cache
-  (`source="google"`, `rating,text,author,city`), refresh terjadwal.
-- Env: `GOOGLE_MAPS_API_KEY` (+ OAuth Business Profile bila Fase lanjutan).
-- UI: input/cari `placeId`, pratinjau review yang ditarik, pilih mana yang tampil.
-- `t.js`: tipe `review` render bintang + kutipan + nama/kota + sumber "Google".
-- (Opsional menyusul) **entry manual + moderasi** sebagai pelengkap bila lokasi
-  belum punya cukup review.
-
-**Tugas implementasi.** Modul `reviews` (service+router+UI) atau konektor review;
-event `review` payload `{ rating, text, source }`; gating paket.
-
-**FR:** FR-NOT-05.
+**FR:** FR-NOT-05 (dibatalkan).
 
 ## H. Spin-to-win tanpa reward (F69)
 
@@ -336,19 +308,29 @@ yang performa terbaik).
 
 **FR:** FR-ING-11.
 
-## L. Editor belum sesuai alur & opsi (FR-NED-01..10)
+## L. Editor belum sesuai alur & opsi (FR-NED-01..10) — ✅ DIKERJAKAN
 
-**Kondisi saat ini.** Editor satu form (bukan wizard **Type→Track→Display→
+**Kondisi sebelumnya.** Editor satu form (bukan wizard **Type→Track→Display→
 Message→Style→Launch**), preview hanya satu bentuk (tak ada device desktop/mobile
 nyata), media/ikon (FR-NED-03) **tidak bisa dipilih** (server menurunkan otomatis),
 fallback variabel (FR-NED-02) & "sembunyikan time-ago" (FR-NED-04) minim di UI.
 
-**Perilaku yang benar.** Wizard sesuai PRD §5.1; preview device; pemilihan media
-(image→icon→map→gravatar→flag) dan fallback eksplisit.
+**Yang dikerjakan (15 Okt 2026).**
 
-**Tugas implementasi.** `apps/web/src/features/notifications/components/*`
-(wizard + preview device + field media/fallback); preview device sudah ada
-komponen dasar — lengkapi.
+- **Wizard 6 langkah** sesuai PRD §5.1 di `notifications-page.tsx`: stepper
+  **Type → Track → Display → Message → Style → Launch** (Type: nama/jenis + extras
+  countdown/FOMO/spin; Track: URL match + targeting; Display: posisi, timing,
+  media; Message: template + terjemahan + varian A/B; Style: aksen, bentuk,
+  ukuran, animasi; Launch: aktif + ringkasan). Navigasi Back/Next, state tidak hilang.
+- **Preview device** (desktop/mobile) di `notification-preview.tsx`; menampilkan
+  gambar media yang di-pin bila ada.
+- **Media eksplisit (FR-NED-03):** `notificationConfig.media = { imageUrl?,
+fallback }` — `fallback` ∈ `auto | image | map | gravatar | flag | none`.
+  Server `resolveMedia` menghormati pilihan: `imageUrl` yang di-pin menang; selain
+  itu hanya sumber yang dipilih yang dipakai (`none` = ikon tipe). Disimpan di
+  kolom `extra`; divalidasi kontrak; di-render oleh `t.js` via `mediaUrl`.
+- Ditambahkan juga kontrol timing (delay/visible/gap), bentuk/ukuran/animasi yang
+  sebelumnya tak terekspos.
 
 **FR:** FR-NED-01..10.
 
@@ -423,12 +405,13 @@ field) dan pakai di `mapToEvent`.
 
 ### Ringkasan prioritas perbaikan
 
-| Prioritas | Temuan                                             | Dampak                          |
-| --------- | -------------------------------------------------- | ------------------------------- |
-| P0        | A Integrasi connect, E Kuota traffic               | Nilai inti & monetisasi         |
-| P1        | B Targeting, C Manual order, D Custom JS, G Review | Fitur yang dijanjikan tapi mati |
-| P2        | F Harga, I Goals, J Analytics per-notif, M RBAC    | Kepercayaan & keamanan          |
-| P3        | K,L,N,O,P,Q,R                                      | Penyempurnaan                   |
+| Prioritas | Temuan                                          | Dampak                          |
+| --------- | ----------------------------------------------- | ------------------------------- |
+| P0        | A Integrasi connect, E Kuota traffic            | Nilai inti & monetisasi         |
+| P1        | B Targeting, C Manual order, D Custom JS        | Fitur yang dijanjikan tapi mati |
+| P2        | F Harga, I Goals, J Analytics per-notif, M RBAC | Kepercayaan & keamanan          |
+| P3        | K,L,N,O,P,Q,R — ✅ semua dikerjakan             | Penyempurnaan                   |
+| —         | ~~G Review~~ — DIHAPUS dari produk              | —                               |
 
 > Setiap item di atas harus menambah: bentuk data baru → skema Zod di
 > `@repo/contracts`; error baru → `apiErrorSchema`; query difilter
@@ -617,22 +600,22 @@ varian), T11 (spin reward). Semua terbukti ada di pesaing.
 
 ## Rencana parity (task)
 
-| #   | Task                                                                                                                                     | Prioritas | FR              |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------------- |
-| T1  | Integrasi connect sesungguhnya (OAuth/webhook/poll, verify, health, mapping, disconnect) = audit **A**                                   | P0        | FR-INT-01..04   |
-| T12 | Tegakkan kuota traffic: hentikan notifikasi saat over-quota + CTA/email = audit **E**                                                    | P0        | FR-BIL-01/03    |
-| T2  | Sumber Review & rating: entry manual+moderasi dan/atau integrasi Judge.me/Loox/Yotpo/Trustpilot (bukan FB/Google) = audit **G**          | P0        | FR-NOT-05       |
-| T3  | Targeting lengkap: UTM/referrer/visitor + country/city/language + device                                                                 | P1        | FR-NED-07       |
-| T4  | Sequencing & custom rules: once/session, skip repeats, frequency cap, max conversions, anonymous, hide location/product, include-exclude | P1        | FR-NGS-02/03/07 |
-| T5  | Custom JS sandbox = audit **D**                                                                                                          | P1        | FR-NGS-04       |
-| T6  | Inline embeds + Social counter (tipe notifikasi baru)                                                                                    | P1        | FR-NOT-08/09    |
-| T7  | Analytics dalam: per-notifikasi, hover/engaged, compare period, top pages/devices/countries, export                                      | P2        | FR-ANL-02       |
-| T8  | Revenue attribution / goal revenue / ROAS                                                                                                | P2        | FR-ANL-03       |
-| T9  | A/B: ≤5 varian, signifikansi, auto-promote                                                                                               | P2        | FR-ANL-04       |
-| T10 | Lokalisasi UI (daftar bahasa, RTL), FE0 inheritance font                                                                                 | P2        | FR-NED-12       |
-| T13 | Harga satu sumber (Stripe Price) = audit **F**                                                                                           | P2        | FR-BIL-01/02    |
-| T11 | Conversion widgets: hadiah spin nyata, WhatsApp button, announcement presets                                                             | P3        | PRD Fase 4      |
-| —   | Auto-detect platform e-commerce; AI preview URL; weekly digest email                                                                     | P3        | backlog         |
+| #      | Task                                                                                                                                     | Prioritas | FR              |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------------- |
+| T1     | Integrasi connect sesungguhnya (OAuth/webhook/poll, verify, health, mapping, disconnect) = audit **A**                                   | P0        | FR-INT-01..04   |
+| T12    | Tegakkan kuota traffic: hentikan notifikasi saat over-quota + CTA/email = audit **E**                                                    | P0        | FR-BIL-01/03    |
+| ~~T2~~ | ~~Sumber Review & rating~~ — **DIHAPUS** (Review keluar dari produk)                                                                     | —         | —               |
+| T3     | Targeting lengkap: UTM/referrer/visitor + country/city/language + device                                                                 | P1        | FR-NED-07       |
+| T4     | Sequencing & custom rules: once/session, skip repeats, frequency cap, max conversions, anonymous, hide location/product, include-exclude | P1        | FR-NGS-02/03/07 |
+| T5     | Custom JS sandbox = audit **D**                                                                                                          | P1        | FR-NGS-04       |
+| T6     | Inline embeds + Social counter (tipe notifikasi baru)                                                                                    | P1        | FR-NOT-08/09    |
+| T7     | Analytics dalam: per-notifikasi, hover/engaged, compare period, top pages/devices/countries, export                                      | P2        | FR-ANL-02       |
+| T8     | Revenue attribution / goal revenue / ROAS                                                                                                | P2        | FR-ANL-03       |
+| T9     | A/B: ≤5 varian, signifikansi, auto-promote                                                                                               | P2        | FR-ANL-04       |
+| T10    | Lokalisasi UI (daftar bahasa, RTL), FE0 inheritance font                                                                                 | P2        | FR-NED-12       |
+| T13    | Harga satu sumber (Stripe Price) = audit **F**                                                                                           | P2        | FR-BIL-01/02    |
+| T11    | Conversion widgets: hadiah spin nyata, WhatsApp button, announcement presets                                                             | P3        | PRD Fase 4      |
+| —      | Auto-detect platform e-commerce; AI preview URL; weekly digest email                                                                     | P3        | backlog         |
 
 ## Keputusan adopsi
 
@@ -640,7 +623,7 @@ varian), T11 (spin reward). Semua terbukti ada di pesaing.
 - **Diadopsi bertahap:** T8, T9, T10, T13, T11.
 - **Ditunda/opsional:** WhatsApp button, AI widget builder/preview, auto-detect platform, weekly digest, RTL (bergantung permintaan pasar Asia/global).
 - **Tetap ditolak (beda posisi produk):** mesin testimonial/Wall of Love, Slack/Teams, notifikasi fiktif. Import review **Facebook/YouTube** tetap di luar scope.
-- **Diputuskan 15 Okt 2026:** sumber **Review = Google Maps / Google Business** (membalik F62 khusus Google) via **Google Places API (≤5 review, cache)** dan/atau **Business Profile API (OAuth pemilik)** — lihat audit **G**. Entry manual jadi pelengkap opsional.
+- **Diputuskan 15 Okt 2026 (revisi):** **fitur Review DIHAPUS dari produk.** Tipe notifikasi `review`, tipe event `review`, dan integrasi Google Places (`google_reviews`) dikeluarkan — lihat audit **G**. Sumber ulasan pihak ketiga dan entry manual juga di luar scope.
 
 ---
 
