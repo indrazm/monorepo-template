@@ -86,6 +86,7 @@ describe("sites service (tenant isolation)", () => {
           filterProfanity: false,
         },
         customCss: ".x{}",
+        customJs: null,
         analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
       }),
     ).toBeNull();
@@ -100,6 +101,7 @@ describe("sites service (tenant isolation)", () => {
         filterProfanity: false,
       },
       customCss: ".tacto-card{border:0}",
+      customJs: null,
       analyticsPassthrough: { gtag: true, dataLayer: false, fbq: false, mixpanel: false },
     });
     const saved = await service.getSettings(ORG_A, siteA.id);
@@ -119,6 +121,7 @@ describe("sites service (tenant isolation)", () => {
         filterProfanity: false,
       },
       customCss: null,
+      customJs: null,
       analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
     });
     const second = await service.getSettings(ORG_A, siteA.id);

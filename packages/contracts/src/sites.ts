@@ -56,6 +56,9 @@ export const domainSettingSchema = z.object({
   loop: domainLoopSettingsSchema,
   privacy: domainPrivacySchema,
   customCss: z.string().max(20_000).nullable().default(null),
+  // Custom JS (FR-NGS-04). Executed by the pixel inside a sandboxed iframe
+  // with no access to the host page, and only served on plans that allow it.
+  customJs: z.string().max(20_000).nullable().default(null),
   analyticsPassthrough: analyticsPassthroughSchema,
 });
 export const updateDomainSettingSchema = domainSettingSchema.partial();

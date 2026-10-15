@@ -31,7 +31,7 @@ import {
   type WidgetPayloadResponse,
 } from "@repo/contracts/widget";
 import { renderMessage } from "./template";
-import { matchUrl } from "./url-match";
+import { matchesTargeting, targetingCacheKey, type VisitContext } from "./targeting";
 
 const DEFAULT_TTL = 30;
 const LIVE_WINDOW_MS = 5 * 60_000;
@@ -200,6 +200,10 @@ export function createWidgetService(
     country?: string | null;
     locale?: string | null;
     visitorKey?: string | null;
+    // Visit context for targeting (FR-NED-07), reported by the pixel.
+    params?: Record<string, string>;
+    referrer?: string | null;
+    visitor?: "new" | "returning" | null;
   }): Promise<PayloadResult> {
     const [siteRow] = await db.select().from(site).where(eq(site.siteKey, input.siteKey)).limit(1);
     if (!siteRow) return { kind: "not_found" };
@@ -239,6 +243,14 @@ export function createWidgetService(
       : 0;
     const overQuota = quota > 0 && used > quota;
 
+    const visitContext: VisitContext = {
+      url: input.url,
+      country: input.country,
+      params: input.params,
+      referrer: input.referrer,
+      visitor: input.visitor,
+    };
+
     // Redis payload cache (NFR-PERF-02/03). Keyed by site/url/lang/country and
     // the quota state so targeting and gating stay correct. Blocked requests
     // and A/B variants bypass it.
@@ -246,7 +258,7 @@ export function createWidgetService(
       deps.store && !blocked
         ? `tacto:widget:${input.siteKey}:${hashKey(input.url)}:${input.locale ?? ""}:${(
             input.country ?? ""
-          ).toUpperCase()}:${overQuota ? "oq" : "ok"}`
+          ).toUpperCase()}:${hashKey(targetingCacheKey(visitContext))}:${overQuota ? "oq" : "ok"}`
         : null;
     if (deps.store && cacheKey) {
       const cached = await deps.store.cacheGet(cacheKey);
@@ -274,9 +286,8 @@ export function createWidgetService(
     if (!blocked && !overQuota) {
       for (const row of orderedRows) {
         const config = toConfig(row);
-        if (!matchUrl(config.display.url, input.url)) continue;
-        // Country targeting (FR-NGS-07): a known country must be in the list.
-        if (!countryAllowed(config.display.countries, input.country)) continue;
+        // URL, country, UTM, referrer and visitor segment (FR-NED-07).
+        if (!matchesTargeting(config.display, visitContext)) continue;
         const rendered = await renderNotification(
           siteRow.id,
           row,
@@ -301,6 +312,10 @@ export function createWidgetService(
         showBadge: !planLimits[plan].removeBadge,
         requireConsent: privacy.requireConsent,
         customCss: (settingRow?.customCss as string | null) ?? null,
+        // Custom JS is a paid capability; never served on plans without it.
+        customJs: planLimits[plan].customCode
+          ? ((settingRow?.customJs as string | null) ?? null)
+          : null,
         overQuota,
         upgradeUrl: overQuota ? (deps.upgradeUrl ?? null) : null,
         analyticsPassthrough: analyticsPassthroughSchema.parse(
@@ -607,19 +622,6 @@ function timeAgoLabel(occurredAt: Date): string {
   if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
   const days = Math.floor(hours / 24);
   return `${days} day${days === 1 ? "" : "s"} ago`;
-}
-
-// Country targeting (FR-NGS-07). No country list → show everywhere; country
-// list set but geo unknown → allow (fail-open, we cannot filter reliably).
-function countryAllowed(
-  countries: string[] | undefined,
-  country: string | null | undefined,
-): boolean {
-  if (!countries || countries.length === 0) return true;
-  if (!country) return true;
-  const code = country.trim().toUpperCase();
-  if (code === "XX" || code === "T1") return true; // Cloudflare unknown / Tor
-  return countries.some((entry) => entry.toUpperCase() === code);
 }
 
 function originAllowed(origin: string | null, domain: string): boolean {

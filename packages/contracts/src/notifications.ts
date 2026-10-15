@@ -79,11 +79,34 @@ export const urlMatchSchema = z
     path: ["value"],
   });
 
+// Referrer targeting (FR-NED-07). A bare string is accepted for rows written
+// before this rule had a mode, and is read as "contains".
+export const referrerRuleSchema = z.preprocess(
+  (value) => (typeof value === "string" ? { mode: "contains", value } : value),
+  z
+    .object({
+      mode: z.enum(["any", "contains", "regex"]).default("any"),
+      value: z.string().trim().max(300).optional(),
+    })
+    .refine((rule) => rule.mode === "any" || (rule.value?.length ?? 0) > 0, {
+      message: "A referrer value is required for contains/regex.",
+      path: ["value"],
+    }),
+);
+
+// Visitor segmentation (FR-NED-07): first-ever visit vs a returning visitor,
+// as reported by the pixel from its own stored visitor id.
+export const visitorSegments = ["all", "new", "returning"] as const;
+export const visitorSegmentSchema = z.enum(visitorSegments);
+
 export const notificationDisplaySchema = z.object({
   url: urlMatchSchema,
   countries: z.array(z.string().length(2)).optional(),
+  // Every listed param must be present on the landing URL with that value.
   utm: z.record(z.string(), z.string()).optional(),
-  referrer: z.string().trim().optional(),
+  referrer: referrerRuleSchema.optional(),
+  // Absent = "all"; kept optional so existing notifications stay valid.
+  visitor: visitorSegmentSchema.optional(),
 });
 
 export const notificationDataSourceSchema = z.object({
@@ -150,6 +173,8 @@ export type EventType = z.output<typeof eventTypeSchema>;
 export type NotificationMessage = z.output<typeof notificationMessageSchema>;
 export type NotificationStyle = z.output<typeof notificationStyleSchema>;
 export type NotificationDisplay = z.output<typeof notificationDisplaySchema>;
+export type ReferrerRule = z.output<typeof referrerRuleSchema>;
+export type VisitorSegment = z.output<typeof visitorSegmentSchema>;
 export type NotificationDataSource = z.output<typeof notificationDataSourceSchema>;
 export type NotificationTiming = z.output<typeof notificationTimingSchema>;
 export type NotificationConfig = z.output<typeof notificationConfigSchema>;

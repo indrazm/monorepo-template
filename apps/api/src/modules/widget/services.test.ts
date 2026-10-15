@@ -204,6 +204,7 @@ describe("widget payload service", () => {
         filterProfanity: false,
       },
       customCss: null,
+      customJs: null,
       analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
     });
 
@@ -464,6 +465,7 @@ describe("widget payload service", () => {
         filterProfanity: false,
       },
       customCss: null,
+      customJs: null,
       analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
     });
 
@@ -544,6 +546,7 @@ describe("widget payload service", () => {
         filterProfanity: true,
       },
       customCss: null,
+      customJs: null,
       analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
     });
 

@@ -10,6 +10,8 @@ export type PlanLimits = {
   maxSites: number;
   removeBadge: boolean;
   notificationTypes: "all" | readonly z.output<typeof notificationTypeSchema>[];
+  // Custom JS in the widget sandbox (FR-NGS-04) — an advanced, paid feature.
+  customCode: boolean;
 };
 
 // Indicative limits (PRD section 7.2). Prices are validated by market testing.
@@ -19,10 +21,29 @@ export const planLimits: Record<Plan, PlanLimits> = {
     maxSites: 1,
     removeBadge: false,
     notificationTypes: ["recent_sales", "counter", "live_visitors", "custom"],
+    customCode: false,
   },
-  starter: { trafficQuota: 10_000, maxSites: 1, removeBadge: true, notificationTypes: "all" },
-  growth: { trafficQuota: 100_000, maxSites: 3, removeBadge: true, notificationTypes: "all" },
-  agency: { trafficQuota: 200_000, maxSites: 10, removeBadge: true, notificationTypes: "all" },
+  starter: {
+    trafficQuota: 10_000,
+    maxSites: 1,
+    removeBadge: true,
+    notificationTypes: "all",
+    customCode: false,
+  },
+  growth: {
+    trafficQuota: 100_000,
+    maxSites: 3,
+    removeBadge: true,
+    notificationTypes: "all",
+    customCode: true,
+  },
+  agency: {
+    trafficQuota: 200_000,
+    maxSites: 10,
+    removeBadge: true,
+    notificationTypes: "all",
+    customCode: true,
+  },
 };
 
 // Fallback monthly price in USD cents (PRD section 7.2), used only when Stripe

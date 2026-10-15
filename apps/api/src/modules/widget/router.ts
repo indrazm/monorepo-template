@@ -7,6 +7,7 @@ import {
   visitEventSchema,
   widgetPayloadQuerySchema,
 } from "@repo/contracts/widget";
+import { parseParams } from "./targeting";
 import type { createWidgetService } from "./services";
 
 export function createWidgetRouter(
@@ -21,7 +22,7 @@ export function createWidgetRouter(
         if (!result.success) return c.json(apiError("validation_error"), 400);
       }),
       async (c) => {
-        const { site, url, lang, vid } = c.req.valid("query");
+        const { site, url, lang, vid, q, ref, vs } = c.req.valid("query");
         const origin = c.req.header("origin") ?? c.req.header("referer") ?? null;
         const requestIp =
           c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
@@ -42,6 +43,9 @@ export function createWidgetRouter(
           country,
           locale: lang ?? null,
           visitorKey: vid ?? null,
+          params: parseParams(q),
+          referrer: ref ?? null,
+          visitor: vs ?? null,
         });
         if (result.kind === "not_found") return c.json(apiError("site_not_found"), 404);
         if (result.kind === "forbidden") return c.json(apiError("forbidden"), 403);

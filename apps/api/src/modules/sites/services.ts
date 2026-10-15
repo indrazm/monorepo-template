@@ -21,6 +21,7 @@ function defaultDomainSetting(): DomainSetting {
     loop: domainLoopSettingsSchema.parse({}),
     privacy: domainPrivacySchema.parse({}),
     customCss: null,
+    customJs: null,
     analyticsPassthrough: analyticsPassthroughSchema.parse({}),
   };
 }
@@ -65,6 +66,7 @@ export function createSitesService(db: Pick<Database, "select" | "insert" | "upd
       loop: row.loop as DomainLoopSettings,
       privacy: domainPrivacySchema.parse(row.privacy ?? {}),
       customCss: (row.customCss as string | null) ?? null,
+      customJs: (row.customJs as string | null) ?? null,
       analyticsPassthrough: analyticsPassthroughSchema.parse(row.analyticsPassthrough ?? {}),
     };
   }
@@ -79,6 +81,7 @@ export function createSitesService(db: Pick<Database, "select" | "insert" | "upd
       loop: input.loop,
       privacy: input.privacy,
       customCss: input.customCss,
+      customJs: input.customJs,
       analyticsPassthrough: input.analyticsPassthrough,
     };
     await db

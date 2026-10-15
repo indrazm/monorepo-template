@@ -14,9 +14,19 @@ import { Label } from "@repo/ui/components/label";
 import { toast } from "@repo/ui/components/sonner";
 import { Switch } from "@repo/ui/components/switch";
 import { Textarea } from "@repo/ui/components/textarea";
+import { planLimits, type Plan } from "@repo/contracts/billing";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { apiClient } from "../../../api";
 import { getSiteSettings, updateSiteSettings } from "../services";
+import { ManualOrderEditor } from "./manual-order-editor";
+
+// Example shown in the Custom JS field — the sandbox API in three lines.
+const PLACEHOLDER_JS = [
+  "window.tacto.on(function (event, notification) {",
+  '  if (event === "click") window.tacto.track("cta_click");',
+  "});",
+].join("\n");
 
 const selectClass =
   "border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
@@ -71,6 +81,17 @@ function SettingsForm({
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<DomainSetting>(initial);
+  // Custom JS is gated server-side too; this only keeps the UI honest.
+  const plan = useQuery({
+    queryKey: ["billing"],
+    queryFn: async () => {
+      const response = await apiClient.api.v1.billing.$get();
+      if (!response.ok) throw new Error("Failed to load billing.");
+      return (await response.json()).overview;
+    },
+    staleTime: 60_000,
+  });
+  const customCodeAllowed = planLimits[(plan.data?.plan ?? "free") as Plan].customCode;
 
   const save = useMutation({
     mutationFn: (value: DomainSetting) => updateSiteSettings(siteId, value),
@@ -120,6 +141,19 @@ function SettingsForm({
             <option value="manual">Manual</option>
           </select>
         </div>
+        {draft.loop.order === "manual" ? (
+          <div className="grid gap-2 sm:col-span-2">
+            <Label>Display order</Label>
+            <ManualOrderEditor
+              siteId={siteId}
+              value={draft.loop.manualOrder}
+              onChange={(manualOrder) => setLoop({ manualOrder })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Notifications are shown top to bottom in this order.
+            </p>
+          </div>
+        ) : null}
         <div className="grid gap-2">
           <Label htmlFor="closeForDays">Snooze on close (days)</Label>
           <Input
@@ -190,6 +224,26 @@ function SettingsForm({
           value={draft.customCss ?? ""}
           onChange={(e) => setDraft({ ...draft, customCss: e.target.value || null })}
         />
+      </div>
+
+      {/* Custom JS (FR-NGS-04). Runs in a sandboxed iframe, Growth+ only. */}
+      <div className="grid gap-2">
+        <Label htmlFor="customJs">
+          Custom JS (advanced){customCodeAllowed ? null : " — Growth plan and above"}
+        </Label>
+        <Textarea
+          id="customJs"
+          rows={4}
+          disabled={!customCodeAllowed}
+          placeholder={PLACEHOLDER_JS}
+          value={draft.customJs ?? ""}
+          onChange={(e) => setDraft({ ...draft, customJs: e.target.value || null })}
+        />
+        <p className="text-xs text-muted-foreground">
+          {customCodeAllowed
+            ? "Runs inside a sandboxed, cross-origin iframe — it cannot read your page, cookies or visitors' data. Available API: window.tacto.on(fn), window.tacto.track(name), window.tacto.log(message)."
+            : "Upgrade to Growth to run custom code in the widget sandbox."}
+        </p>
       </div>
 
       <div className="grid gap-2">

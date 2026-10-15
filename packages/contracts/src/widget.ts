@@ -34,6 +34,9 @@ export const widgetSettingsSchema = z.object({
   showBadge: z.boolean(),
   requireConsent: z.boolean().default(false),
   customCss: z.string().nullable().default(null),
+  // Custom JS to run in the widget's sandboxed iframe (FR-NGS-04). Null unless
+  // the plan allows custom code.
+  customJs: z.string().nullable().default(null),
   // Monthly visitor quota exceeded (FR-BIL-01): no social proof is served and
   // the pixel shows only an upgrade hint to the site owner.
   overQuota: z.boolean().default(false),
@@ -59,6 +62,11 @@ export const widgetPayloadQuerySchema = z.object({
   lang: z.string().trim().max(35).optional(),
   // Stable per-browser id, used to bucket A/B variants deterministically.
   vid: z.string().trim().max(128).optional(),
+  // Visit context for targeting (FR-NED-07): the landing URL's query string,
+  // the referrer, and whether this browser has been seen before.
+  q: z.string().trim().max(500).optional(),
+  ref: z.string().trim().max(500).optional(),
+  vs: z.enum(["new", "returning"]).optional(),
 });
 
 // ---------- telemetry (POST /widget/v1/track, beacon) ----------

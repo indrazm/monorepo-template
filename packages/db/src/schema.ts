@@ -329,6 +329,9 @@ export const domainSetting = pgTable("domain_setting", {
     .references(() => site.id, { onDelete: "cascade" }),
   loop: jsonb("loop").notNull(),
   customCss: text("custom_css"),
+  // Custom JS runs inside a sandboxed, cross-origin iframe in the pixel
+  // (FR-NGS-04) — it can never touch the host page's DOM or cookies.
+  customJs: text("custom_js"),
   privacy: jsonb("privacy").notNull(),
   analyticsPassthrough: jsonb("analytics_passthrough"),
 });

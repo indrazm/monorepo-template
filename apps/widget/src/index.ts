@@ -3,6 +3,7 @@ import { grantConsent, hasConsent, revokeConsent } from "./consent";
 import { loadPayload } from "./loader";
 import { forwardAnalytics } from "./passthrough";
 import { startScheduler } from "./scheduler";
+import { createSandbox, forwardCustom } from "./sandbox";
 import { createShadowHost } from "./shadow";
 import { track } from "./track";
 import { visit } from "./visit";
@@ -51,6 +52,16 @@ function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string)
     custom.textContent = payload.settings.customCss;
     host.root.appendChild(custom);
   }
+  // Custom JS, isolated in a cross-origin sandbox iframe (FR-NGS-04). It only
+  // observes widget events and may send one custom analytics event back.
+  const sandbox = payload.settings.customJs
+    ? createSandbox(payload.settings.customJs, {
+        onTrack: (name) => forwardCustom(payload.settings.analyticsPassthrough, name),
+      })
+    : null;
+  const typeOf = (refId: string) =>
+    payload.notifications.find((item) => item.id === refId)?.type ?? "";
+
   startScheduler({
     host,
     siteKey,
@@ -59,10 +70,12 @@ function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string)
     onView: (refId, variantId) => {
       track(apiBase, { site: siteKey, refId, kind: "view", variantId });
       forwardAnalytics(payload.settings, "view", refId);
+      sandbox?.emit({ event: "view", id: refId, type: typeOf(refId) });
     },
     onClick: (refId, variantId) => {
       track(apiBase, { site: siteKey, refId, kind: "click", variantId });
       forwardAnalytics(payload.settings, "click", refId);
+      sandbox?.emit({ event: "click", id: refId, type: typeOf(refId) });
     },
   });
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "domain_setting" ADD COLUMN "custom_js" text;

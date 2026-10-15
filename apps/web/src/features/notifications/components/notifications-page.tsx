@@ -32,6 +32,7 @@ import {
   useUpdateNotificationMutation,
 } from "../hooks/use-notifications";
 import { NotificationPreview } from "./notification-preview";
+import { TargetingFields } from "./targeting-fields";
 
 const TYPES: { value: NotificationType; label: string }[] = [
   { value: "recent_sales", label: "Recent sales" },
@@ -641,6 +642,11 @@ function NotificationEditorDialog({
               </div>
             ) : null}
           </div>
+
+          <TargetingFields
+            display={config.display}
+            onChange={(display) => patchConfig({ display })}
+          />
 
           <DialogFooter>
             <Button type="submit" disabled={pending}>
