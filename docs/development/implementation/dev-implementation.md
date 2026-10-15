@@ -42,7 +42,13 @@ Format: **Hasil · File · Kerjakan · Cek · FR**.
 | EPIK J  | Onboarding & Acceptance MVP | F54–F57 |
 | EPIK K+ | Fase 2–4 (ringkas)          | F58+    |
 
-### Status progres — MVP + Fase 2 + Fase 3 + Fase 4 (inti) SELESAI ✅
+### Status progres — MVP + Fase 2 + Fase 3 + Fase 4 (inti) SELESAI (teknis) ✅
+
+> ⚠️ **Baca juga [Audit — Kesesuaian Fitur dengan Proses Bisnis](#audit--kesesuaian-fitur-dengan-proses-bisnis)**
+> di bawah. Status ✅ berarti fitur berjalan secara teknis, **bukan** jaminan
+> sudah sesuai proses bisnis/kebermanfaatan. Beberapa fitur masih "CRUD-only"
+> (mis. integrasi "connect" hanya generate key, kuota traffic belum ditegakkan,
+> targeting UTM/referrer belum dieksekusi).
 
 Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker, + prod compose/Caddy): **sign-up / Google OAuth / reset password → Org default + Team → Site + snippet + verifikasi pixel → editor notifikasi (recent_sales, counter, combo, live_visitors, review, custom, low_stock/FOMO, countdown, popup/bar/spin-to-win) + preview + terjemahan → `t.js` (shadow DOM, ≈5.2 KB gzip) render + conversion widgets + consent GDPR + custom CSS + passthrough GA/GTM/FB/Mixpanel → ingest (pixel capture / API key / custom webhook + 44 konektor terverifikasi + data filter) → **worker BullMQ: webhook→event durabel, flush buffer impression Redis→Postgres, recompute counter ke cache Redis** → analytics (impression/klik/CTR + events feed) + Goals (konversi) → Billing freemium + Stripe checkout/webhook + badge → anti-abuse (block IP, profanity, country, rate-limit) → Overview + onboarding.**
 
@@ -60,6 +66,334 @@ Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker,
 - **Ditunda (opsional):**
   - Perluasan katalog integrasi lebih lanjut & optimisasi biaya/perf lanjutan — opsional.
 - **Credential yang perlu diisi di `.env`:** `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` (diisi), `GOOGLE_CLIENT_ID`/`SECRET` (diisi), `SMTP_*` (opsional — tanpa itu link email di-log), `HUBSPOT_*`/`SHOPIFY_*` (placeholder opsional untuk konektor OAuth mendatang; integrasi webhook memakai secret per-integrasi di dashboard).
+
+---
+
+# Audit — Kesesuaian Fitur dengan Proses Bisnis
+
+> Status **✅** pada EPIK di atas berarti fitur _ada dan berjalan secara teknis_
+> (endpoint/skema/UI tersedia & teruji). Artinya **bukan** otomatis bahwa fitur
+> sudah sesuai **proses bisnis dan kebermanfaatan sebenarnya**. Bagian ini adalah
+> hasil audit ulang: temuan fitur yang masih **"CRUD-only"**, tidak dieksekusi
+> penuh di runtime, atau tidak memberi nilai sesuai tujuan produk (WiserNotify/
+> ProveSource parity). Setiap temuan memuat: kondisi saat ini · mengapa belum
+> sesuai · perilaku yang benar · tugas implementasi (file) · FR.
+>
+> Prioritas disarankan: **A, E, B, C, D, G** (berdampak langsung ke nilai produk).
+
+## A. Integrasi "Connect" baru sebatas generate key (FR-INT-01..04)
+
+**Kondisi saat ini.** `apps/api/src/modules/integrations/` menyimpan `provider` +
+`config.secret`. "Connect" = auto-generate secret (mode automation) atau paste
+secret (mode direct). Tidak ada verifikasi koneksi, tidak ada OAuth, tidak ada
+lifecycle.
+
+**Mengapa belum sesuai.** Proses bisnis integrasi SaaS nyata adalah: authorize
+(OAuth/API key) → subscribe webhook/poll → **verifikasi koneksi** → **petakan
+field** → monitor status & error → disconnect (revoke). Yang ada sekarang hanya
+satu langkah (secret), sehingga untuk banyak provider pengguna tak tahu harus
+melakukan apa, dan tak bisa tahu koneksi berhasil/gagal.
+
+**Perilaku yang benar.**
+
+1. **Model koneksi eksplisit** per provider: `auth: "oauth" | "api_key" | "webhook" | "poll"`.
+2. **Wizard Connect** menampilkan langkah spesifik platform (buka halaman webhook,
+   salin secret, pilih event) — bukan sekadar form secret.
+3. **Test connection**: tombol "Verify" mengirim ping/uji signature dan menampilkan
+   status `connected | error | pending` + pesan.
+4. **Connection health**: `integration` menyimpan `status`, `lastCheckedAt`,
+   `lastError`, `webhookId` platform, dan **log event terakhir** yang diterima.
+5. **Disconnect** memanggil API provider (hapus webhook) bila memungkinkan.
+6. **Pemetaan field per integrasi** (FR-INT-03 lanjutan): konfigurasi JSON path →
+   `name/city/product/dedupeKey/occurredAt` (bukan hanya heuristic `mapLoose`).
+7. **Peringatan provider yang tidak mendukung header native** → arahkan ke
+   Zapier/Make (sudah ada `integrationGuide`, lanjutkan jadi wizard multi-langkah).
+
+**Tugas implementasi.**
+
+- `apps/api/src/modules/integrations/connectors.ts`: tambah `auth`, `testConnection?`,
+  `fields` (mapping), `subscribe/unsubscribe?` pada tipe `Connector`.
+- `apps/api/src/modules/integrations/services.ts`: status/health + `verify(provider)`.
+- `apps/api/src/modules/integrations/router.ts`: `POST /:id/verify`, `PATCH /:id/config`.
+- `packages/db/src/schema.ts`: kolom `status`, `lastCheckedAt`, `lastError`, `externalRef` di `integration`.
+- `apps/web/src/features/integrations/`: wizard multi-langkah + indikator status.
+- Env OAuth (sudah ada placeholder `HUBSPOT_*`, `SHOPIFY_*`) — isi bila implement OAuth.
+
+**FR:** FR-INT-01/02/03/04.
+
+## B. Targeting UTM / Referrer / Visitor tidak dieksekusi & tanpa UI (FR-NED-07)
+
+**Kondisi saat ini.** `notificationDisplaySchema` punya `countries`, `utm`,
+`referrer`. Di runtime hanya **URL match** (`matchUrl`) dan **country**
+(`countryAllowed`) yang ditegakkan; `utm` & `referrer` **diabaikan**. Editor
+(`notifications-page.tsx`) hanya mengekspos **URL match** — tidak ada UI
+UTM/referrer/country/visitor.
+
+**Mengapa belum sesuai.** "Targeting" adalah janji inti (PRD/FR-NED-07). Opsi
+yang ada di skema tapi tidak dijalankan = fitur hantu: pengguna mengira bisa
+menargetkan, padahal tidak.
+
+**Perilaku yang benar.**
+
+1. Payload mengirim konteks kunjungan: `utm` (query param), `referrer`, `country`,
+   dan `visitor` (baru/returning) ke server.
+2. Server mengeksekusi aturan: `display.utm` (kecocokan param), `display.referrer`
+   (contains/regex), `display.countries` (sudah ada), dan segmentasi visitor.
+3. Editor mengekspos field-field itu (UI), divalidasi kontrak.
+
+**Tugas implementasi.**
+
+- `apps/widget/src/loader.ts`: kirim `utm`/`referrer` (dari `location`/`document.referrer`).
+- `apps/api/src/modules/widget/services.ts`: fungsi `matchesTargeting(url, utm, referrer, country, visitor)`; buang UTM/referrer yang tak terpakai.
+- `apps/web/src/features/notifications/components/notifications-page.tsx`: UI UTM/referrer/country.
+- `packages/contracts/src/notifications.ts`: sudah ada — pastikan validasi.
+
+**FR:** FR-NED-07.
+
+## C. Urutan manual: tidak ada UI drag-and-drop (FR-NGS-02)
+
+**Kondisi saat ini.** `loop.manualOrder` kini **dihormati** oleh payload, tetapi
+**tidak ada cara mengisinya** dari dashboard (pengaturan hanya punya select
+"random|manual"; `manualOrder` selalu `[]`).
+
+**Mengapa belum sesuai.** "Urutan manual" tak bisa dipakai → fitur mati.
+
+**Tugas implementasi.**
+
+- `apps/web/src/features/sites/components/site-settings-dialog.tsx`: daftar
+  notifikasi situs dengan **drag-and-drop** yang menulis `loop.manualOrder`,
+  atau editor urutan di halaman Notifications.
+- Endpoint sudah ada (`PUT /api/v1/sites/:id/settings`), cukup wire UI.
+
+**FR:** FR-NGS-02.
+
+## D. Custom JS belum ada (FR-NGS-04)
+
+**Kondisi saat ini.** Hanya `customCss` (kolom `domain_setting.custom_css`).
+Custom **JS** tidak ada.
+
+**Mengapa belum sesuai.** FR-NGS-04 menyebut "Custom CSS/JS".
+
+**Perilaku yang benar.** Jika ingin mendukung JS: kolom `custom_js` + injeksi
+**ter-sandbox** di shadow root (tanpa akses lintas-origin), dengan peringatan
+keamanan & validasi. Alternatif jujur: **batalkan JS resmi** dan dokumentasikan
+bahwa hanya CSS + passthrough analytics yang didukung.
+
+**Tugas implementasi.** `schema.ts` (`custom_js`), `sites.ts` kontrak, widget
+`shadow.ts`/`index.ts` (inject), site settings UI. Keputusan scope perlu konfirmasi.
+
+**FR:** FR-NGS-04.
+
+## E. Kuota traffic tidak ditegakkan (FR-BIL-01/03, F51)
+
+**Kondisi saat ini.** `getOverview` **menghitung** pemakaian (kini dari `visit`
+event). Namun payload widget **tidak** memblokir/menurunkan apa pun saat
+`usage > trafficQuota`. F51 menyebut "batasi payload + ajakan upgrade" — belum ada.
+
+**Mengapa belum sesuai.** Model bisnis freemium berbasis **kuota traffic**: tanpa
+penegakan, tier gratis tak termonetisasi.
+
+**Perilaku yang benar.**
+
+1. Hitung visitor unik per bulan per ORG (Redis counter `visitors:{orgId}:{YYYY-MM}`
+   di-increment dari `/widget/v1/visit` dengan dedupe per `visitorId`/hari).
+2. Saat kuota terlampaui: hentikan rendering notifikasi (atau tampilkan hanya
+   badge + CTA upgrade), dan kirim flag `overQuota` di payload + notifikasi email.
+3. Tegakkan batas lain: `maxSites` (sudah), `notificationTypes` (sudah).
+
+**Tugas implementasi.**
+
+- `packages/queue/src/index.ts`: counter bulanan orang (`hitVisitor(orgId, visitorId)`).
+- `apps/api/src/modules/widget/services.ts`: `overQuota` → kosongkan notifikasi + set `settings.upgrade`.
+- `apps/api/src/modules/billing/services.ts`: `getOverview.usage` baca Redis.
+- `apps/web/src/features/billing/` + widget: CTA upgrade saat over-quota.
+
+**FR:** FR-BIL-01/03, F51.
+
+## F. Harga paket di UI tidak satu sumber (Billing)
+
+**Kondisi saat ini.** Checkout memakai `STRIPE_PRICE_*` (benar). Tetapi halaman
+Billing (`apps/web/src/features/billing/...`) masih **menulis harga hardcoded**
+("$12/mo …") — bisa beda dengan Price di Stripe.
+
+**Perilaku yang benar.** Ambil harga/label dari sumber tunggal: Stripe Price
+(`unit_amount`) via backend, atau konfigurasi harga yang sama dipakai checkout.
+
+**Tugas implementasi.** `GET /api/v1/billing/plans` (harga dari Stripe) → UI
+Billing menampilkan dari API; hapus string harga hardcoded.
+
+**FR:** FR-BIL-01/02.
+
+## G. Review: tak ada cara menambah review dari dashboard (FR-NOT-05)
+
+**Kondisi saat ini.** Tipe `review` hanya menampilkan `event` type `review` yang
+datang via webhook/ingest. Import Google/Facebook **dibatalkan**.
+
+**Mengapa belum sesuai.** Pengguna yang memilih "Review" tak punya jalur untuk
+mengisi review (kecuali kirim webhook manual). Fitur jadi kosong.
+
+**Perilaku yang benar (pilih salah satu, perlu konfirmasi).**
+
+1. **Entry manual + moderasi**: UI tambah review (nama, rating, teks, kota),
+   status approve/hide, lalu dipakai tipe `review`.
+2. **Via integrasi review** (mis. Judge.me/Trustpilot) lewat framework konektor.
+3. **Scoping jujur**: sembunyikan tipe Review dari tier tanpa sumber.
+
+**Tugas implementasi.** Modul notifikasi/`reviews` (service+router+UI) + event
+`review` (payload `rating`,`text`); atau sinkron integrasi.
+
+**FR:** FR-NOT-05.
+
+## H. Spin-to-win tanpa reward (F69)
+
+**Kondisi saat ini.** `spin_to_win` hanya animasi roda lalu menampilkan pesan;
+tidak ada hadiah/kupon yang benar-benar diberikan.
+
+**Mengapa belum sesuai.** Tujuan conversion widget adalah memberi insentif nyata
+(diskon/kupon), bukan sekadar visual.
+
+**Perilaku yang benar.** Konfigurasi hadiah (kode kupon/URL, probabilitas per
+segmen), klaim (tampilkan kode / kirim email), dan pencatatan klaim (analytics).
+Atau secara jujur dibatasi ke "teaser" dan didokumentasikan.
+
+**Tugas implementasi.** `packages/contracts/src/notifications.ts` (config
+`spin: { prizes }`), widget `render/notification.ts` (prizes), event klaim.
+
+**FR:** PRD Fase 4.
+
+## I. Goals: URL-only, tanpa tren/atribusi (FR-ANL-03)
+
+**Kondisi saat ini.** Goal hanya **rule URL**; menampilkan **total** konversi.
+Tidak ada deret waktu, tidak ada atribusi ke notifikasi tertentu, tidak ada goal
+berbasis event.
+
+**Perilaku yang benar.** Goal event-based (`purchase`/`signup`), tren per hari,
+dan **atribusi** (konversi setelah impression notifikasi X dalam jendela waktu).
+
+**Tugas implementasi.** `packages/contracts/src/goals.ts` (rule `{type:"event"}`),
+`apps/api/src/modules/goals/services.ts` (agregasi harian + atribusi), UI trend.
+
+**FR:** FR-ANL-03.
+
+## J. Analytics: tak ada breakdown per-notifikasi (FR-ANL-02)
+
+**Kondisi saat ini.** Ringkasan bersifat **site-level** (views/clicks/CTR). A/B
+punya breakdown varian, tetapi **tidak ada tabel per-notifikasi** (notifikasi mana
+yang performa terbaik).
+
+**Tugas implementasi.** `analytics/services.ts`: agregasi per `refId`
+(notificationId) → `variants`-style; UI tabel per-notifikasi.
+
+**FR:** FR-ANL-02.
+
+## K. Events Feed tanpa filter (FR-ING-11)
+
+**Kondisi saat ini.** Sudah **paginasi cursor**, tapi belum ada filter
+(type/source/verified) atau pencarian.
+
+**Tugas implementasi.** `eventsFeedQuerySchema` (+`type`,`source`,`verified`) →
+`analytics/services.ts` where + UI filter.
+
+**FR:** FR-ING-11.
+
+## L. Editor belum sesuai alur & opsi (FR-NED-01..10)
+
+**Kondisi saat ini.** Editor satu form (bukan wizard **Type→Track→Display→
+Message→Style→Launch**), preview hanya satu bentuk (tak ada device desktop/mobile
+nyata), media/ikon (FR-NED-03) **tidak bisa dipilih** (server menurunkan otomatis),
+fallback variabel (FR-NED-02) & "sembunyikan time-ago" (FR-NED-04) minim di UI.
+
+**Perilaku yang benar.** Wizard sesuai PRD §5.1; preview device; pemilihan media
+(image→icon→map→gravatar→flag) dan fallback eksplisit.
+
+**Tugas implementasi.** `apps/web/src/features/notifications/components/*`
+(wizard + preview device + field media/fallback); preview device sudah ada
+komponen dasar — lengkapi.
+
+**FR:** FR-NED-01..10.
+
+## M. RBAC belum per-role (FR-AUTH-05)
+
+**Kondisi saat ini.** Middleware hanya `requireOrg` (keanggotaan). Tidak ada
+pembatasan `owner`/`admin` vs `member` (mis. siapa boleh ubah billing/hapus site).
+
+**Perilaku yang benar.** Cek role dari `member.role` untuk operasi sensitif
+(billing, hapus site, undang member).
+
+**Tugas implementasi.** `apps/api/src/modules/auth/middleware.ts` (+`requireRole`),
+terapkan di router billing/sites/team.
+
+**FR:** FR-AUTH-05, NFR-SEC-03.
+
+## N. Privasi: `trackIpGeo` tak dipakai & tak ada hapus/ekspor data (NFR-PRIV-02/03)
+
+**Kondisi saat ini.** `storeEmail` sudah dipakai. `trackIpGeo` **inert**; tidak ada
+endpoint **hapus/ekspor data** (NFR-PRIV-03).
+
+**Tugas implementasi.** Hormati `trackIpGeo` (atau hapus opsi bila tak dimaksud),
+tambah `DELETE /api/v1/sites/:id/events` (atau per event) + ekspor (CSV/JSON).
+
+**FR:** NFR-PRIV-02/03.
+
+## O. Media "map" bergantung layanan eksternal (FR-NED-03)
+
+**Kondisi saat ini.** Fallback peta memakai static-map OpenStreetMap tanpa kunci —
+bisa lambat/berubah.
+
+**Perilaku yang benar.** Konfigurasi penyedia peta ber-kunci (opsional) atau
+matikan fallback peta.
+
+**Tugas implementasi.** `apps/api/src/modules/widget/services.ts` (`resolveMedia`) +
+env opsional.
+
+**FR:** FR-NED-03.
+
+## P. Observability belum memadai (NFR-OBS-01/02)
+
+**Kondisi saat ini.** Logging `console.*`; tak ada endpoint metrik (request rate,
+latency, error rate, jobs BullMQ waiting/failed).
+
+**Tugas implementasi.** Logger terstruktur + `GET /metrics` (Prometheus) untuk API
+dan worker (BullMQ).
+
+**FR:** NFR-OBS-01/02.
+
+## Q. A/B: tanpa statistik & hanya message (FR-ANL-04)
+
+**Kondisi saat ini.** Variant memilih message/style per visitor; hasil = views/klik/CTR.
+Tidak ada signifikansi statistik, tidak ada target konversi, tidak ada editor
+style per varian di UI.
+
+**Tugas implementasi.** Editor varian (message+style), indikator signifikansi,
+integrasi ke Goals untuk mengukur konversi per varian.
+
+**FR:** FR-ANL-04.
+
+## R. Pemetaan field integrasi masih heuristic (FR-INT-03)
+
+**Kondisi saat ini.** `mapLoose` menebak field via daftar path. Tidak ada mapping
+kustom per integrasi.
+
+**Tugas implementasi.** Sertakan `mapping` di `integration.config` (JSON path →
+field) dan pakai di `mapToEvent`.
+
+**FR:** FR-INT-03.
+
+---
+
+### Ringkasan prioritas perbaikan
+
+| Prioritas | Temuan                                             | Dampak                          |
+| --------- | -------------------------------------------------- | ------------------------------- |
+| P0        | A Integrasi connect, E Kuota traffic               | Nilai inti & monetisasi         |
+| P1        | B Targeting, C Manual order, D Custom JS, G Review | Fitur yang dijanjikan tapi mati |
+| P2        | F Harga, I Goals, J Analytics per-notif, M RBAC    | Kepercayaan & keamanan          |
+| P3        | K,L,N,O,P,Q,R                                      | Penyempurnaan                   |
+
+> Setiap item di atas harus menambah: bentuk data baru → skema Zod di
+> `@repo/contracts`; error baru → `apiErrorSchema`; query difilter
+> `organizationId`/`siteId`; migrasi `db:generate`→review→`db:deploy`; test; gate
+> `pnpm check && pnpm typecheck`.
 
 ---
 
