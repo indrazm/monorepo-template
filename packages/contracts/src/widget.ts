@@ -34,6 +34,10 @@ export const widgetSettingsSchema = z.object({
   showBadge: z.boolean(),
   requireConsent: z.boolean().default(false),
   customCss: z.string().nullable().default(null),
+  // Monthly visitor quota exceeded (FR-BIL-01): no social proof is served and
+  // the pixel shows only an upgrade hint to the site owner.
+  overQuota: z.boolean().default(false),
+  upgradeUrl: z.string().nullable().default(null),
   analyticsPassthrough: z.object({
     gtag: z.boolean().default(false),
     dataLayer: z.boolean().default(false),
@@ -79,6 +83,9 @@ export const captureEventSchema = z.object({
 // Counts traffic for the plan quota and analytics (SRS FR-BIL-01).
 export const visitEventSchema = z.object({
   site: z.string().trim().min(1),
+  // Stable per-browser id so the monthly quota counts unique visitors, not
+  // pageviews (FR-BIL-01).
+  visitorId: z.string().trim().min(1).max(128).optional(),
 });
 
 export type WidgetNotification = z.output<typeof widgetNotificationSchema>;

@@ -86,6 +86,38 @@ export function parseBillingEvent(raw: unknown): BillingUpdate | null {
   }
 }
 
+// Reads a Price from Stripe so the dashboard shows exactly what Checkout will
+// charge (single source of truth for pricing). Returns null when the Price is
+// missing or Stripe is unreachable — the caller then falls back and says so.
+export type StripePrice = { amount: number | null; currency: string; interval: string };
+
+export async function fetchStripePrice(
+  secretKey: string,
+  priceId: string,
+): Promise<StripePrice | null> {
+  try {
+    const response = await fetch(
+      `https://api.stripe.com/v1/prices/${encodeURIComponent(priceId)}`,
+      { headers: { Authorization: `Bearer ${secretKey}` } },
+    );
+    if (!response.ok) return null;
+    const price = (await response.json()) as {
+      unit_amount?: number | null;
+      currency?: string;
+      active?: boolean;
+      recurring?: { interval?: string } | null;
+    };
+    if (price.active === false) return null;
+    return {
+      amount: typeof price.unit_amount === "number" ? price.unit_amount : null,
+      currency: (price.currency ?? "usd").toUpperCase(),
+      interval: price.recurring?.interval ?? "month",
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Creates a Stripe Checkout Session via the REST API (no SDK dependency).
 // Returns the hosted checkout URL. Requires STRIPE_SECRET_KEY and a Price ID
 // (STRIPE_PRICE_*) so the amount matches the product configured in Stripe.

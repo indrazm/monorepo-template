@@ -1,3 +1,5 @@
+import { planLabels, type PlanOffer } from "@repo/contracts/billing";
+import { Alert, AlertDescription, AlertTitle } from "@repo/ui/components/alert";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import {
@@ -11,15 +13,11 @@ import { Progress } from "@repo/ui/components/progress";
 import { toast } from "@repo/ui/components/sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryOptions } from "@tanstack/react-query";
+import { TriangleAlertIcon } from "lucide-react";
 import { apiClient } from "../../../api";
 import { AppShell } from "../../app-shell/app-shell";
 
 type PaidPlan = "starter" | "growth" | "agency";
-const UPGRADE_PLANS: { plan: PaidPlan; label: string; price: string }[] = [
-  { plan: "starter", label: "Starter", price: "$12/mo · 10K visitors" },
-  { plan: "growth", label: "Growth", price: "$35/mo · 100K visitors, 3 sites" },
-  { plan: "agency", label: "Agency", price: "$79/mo · 200K visitors, 10 sites" },
-];
 
 async function startCheckout(plan: PaidPlan): Promise<string> {
   const response = await apiClient.api.v1.billing.checkout.$post({ json: { plan } });
@@ -45,17 +43,43 @@ const billingQueryOptions = queryOptions({
   },
 });
 
-const PLAN_LABEL: Record<string, string> = {
-  free: "Free",
-  starter: "Starter",
-  growth: "Growth",
-  agency: "Agency",
-};
+// Prices come from the Stripe Price that Checkout charges — never hardcoded
+// here, so the page and the invoice cannot disagree (audit finding F).
+const plansQueryOptions = queryOptions({
+  queryKey: ["billing", "plans"],
+  queryFn: async () => {
+    const response = await apiClient.api.v1.billing.plans.$get();
+    if (!response.ok) throw new Error("Failed to load plans.");
+    return (await response.json()).plans;
+  },
+  staleTime: 5 * 60_000,
+});
+
+function formatPrice(offer: PlanOffer): string {
+  if (offer.amount === null) return "custom pricing";
+  if (offer.amount === 0) return "Free";
+  const value = new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: offer.currency,
+    maximumFractionDigits: offer.amount % 100 === 0 ? 0 : 2,
+  }).format(offer.amount / 100);
+  return `${value}/${offer.interval}`;
+}
+
+function formatLimits(offer: PlanOffer): string {
+  const sites = offer.maxSites === 1 ? "1 site" : `${offer.maxSites} sites`;
+  return `${offer.trafficQuota.toLocaleString()} visitors · ${sites}`;
+}
 
 export function BillingPage() {
   const billing = useQuery(billingQueryOptions);
+  const plans = useQuery(plansQueryOptions);
   const overview = billing.data;
-  const usagePct = overview ? Math.min(100, (overview.usage / overview.trafficQuota) * 100) : 0;
+  const usagePct = overview
+    ? Math.min(100, (overview.usage / Math.max(1, overview.trafficQuota)) * 100)
+    : 0;
+  const overQuota = overview ? overview.usage > overview.trafficQuota : false;
+  const nearQuota = !overQuota && usagePct >= 80;
   const checkout = useMutation({
     mutationFn: startCheckout,
     onSuccess: (url) => {
@@ -71,6 +95,10 @@ export function BillingPage() {
     onError: (error) => toast.error(error.message),
   });
 
+  const upgrades = (plans.data ?? []).filter(
+    (offer) => offer.plan !== "free" && offer.plan !== overview?.plan,
+  );
+
   return (
     <AppShell>
       <section className="grid gap-6">
@@ -79,12 +107,33 @@ export function BillingPage() {
           <h1 className="text-3xl font-extrabold tracking-tight">Billing</h1>
         </div>
 
+        {/* The quota is enforced, so it gets a real warning (FR-BIL-01). */}
+        {overQuota ? (
+          <Alert variant="destructive">
+            <TriangleAlertIcon />
+            <AlertTitle>Notifications are paused</AlertTitle>
+            <AlertDescription>
+              Your workspace passed its monthly visitor quota, so Tacto has stopped showing
+              notifications on your sites. Upgrade to switch them back on immediately — the quota
+              otherwise resets at the start of next month.
+            </AlertDescription>
+          </Alert>
+        ) : nearQuota ? (
+          <Alert>
+            <TriangleAlertIcon />
+            <AlertTitle>You have used {Math.round(usagePct)}% of your visitor quota</AlertTitle>
+            <AlertDescription>
+              Notifications stop showing once the quota is reached.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {overview ? (
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  {PLAN_LABEL[overview.plan] ?? overview.plan} plan
+                  {planLabels[overview.plan] ?? overview.plan} plan
                   {overview.plan === "free" ? <Badge variant="secondary">Free</Badge> : null}
                 </CardTitle>
                 <CardDescription>
@@ -96,7 +145,7 @@ export function BillingPage() {
               <CardContent className="grid gap-4">
                 <div>
                   <div className="mb-1 flex justify-between text-sm">
-                    <span className="text-muted-foreground">Monthly visitors</span>
+                    <span className="text-muted-foreground">Unique visitors this month</span>
                     <span className="font-medium tabular-nums">
                       {overview.usage.toLocaleString()} / {overview.trafficQuota.toLocaleString()}
                     </span>
@@ -109,6 +158,14 @@ export function BillingPage() {
                     {overview.sitesUsed} / {overview.maxSites}
                   </span>
                 </div>
+                {overview.renewsAt ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Renews</span>
+                    <span className="font-medium">
+                      {new Date(overview.renewsAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                ) : null}
                 {overview.manageable ? (
                   <Button
                     variant="outline"
@@ -129,23 +186,45 @@ export function BillingPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-2">
-                {UPGRADE_PLANS.filter((p) => p.plan !== overview.plan).map((p) => (
-                  <Button
-                    key={p.plan}
-                    variant={p.plan === "growth" ? "default" : "ghost"}
-                    className={p.plan === "growth" ? "" : "border"}
-                    disabled={checkout.isPending}
-                    onClick={() => checkout.mutate(p.plan)}
-                  >
-                    <span className="flex w-full items-center justify-between gap-3">
-                      <span>Upgrade to {p.label}</span>
-                      <span className="text-xs opacity-80">{p.price}</span>
-                    </span>
-                  </Button>
-                ))}
-                <p className="text-xs text-muted-foreground">
-                  Secure checkout via Stripe. You can cancel anytime.
-                </p>
+                {plans.isLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading plans…</p>
+                ) : upgrades.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    You are on the highest plan available.
+                  </p>
+                ) : (
+                  upgrades.map((offer) => (
+                    <Button
+                      key={offer.plan}
+                      variant={offer.plan === "growth" ? "default" : "ghost"}
+                      className={offer.plan === "growth" ? "" : "border"}
+                      disabled={checkout.isPending || !offer.purchasable}
+                      title={
+                        offer.purchasable
+                          ? undefined
+                          : "This plan has no Stripe Price configured yet."
+                      }
+                      onClick={() => checkout.mutate(offer.plan as PaidPlan)}
+                    >
+                      <span className="flex w-full items-center justify-between gap-3">
+                        <span>Upgrade to {offer.label}</span>
+                        <span className="text-xs opacity-80">
+                          {formatPrice(offer)} · {formatLimits(offer)}
+                        </span>
+                      </span>
+                    </Button>
+                  ))
+                )}
+                {upgrades.some((offer) => offer.source === "fallback") ? (
+                  <p className="text-xs text-muted-foreground">
+                    Plans without a Stripe Price show an indicative amount and cannot be purchased
+                    yet.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Secure checkout via Stripe. You can cancel anytime.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>

@@ -11,7 +11,7 @@ import {
 } from "@repo/db/schema";
 import type { CaptureEventInput, TrackEventInput, VisitEventInput } from "@repo/contracts/widget";
 import { planLimits, type Plan } from "@repo/contracts/billing";
-import type { RealtimeStore } from "@repo/queue";
+import { currentMonthKey, type RealtimeStore } from "@repo/queue";
 import { analyticsPassthroughSchema, domainPrivacySchema } from "@repo/contracts/sites";
 import type { DomainLoopSettings } from "@repo/contracts/sites";
 import { maskProfanity } from "./profanity";
@@ -52,6 +52,11 @@ export type PayloadResult =
 export type WidgetServiceDeps = {
   store?: RealtimeStore;
   enqueueCounter?: (siteId: string) => Promise<void> | void;
+  // Where an over-quota site owner is sent to upgrade (dashboard billing page).
+  upgradeUrl?: string;
+  // Called when an organization crosses a quota threshold (0.8 / 1.0) so the
+  // owner can be warned by email before notifications stop (FR-BIL-01).
+  onQuotaThreshold?: (organizationId: string, ratio: number) => void;
 };
 
 export function createWidgetService(
@@ -65,7 +70,7 @@ export function createWidgetService(
   // analytics live-visitor window fallback (FR-NOT-03).
   async function recordVisit(input: VisitEventInput): Promise<boolean> {
     const [siteRow] = await db
-      .select({ id: site.id })
+      .select({ id: site.id, organizationId: site.organizationId })
       .from(site)
       .where(eq(site.siteKey, input.site))
       .limit(1);
@@ -77,7 +82,43 @@ export function createWidgetService(
       verified: false,
       occurredAt: new Date(),
     });
+    // Unique monthly visitors per organization drive the plan quota. Redis
+    // dedupes per visitor id, so a returning visitor is counted once a month.
+    if (deps.store && input.visitorId) {
+      const used = await deps.store.hitVisitor(
+        siteRow.organizationId,
+        input.visitorId,
+        currentMonthKey(),
+      );
+      await warnOnQuota(siteRow.organizationId, used);
+    }
     return true;
+  }
+
+  // Emits the 80% / 100% warning once per organization per month.
+  async function warnOnQuota(organizationId: string, used: number): Promise<void> {
+    if (!deps.onQuotaThreshold || !deps.store) return;
+    const quota = await quotaFor(organizationId);
+    if (quota <= 0) return;
+    const ratio = used / quota;
+    const threshold = ratio >= 1 ? 1 : ratio >= 0.8 ? 0.8 : 0;
+    if (threshold === 0) return;
+    const month = currentMonthKey();
+    const fresh = await deps.store.acquireLock(
+      `quota-warn:${organizationId}:${month}:${threshold}`,
+      40 * 86_400,
+    );
+    if (fresh) deps.onQuotaThreshold(organizationId, threshold);
+  }
+
+  async function quotaFor(organizationId: string): Promise<number> {
+    const [subRow] = await db
+      .select({ plan: subscription.plan, trafficQuota: subscription.trafficQuota })
+      .from(subscription)
+      .where(eq(subscription.organizationId, organizationId))
+      .limit(1);
+    const plan = (subRow?.plan ?? "free") as Plan;
+    return subRow?.trafficQuota ?? planLimits[plan].trafficQuota;
   }
 
   // Records a view/click impression (SRS FR-ANL-01). Buffered in Redis on the
@@ -183,13 +224,29 @@ export function createWidgetService(
     const privacy = domainPrivacySchema.parse(settingRow?.privacy ?? {});
     const blocked = Boolean(input.requestIp && privacy.blockedIps.includes(input.requestIp));
 
-    // Redis payload cache (NFR-PERF-02/03). Keyed by site/url/lang/country so
-    // targeting stays correct. Blocked requests and A/B variants bypass it.
+    const [subRow] = await db
+      .select()
+      .from(subscription)
+      .where(eq(subscription.organizationId, siteRow.organizationId))
+      .limit(1);
+    const plan = (subRow?.plan ?? "free") as Plan;
+
+    // Monthly visitor quota (FR-BIL-01, F51). Over the quota the site serves no
+    // social proof at all — the freemium tier has to convert to stay useful.
+    const quota = subRow?.trafficQuota ?? planLimits[plan].trafficQuota;
+    const used = deps.store
+      ? await deps.store.getVisitorCount(siteRow.organizationId, currentMonthKey())
+      : 0;
+    const overQuota = quota > 0 && used > quota;
+
+    // Redis payload cache (NFR-PERF-02/03). Keyed by site/url/lang/country and
+    // the quota state so targeting and gating stay correct. Blocked requests
+    // and A/B variants bypass it.
     const cacheKey =
       deps.store && !blocked
         ? `tacto:widget:${input.siteKey}:${hashKey(input.url)}:${input.locale ?? ""}:${(
             input.country ?? ""
-          ).toUpperCase()}`
+          ).toUpperCase()}:${overQuota ? "oq" : "ok"}`
         : null;
     if (deps.store && cacheKey) {
       const cached = await deps.store.cacheGet(cacheKey);
@@ -203,13 +260,6 @@ export function createWidgetService(
       }
     }
 
-    const [subRow] = await db
-      .select()
-      .from(subscription)
-      .where(eq(subscription.organizationId, siteRow.organizationId))
-      .limit(1);
-    const plan = (subRow?.plan ?? "free") as Plan;
-
     const activeRows = await db
       .select()
       .from(notification)
@@ -219,8 +269,9 @@ export function createWidgetService(
     const orderedRows = applyManualOrder(activeRows, loop);
 
     const notifications: WidgetNotification[] = [];
-    // Blocked IPs get the settings/badge but no notifications (FR-NGS-07).
-    if (!blocked) {
+    // Blocked IPs get the settings/badge but no notifications (FR-NGS-07);
+    // neither does an organization over its monthly visitor quota.
+    if (!blocked && !overQuota) {
       for (const row of orderedRows) {
         const config = toConfig(row);
         if (!matchUrl(config.display.url, input.url)) continue;
@@ -250,6 +301,8 @@ export function createWidgetService(
         showBadge: !planLimits[plan].removeBadge,
         requireConsent: privacy.requireConsent,
         customCss: (settingRow?.customCss as string | null) ?? null,
+        overQuota,
+        upgradeUrl: overQuota ? (deps.upgradeUrl ?? null) : null,
         analyticsPassthrough: analyticsPassthroughSchema.parse(
           settingRow?.analyticsPassthrough ?? {},
         ),

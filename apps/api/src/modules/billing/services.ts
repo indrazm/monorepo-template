@@ -2,6 +2,7 @@ import { and, count, eq, gte, inArray } from "drizzle-orm";
 import type { Database } from "@repo/db";
 import { event, site, subscription } from "@repo/db/schema";
 import { planLimits, type Plan } from "@repo/contracts/billing";
+import { currentMonthKey, type RealtimeStore } from "@repo/queue";
 
 export type BillingOverview = {
   plan: Plan;
@@ -15,7 +16,17 @@ export type BillingOverview = {
   manageable: boolean;
 };
 
-export function createBillingService(db: Pick<Database, "select" | "update">) {
+// With Redis, monthly usage is the authoritative unique-visitor counter the
+// widget increments (FR-BIL-01). Without it we fall back to counting `visit`
+// events, which over-counts returning visitors but keeps the page working.
+export type BillingServiceDeps = {
+  store?: Pick<RealtimeStore, "getVisitorCount">;
+};
+
+export function createBillingService(
+  db: Pick<Database, "select" | "update">,
+  deps: BillingServiceDeps = {},
+) {
   return { getPlan, getOverview, canCreateSite, updatePlan, getCustomerId };
 
   // Applies a subscription change from Stripe (SRS FR-BIL-05). Upserts onto the
@@ -85,7 +96,22 @@ export function createBillingService(db: Pick<Database, "select" | "update">) {
 
     const sitesUsed = await countSites(organizationId);
 
-    // Approximate monthly visitor usage from visit events across the org's sites.
+    // Unique monthly visitors, as counted by the widget's visit beacon.
+    if (deps.store) {
+      const used = await deps.store.getVisitorCount(organizationId, currentMonthKey());
+      return {
+        plan,
+        trafficQuota: subRow?.trafficQuota ?? limits.trafficQuota,
+        usage: used,
+        sitesUsed,
+        maxSites: limits.maxSites,
+        removeBadge: limits.removeBadge,
+        renewsAt: subRow?.renewsAt ? subRow.renewsAt.toISOString() : null,
+        manageable: Boolean(subRow?.externalCustomerId),
+      };
+    }
+
+    // Fallback: approximate usage from visit events across the org's sites.
     const orgSites = await db
       .select({ id: site.id })
       .from(site)

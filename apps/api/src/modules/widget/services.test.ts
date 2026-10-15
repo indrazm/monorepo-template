@@ -4,7 +4,9 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { planLimits } from "@repo/contracts/billing";
 import type { NotificationConfig } from "@repo/contracts/notifications";
+import type { RealtimeStore } from "@repo/queue";
 import { event, impression, site } from "@repo/db/schema";
 import * as schema from "@repo/db/schema";
 import { createNotificationsService } from "../notifications/services";
@@ -32,6 +34,42 @@ function config(overrides: Partial<NotificationConfig> = {}): NotificationConfig
     display: { url: { mode: "all" } },
     dataSource: { eventTypes: ["purchase"] },
     timing: { delayMs: 0, durationMs: 5000, intervalMs: 8000 },
+    ...overrides,
+  };
+}
+
+// Minimal in-memory stand-in for the Redis store, so tests can drive the quota
+// and cache paths without a live Redis.
+function fakeStore(overrides: Partial<RealtimeStore> = {}): RealtimeStore {
+  return {
+    async pushImpression() {},
+    async drainImpressions() {
+      return [];
+    },
+    async recordVisit() {},
+    async countVisitors() {
+      return 0;
+    },
+    async setCounter() {},
+    async getCounter() {
+      return null;
+    },
+    async hitRateLimit() {
+      return true;
+    },
+    async cacheGet() {
+      return null;
+    },
+    async cacheSet() {},
+    async acquireLock() {
+      return true;
+    },
+    async hitVisitor() {
+      return 0;
+    },
+    async getVisitorCount() {
+      return 0;
+    },
     ...overrides,
   };
 }
@@ -526,5 +564,93 @@ describe("widget payload service", () => {
       requestIp: "203.0.113.5",
     });
     expect(blocked.kind === "ok" && blocked.payload.notifications).toHaveLength(0);
+  });
+  // FR-BIL-01 / F51: the monthly visitor quota is enforced, not just measured.
+  it("serves no notifications once the visitor quota is exceeded", async () => {
+    // A store whose visitor counter is already past the free plan's quota.
+    let counted = 0;
+    const overQuotaStore = fakeStore({
+      async hitVisitor() {
+        counted += 1;
+        return planLimits.free.trafficQuota + 1;
+      },
+      async getVisitorCount() {
+        return planLimits.free.trafficQuota + 1;
+      },
+    });
+    const warnings: { organizationId: string; ratio: number }[] = [];
+    const gated = createWidgetService(db, {
+      store: overQuotaStore,
+      upgradeUrl: "https://app.tacto.test/billing",
+      onQuotaThreshold: (organizationId, ratio) => warnings.push({ organizationId, ratio }),
+    });
+
+    const created = await seedSite();
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "Recent sales",
+      type: "recent_sales",
+      isActive: true,
+      config: config(),
+    });
+    await db.insert(event).values({
+      siteId: created.id,
+      type: "purchase",
+      source: "manual",
+      displayName: "Ada",
+      city: "Jakarta",
+      payload: { product: "Course" },
+      occurredAt: new Date(),
+    });
+
+    const result = await gated.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+    });
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    expect(result.payload.notifications).toHaveLength(0);
+    expect(result.payload.settings.overQuota).toBe(true);
+    expect(result.payload.settings.upgradeUrl).toBe("https://app.tacto.test/billing");
+
+    // A pageview still counts (so usage keeps growing) and warns the owner once.
+    await gated.recordVisit({ site: created.siteKey, visitorId: "visitor-1" });
+    expect(counted).toBe(1);
+    expect(warnings).toEqual([{ organizationId: ORG, ratio: 1 }]);
+  });
+
+  it("serves notifications normally while under the quota", async () => {
+    const underQuota = createWidgetService(db, {
+      store: fakeStore({
+        async getVisitorCount() {
+          return 10;
+        },
+      }),
+    });
+    const created = await seedSite();
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "Recent sales",
+      type: "recent_sales",
+      isActive: true,
+      config: config(),
+    });
+    await db.insert(event).values({
+      siteId: created.id,
+      type: "purchase",
+      source: "manual",
+      displayName: "Ada",
+      city: "Jakarta",
+      payload: { product: "Course" },
+      occurredAt: new Date(),
+    });
+    const result = await underQuota.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+    });
+    expect(result.kind === "ok" && result.payload.notifications).toHaveLength(1);
+    expect(result.kind === "ok" && result.payload.settings.overQuota).toBe(false);
   });
 });

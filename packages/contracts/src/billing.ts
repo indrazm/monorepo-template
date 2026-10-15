@@ -25,7 +25,9 @@ export const planLimits: Record<Plan, PlanLimits> = {
   agency: { trafficQuota: 200_000, maxSites: 10, removeBadge: true, notificationTypes: "all" },
 };
 
-// Indicative monthly price in USD cents (PRD section 7.2); Free has no price.
+// Fallback monthly price in USD cents (PRD section 7.2), used only when Stripe
+// has no Price configured for the plan. The displayed price always comes from
+// GET /api/v1/billing/plans so the dashboard and Checkout cannot disagree.
 export const planPricesUsdCents: Record<Plan, number> = {
   free: 0,
   starter: 1_200,
@@ -45,6 +47,33 @@ export function planAllowsNotificationType(
   const allowed = planLimits[plan].notificationTypes;
   return allowed === "all" || allowed.includes(type);
 }
+
+// One purchasable plan as the dashboard should render it. `amount` is in the
+// currency's minor unit (cents) and comes from the Stripe Price when it is
+// configured; `source` says which it is, so the UI can flag a stale fallback.
+export const planOfferSchema = z.object({
+  plan: planSchema,
+  label: z.string(),
+  amount: z.number().int().nullable(),
+  currency: z.string(),
+  interval: z.string(),
+  trafficQuota: z.number().int(),
+  maxSites: z.number().int(),
+  removeBadge: z.boolean(),
+  // "stripe": live from the Stripe Price. "fallback": Stripe is not configured
+  // for this plan, so the indicative price is shown and checkout is disabled.
+  source: z.enum(["stripe", "fallback"]),
+  purchasable: z.boolean(),
+});
+export const planOffersResponseSchema = z.object({ plans: z.array(planOfferSchema) });
+export type PlanOffer = z.output<typeof planOfferSchema>;
+
+export const planLabels: Record<Plan, string> = {
+  free: "Free",
+  starter: "Starter",
+  growth: "Growth",
+  agency: "Agency",
+};
 
 export const subscriptionSchema = z.object({
   plan: planSchema,

@@ -1,5 +1,7 @@
 import { serve } from "@hono/node-server";
+import { and, eq } from "drizzle-orm";
 import { createDatabase } from "@repo/db";
+import { member, user } from "@repo/db/schema";
 import {
   createCounterQueue,
   createQueueConnection,
@@ -22,7 +24,41 @@ const REVIEWS_LOCK_TTL_S = Math.floor(REVIEWS_REFRESH_MS / 1000) - 60;
 
 export function startServer(config: ReturnType<typeof createApiConfig>) {
   const { db, pool } = createDatabase(config.databaseUrl);
-  const auth = createAuth(db, config.auth, createMailer(config.smtp));
+  const mailer = createMailer(config.smtp);
+  const auth = createAuth(db, config.auth, mailer);
+
+  // Warns the organization owner before (80%) and when (100%) the monthly
+  // visitor quota runs out — at 100% notifications stop serving (FR-BIL-01).
+  async function sendQuotaWarning(organizationId: string, ratio: number): Promise<void> {
+    const [owner] = await db
+      .select({ email: user.email, name: user.name })
+      .from(member)
+      .innerJoin(user, eq(user.id, member.userId))
+      .where(and(eq(member.organizationId, organizationId), eq(member.role, "owner")))
+      .limit(1);
+    if (!owner) return;
+    const billingUrl = `${config.clientOrigins[0] ?? ""}/billing`;
+    const reached = ratio >= 1;
+    await mailer.send({
+      to: owner.email,
+      subject: reached
+        ? "Your Tacto notifications have paused — visitor quota reached"
+        : "You have used 80% of your Tacto visitor quota",
+      text: reached
+        ? `Hi ${owner.name},
+
+Your workspace reached its monthly visitor quota, so Tacto has stopped showing notifications on your site until the quota resets or you upgrade.
+
+Upgrade: ${billingUrl}
+`
+        : `Hi ${owner.name},
+
+Your workspace has used 80% of its monthly visitor quota. Notifications stop showing once the quota is reached.
+
+Review your plan: ${billingUrl}
+`,
+    });
+  }
 
   // Redis data connection (impression buffer / live visitors / counter cache)
   // plus BullMQ producers for durable webhook + counter work (SRS §3.3).
@@ -35,6 +71,11 @@ export function startServer(config: ReturnType<typeof createApiConfig>) {
     db,
     config,
     store,
+    onQuotaThreshold: (organizationId, ratio) => {
+      void sendQuotaWarning(organizationId, ratio).catch((error) =>
+        console.error("Quota warning email failed", { organizationId }, error),
+      );
+    },
     enqueue: {
       webhook: async (job) => {
         await webhookQueue.add(job);

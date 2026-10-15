@@ -43,6 +43,9 @@ export type AppAsyncDeps = {
     webhook?: (job: WebhookJob) => Promise<void>;
     counter?: (siteId: string) => Promise<void>;
   };
+  // Called when an organization reaches 80% / 100% of its monthly visitor
+  // quota, so the owner can be warned before notifications stop (FR-BIL-01).
+  onQuotaThreshold?: (organizationId: string, ratio: number) => void;
 };
 
 export function createApp({
@@ -51,6 +54,7 @@ export function createApp({
   config,
   store,
   enqueue,
+  onQuotaThreshold,
 }: {
   auth: AuthProvider;
   db: Database;
@@ -61,6 +65,9 @@ export function createApp({
 } & AppAsyncDeps) {
   const loadSession = createSessionMiddleware(auth, db);
   const goalsService = createGoalsService(db);
+  // Usage comes from the Redis visitor counter when available (FR-BIL-01).
+  const billingService = createBillingService(db, { store });
+  const dashboardOrigin = config.clientOrigins[0] ?? "";
   // Integration connections own provider credentials, so they need the cipher
   // (encryption at rest), the Tacto-level app keys, and the public URL that
   // provider webhooks are registered against (FR-INT-01/04).
@@ -123,19 +130,21 @@ export function createApp({
       })
       .route("/profile", createProfileRouter(createProfileService(db)))
       .route("/users", createUsersRouter(createUsersService(db)))
-      .route("/api/v1/sites", createSitesRouter(createSitesService(db), createBillingService(db)))
+      .route("/api/v1/sites", createSitesRouter(createSitesService(db), billingService))
       .route("/api/v1/notifications", createNotificationsRouter(createNotificationsService(db)))
       .route("/api/v1/analytics", createAnalyticsRouter(createAnalyticsService(db)))
-      .route(
-        "/api/v1/billing",
-        createBillingRouter(createBillingService(db), config.stripe, config.clientOrigins[0] ?? ""),
-      )
+      .route("/api/v1/billing", createBillingRouter(billingService, config.stripe, dashboardOrigin))
       .route("/api/v1/integrations", createIntegrationsRouter(integrationsService))
       .route("/api/v1/goals", createGoalsRouter(goalsService))
       .route(
         "/widget",
         createWidgetRouter(
-          createWidgetService(db, { store, enqueueCounter: enqueue?.counter }),
+          createWidgetService(db, {
+            store,
+            enqueueCounter: enqueue?.counter,
+            upgradeUrl: dashboardOrigin ? `${dashboardOrigin}/billing` : undefined,
+            onQuotaThreshold,
+          }),
           (siteKey, url) => {
             void goalsService.recordConversions(siteKey, url).catch(() => undefined);
           },

@@ -27,6 +27,19 @@ function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string)
   // Auto-capture is independent of having notifications to show.
   attachCapture(apiBase, siteKey);
 
+  // Over the monthly visitor quota the API serves no notifications (FR-BIL-01).
+  // The host page is left untouched on purpose — a visitor should never see an
+  // upgrade prompt for someone else's plan — but the owner gets a clear console
+  // notice when they look at their own site.
+  if (payload.settings.overQuota) {
+    console.warn(
+      `[tacto] Monthly visitor quota reached — notifications are paused.${
+        payload.settings.upgradeUrl ? ` Upgrade: ${payload.settings.upgradeUrl}` : ""
+      }`,
+    );
+    return;
+  }
+
   if (payload.notifications.length === 0) return;
 
   const position = payload.notifications[0]?.style.position ?? "bottom-left";
