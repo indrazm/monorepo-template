@@ -174,13 +174,22 @@ Custom **JS** tidak ada.
 
 **Mengapa belum sesuai.** FR-NGS-04 menyebut "Custom CSS/JS".
 
-**Perilaku yang benar.** Jika ingin mendukung JS: kolom `custom_js` + injeksi
-**ter-sandbox** di shadow root (tanpa akses lintas-origin), dengan peringatan
-keamanan & validasi. Alternatif jujur: **batalkan JS resmi** dan dokumentasikan
-bahwa hanya CSS + passthrough analytics yang didukung.
+**Keputusan (dikonfirmasi).** Dukung **Custom JS (sandbox)**.
 
-**Tugas implementasi.** `schema.ts` (`custom_js`), `sites.ts` kontrak, widget
-`shadow.ts`/`index.ts` (inject), site settings UI. Keputusan scope perlu konfirmasi.
+**Perilaku yang benar.**
+
+1. Kolom `domain_setting.custom_js` (text, nullable).
+2. Pixel meng-inject JS **terisolasi**: jalankan di dalam `<iframe sandbox="allow-scripts">`
+   tanpa `src` (atau `<script type="module">` di shadow root dengan CSP ketat) —
+   tanpa akses ke DOM host, cookie, atau same-origin. Komunikasi ke kartu hanya via
+   `postMessage` dengan whitelist tipe pesan.
+3. UI memberi peringatan eksplisit ("Advanced — hanya untuk pengguna teknis"),
+   validasi panjang, dan dibatasi ke paket Growth+ (gating tipe fitur).
+4. Fail-safe: error JS tidak boleh merusak situs host.
+
+**Tugas implementasi.** `schema.ts` (`custom_js`), `sites.ts` kontrak + domain
+settings UI (textarea + warning + gating), widget `shadow.ts`/`index.ts` (buat
+iframe sandbox + bridge `postMessage`). Jaga `t.js` tetap kecil.
 
 **FR:** FR-NGS-04.
 
@@ -193,12 +202,17 @@ event). Namun payload widget **tidak** memblokir/menurunkan apa pun saat
 **Mengapa belum sesuai.** Model bisnis freemium berbasis **kuota traffic**: tanpa
 penegakan, tier gratis tak termonetisasi.
 
+**Keputusan (dikonfirmasi).** Saat kuota terlampaui: **hentikan seluruh notifikasi**
+(tidak ada social proof yang tampil).
+
 **Perilaku yang benar.**
 
 1. Hitung visitor unik per bulan per ORG (Redis counter `visitors:{orgId}:{YYYY-MM}`
    di-increment dari `/widget/v1/visit` dengan dedupe per `visitorId`/hari).
-2. Saat kuota terlampaui: hentikan rendering notifikasi (atau tampilkan hanya
-   badge + CTA upgrade), dan kirim flag `overQuota` di payload + notifikasi email.
+2. Saat kuota terlampaui: `notifications` dikosongkan, payload menandai
+   `settings.overQuota = true` (+ `settings.upgradeUrl`), kirim notifikasi email
+   ke pemilik org (mis. 80%/100% kuota). Widget **tidak** menampilkan social proof;
+   opsional satu bilah kecil "Upgrade untuk mengaktifkan kembali".
 3. Tegakkan batas lain: `maxSites` (sudah), `notificationTypes` (sudah).
 
 **Tugas implementasi.**
@@ -224,23 +238,30 @@ Billing menampilkan dari API; hapus string harga hardcoded.
 
 **FR:** FR-BIL-01/02.
 
-## G. Review: tak ada cara menambah review dari dashboard (FR-NOT-05)
+## G. Review: apa maksudnya & belum ada jalur sumbernya (FR-NOT-05)
+
+**Apa itu tipe "Review" di sini (klarifikasi).** **Bukan** review-management
+(bukan tempat membalas/moderasi ulasan, bukan form testimonial/Wall of Love —
+itu produk terpisah & sudah di luar scope). Ini adalah **notification type
+"Review & rating"**: menampilkan **ulasan/rating pelanggan sebagai social proof**
+di situs — persis seperti WiserNotify "Reviews & ratings" (import Google/Facebook)
+dan ProveSource "Reviews" (Google/Facebook/Trustpilot/Yotpo/Capterra). Yang tampil:
+bintang + kutipan singkat + nama/kota + sumber.
 
 **Kondisi saat ini.** Tipe `review` hanya menampilkan `event` type `review` yang
-datang via webhook/ingest. Import Google/Facebook **dibatalkan**.
+datang via webhook/ingest. Import Google/Facebook **dibatalkan** → praktis tipe
+ini kosong tanpa integrasi review.
 
-**Mengapa belum sesuai.** Pengguna yang memilih "Review" tak punya jalur untuk
-mengisi review (kecuali kirim webhook manual). Fitur jadi kosong.
+**Perilaku yang benar (opsi sumber; pilih salah satu/lebih).**
 
-**Perilaku yang benar (pilih salah satu, perlu konfirmasi).**
+1. **Entry manual + moderasi ringan** di dashboard: nama, rating, teks, kota,
+   sumber → dipakai tipe `review`.
+2. **Integrasi platform review** non-FB/Google (sesuai keputusan produk):
+   Judge.me, Loox, Yotpo, Trustpilot — lewat webhook/API → event `review`.
+3. **Scoping jujur**: sembunyikan tipe Review sampai sumbernya tersedia.
 
-1. **Entry manual + moderasi**: UI tambah review (nama, rating, teks, kota),
-   status approve/hide, lalu dipakai tipe `review`.
-2. **Via integrasi review** (mis. Judge.me/Trustpilot) lewat framework konektor.
-3. **Scoping jujur**: sembunyikan tipe Review dari tier tanpa sumber.
-
-**Tugas implementasi.** Modul notifikasi/`reviews` (service+router+UI) + event
-`review` (payload `rating`,`text`); atau sinkron integrasi.
+**Tugas implementasi.** Modul `reviews` (service+router+UI) atau konektor review;
+event `review` payload `{ rating, text, source }`; gating paket.
 
 **FR:** FR-NOT-05.
 
@@ -394,6 +415,94 @@ field) dan pakai di `mapToEvent`.
 > `@repo/contracts`; error baru → `apiErrorSchema`; query difilter
 > `organizationId`/`siteId`; migrasi `db:generate`→review→`db:deploy`; test; gate
 > `pnpm check && pnpm typecheck`.
+
+---
+
+# Referensi Kompetitor & Rencana Parity (WiserNotify · ProveSource)
+
+> **Metode.** Analisis dari **permukaan fitur publik** kedua platform (situs
+> marketing `wisernotify.com` & `provesrc.com`, halaman `/features/`, FAQ, dan
+> daftar integrasi) pada 14 Okt 2026. Dashboard ber-login
+> (`app.wisernotify.com`, `console.provesrc.com`) **tidak dapat diakses** dari
+> environment ini (tidak ada browser interaktif), jadi perilaku di dalam app
+> disimpulkan dari dokumentasi publik + pengetahuan produk sejenis. Tacto
+> memakai pendekatan **duplikat + modifikasi** dari kategori ini.
+>
+> Catatan: angka & fitur bisa berubah; verifikasi ulang saat implementasi.
+
+## Perbandingan kapabilitas
+
+| Kapabilitas                                    | WiserNotify      | ProveSource | Tacto sekarang          | Aksi    |
+| ---------------------------------------------- | ---------------- | ----------- | ----------------------- | ------- |
+| Recent sales / stream                          | ✅               | ✅          | ✅ `recent_sales`       | ok      |
+| Sign-up / lead pop                             | ✅               | ✅          | ✅ (dataSource)         | ok      |
+| Counter / Combo (24h/7/30d)                    | ✅               | ✅          | ✅ counter/combo        | ok      |
+| Live visitors                                  | ✅               | ✅          | ✅                      | ok      |
+| Reviews & rating pop                           | ✅ (Google/FB)   | ✅ (multi)  | ⚠️ tanpa sumber         | **T2**  |
+| Informational / Custom                         | ✅               | ✅          | ✅                      | ok      |
+| Social counter (followers/likes)               | ✅               | ✅          | ❌ (enum reserved)      | **T6**  |
+| Countdown timer (widget/bar)                   | ✅               | ✅          | ✅ countdown/bar        | ok      |
+| Announcement bar                               | ✅               | ✅          | ✅ bar                  | ok      |
+| Inline embeds (badge/counter di halaman)       | ✅               | ⚠️          | ❌                      | **T6**  |
+| Low-stock / FOMO                               | ⚠️               | ⚠️          | ✅ low_stock            | ok      |
+| Popup / Spin-to-win                            | ❌/⚠️            | ✅ (Boost)  | ✅ (spin visual only)   | **T11** |
+| WhatsApp button / AI builder                   | ❌               | ✅          | ❌                      | pending |
+| Targeting URL                                  | ✅               | ✅          | ✅                      | ok      |
+| Targeting country                              | ✅               | ✅          | ✅ (header geo)         | ok      |
+| Targeting city / language                      | ✅               | ✅          | ❌                      | **T3**  |
+| Targeting device / screen-size                 | ✅               | ✅ (mobile) | ❌                      | **T3**  |
+| Targeting UTM / referrer / visitor             | ✅ (behavior)    | ✅          | ⚠️ skema, tak jalan     | **T3**  |
+| Order / loop / random                          | ✅               | ✅          | ✅                      | ok      |
+| Show once per session / skip repeats / cap     | ✅               | ✅          | ❌                      | **T4**  |
+| Max conversions / anonymous / hide location    | ⚠️               | ✅          | ❌                      | **T4**  |
+| Include/exclude produk                         | ⚠️               | ✅          | ❌                      | **T4**  |
+| All-time-high (jika event sedikit)             | ❌               | ✅          | ✅ combo                | ok      |
+| Custom CSS                                     | ✅ (Pro+)        | ✅          | ✅                      | ok      |
+| Custom JS (sandbox)                            | ⚠️               | ⚠️          | ❌                      | **T5**  |
+| RTL / auto-inherit font situs                  | ✅/⚠️            | ✅          | ❌                      | **T10** |
+| A/B multivariate + signifikansi + auto-promote | ✅ (≤5 varian)   | ✅          | ⚠️ minimal              | **T9**  |
+| Analytics: impression/klik/CTR                 | ✅               | ✅          | ✅                      | ok      |
+| Analytics: hover/engaged visitor               | ⚠️               | ✅          | ❌                      | **T7**  |
+| Analytics: compare period, top pages/devices   | ✅               | ✅          | ❌                      | **T7**  |
+| Analytics: per-notifikasi                      | ✅               | ✅          | ❌                      | **T7**  |
+| Revenue attribution / ROAS / goal revenue      | ✅ (Shopify/Woo) | ✅          | ❌                      | **T8**  |
+| Weekly digest email / export GA/BI             | ✅               | ✅          | ⚠️ passthrough saja     | **T7**  |
+| 100–200+ integrasi (native + Zapier)           | ✅ (200+)        | ✅ (100+)   | ⚠️ 44, connect kasar    | **T1**  |
+| Auto-detect platform e-commerce                | ✅               | ✅          | ❌                      | pending |
+| Review import (Google/FB/Trustpilot/Yotpo)     | ✅               | ✅          | ❌ (FB/Google batal)    | **T2**  |
+| Free plan                                      | ❌ (trial 7h)    | ✅          | ✅                      | —       |
+| Harga                                          | dari $16/bln     | free + paid | $12/$35/$79             | **T13** |
+| Multi-site unlimited                           | ✅               | per paket   | per paket               | —       |
+| Kuota traffic ditegakkan                       | ✅               | ✅          | ❌ (hitung saja)        | **T12** |
+| Onboarding "live < 5 menit" + AI preview URL   | ✅               | ✅          | ✅ checklist (tanpa AI) | pending |
+
+## Rencana parity (task)
+
+| #   | Task                                                                                                                                     | Prioritas | FR              |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------------- |
+| T1  | Integrasi connect sesungguhnya (OAuth/webhook/poll, verify, health, mapping, disconnect) = audit **A**                                   | P0        | FR-INT-01..04   |
+| T12 | Tegakkan kuota traffic: hentikan notifikasi saat over-quota + CTA/email = audit **E**                                                    | P0        | FR-BIL-01/03    |
+| T2  | Sumber Review & rating: entry manual+moderasi dan/atau integrasi Judge.me/Loox/Yotpo/Trustpilot (bukan FB/Google) = audit **G**          | P0        | FR-NOT-05       |
+| T3  | Targeting lengkap: UTM/referrer/visitor + country/city/language + device                                                                 | P1        | FR-NED-07       |
+| T4  | Sequencing & custom rules: once/session, skip repeats, frequency cap, max conversions, anonymous, hide location/product, include-exclude | P1        | FR-NGS-02/03/07 |
+| T5  | Custom JS sandbox = audit **D**                                                                                                          | P1        | FR-NGS-04       |
+| T6  | Inline embeds + Social counter (tipe notifikasi baru)                                                                                    | P1        | FR-NOT-08/09    |
+| T7  | Analytics dalam: per-notifikasi, hover/engaged, compare period, top pages/devices/countries, export                                      | P2        | FR-ANL-02       |
+| T8  | Revenue attribution / goal revenue / ROAS                                                                                                | P2        | FR-ANL-03       |
+| T9  | A/B: ≤5 varian, signifikansi, auto-promote                                                                                               | P2        | FR-ANL-04       |
+| T10 | Lokalisasi UI (daftar bahasa, RTL), FE0 inheritance font                                                                                 | P2        | FR-NED-12       |
+| T13 | Harga satu sumber (Stripe Price) = audit **F**                                                                                           | P2        | FR-BIL-01/02    |
+| T11 | Conversion widgets: hadiah spin nyata, WhatsApp button, announcement presets                                                             | P3        | PRD Fase 4      |
+| —   | Auto-detect platform e-commerce; AI preview URL; weekly digest email                                                                     | P3        | backlog         |
+
+## Keputusan adopsi
+
+- **Diadopsi (parity wajib):** T1, T12, T2, T3, T4, T5, T6, T7.
+- **Diadopsi bertahap:** T8, T9, T10, T13, T11.
+- **Ditunda/opsional:** WhatsApp button, AI widget builder/preview, auto-detect platform, weekly digest, RTL (bergantung permintaan pasar Asia/global).
+- **Tetap ditolak (beda posisi produk):** mesin testimonial/Wall of Love, Slack/Teams, notifikasi fiktif. Import review **Google/Facebook** tetap di luar scope (keputusan produk) — review via sumber lain/manual.
+
+> Konfirmasi yang diminta: pilih **sumber Review (T2)** — manual, integrasi pihak ketiga, atau keduanya.
 
 ---
 

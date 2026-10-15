@@ -1,7 +1,9 @@
 # PRD — Tacto
 
 **Product Requirements Document**
-Versi: 4.0 (notifications-only, monorepo) · Tanggal: 12 Oktober 2026 · Status: Draft
+Versi: 4.2 (notifications-only, monorepo) · Tanggal: 14 Oktober 2026 · Status: Draft
+Perubahan v4.2: **analisis kompetitor (WiserNotify & ProveSource) ditambahkan (§12)** — strategi **duplikat + modifikasi**; menambah parity: integrasi connect sesungguhnya, kuota traffic ditegakkan, targeting lengkap (UTM/referrer/city/language/device), sequencing & custom rules, inline embeds + social counter, analytics per-notifikasi + revenue attribution, A/B dengan signifikansi, Custom JS sandbox.
+Perubahan v4.1: **integrasi Facebook & YouTube (review import + tipe YouTube/Social counter) dihapus dari scope** — fokus integrasi inti (webhook, Zapier/Make, Stripe, Shopify, WooCommerce); forward event ke Facebook Pixel (passthrough analytics) tetap ada.
 Perubahan dari v3.0: **stack diselaraskan ke monorepo** (Hono API + TanStack Router SPA + Drizzle + Better Auth + BullMQ/Redis), **scope tetap notifications-only** (mesin testimonial tetap di luar produk). Mengikuti model WiserNotify, ProveSource, Nudgify, Fomo.
 Dokumen pendamping: SRS-Tacto.md (v4), Analisis-Validasi-Tacto.md, Tacto-Feature-Teardown.md
 
@@ -104,31 +106,30 @@ Pendekatan bertahap, mulai dari yang paling berdampak:
 
 - **Universal (MVP):** pixel/JS, auto-capture form submission, **Custom Webhook**, Google Tag Manager.
 - **Fase 2:** **Zapier & Make** (membuka ratusan app sekaligus lewat 1 integrasi), **Stripe**, **Shopify**, **WooCommerce**.
-- **Fase 3:** review sources (Google, Facebook), e-commerce lain (BigCommerce, Wix), CRM/forms/course (HubSpot, Typeform, Kajabi), dsb.
+- **Fase 3:** e-commerce lain (BigCommerce, Wix), CRM/forms/course (HubSpot, Typeform, Kajabi), dsb.
 
 > Prinsip: jangan kejar 200 konektor di awal. **Webhook + Zapier/Make** menutup mayoritas kebutuhan dengan usaha jauh lebih kecil.
 
 ### 5.3 Prioritas (MoSCoW)
 
-| Fitur                                                           | Prioritas | Fase       |
-| --------------------------------------------------------------- | --------- | ---------- |
-| Auth + org + multi-site                                         | Must      | MVP        |
-| Pixel universal + verifikasi + onboarding checklist             | Must      | MVP        |
-| Tipe: Sales pop, Counter, Live visitors, Custom                 | Must      | MVP        |
-| Editor (Type/Track/Display/Message/Style) + preview device      | Must      | MVP        |
-| Targeting URL + Visitor/Country/UTM/Referrer                    | Must      | MVP        |
-| Pengaturan global (loop/order/close/CSS/consent)                | Must      | MVP        |
-| Data in: pixel auto-capture + Custom Webhook                    | Must      | MVP        |
-| Analytics dasar (impression/klik/CTR)                           | Must      | MVP        |
-| Freemium + badge + kuota traffic                                | Must      | MVP        |
-| Tipe: Review                                                    | Should    | MVP/Fase 2 |
-| Zapier/Make + Stripe + Shopify + WooCommerce                    | Should    | Fase 2     |
-| Goals & A/B testing                                             | Should    | Fase 2     |
-| Verified label                                                  | Should    | Fase 2     |
-| Review import (Google/Facebook)                                 | Should    | Fase 2     |
-| Tipe: Combo, Social counter, YouTube, FOMO/low-stock, Countdown | Could     | Fase 3     |
-| Katalog integrasi diperluas                                     | Could     | Fase 3     |
-| Conversion widgets (popup, spin-to-win, bar) — arah "Boost"     | Could     | Fase 4     |
+| Fitur                                                       | Prioritas | Fase       |
+| ----------------------------------------------------------- | --------- | ---------- |
+| Auth + org + multi-site                                     | Must      | MVP        |
+| Pixel universal + verifikasi + onboarding checklist         | Must      | MVP        |
+| Tipe: Sales pop, Counter, Live visitors, Custom             | Must      | MVP        |
+| Editor (Type/Track/Display/Message/Style) + preview device  | Must      | MVP        |
+| Targeting URL + Visitor/Country/UTM/Referrer                | Must      | MVP        |
+| Pengaturan global (loop/order/close/CSS/consent)            | Must      | MVP        |
+| Data in: pixel auto-capture + Custom Webhook                | Must      | MVP        |
+| Analytics dasar (impression/klik/CTR)                       | Must      | MVP        |
+| Freemium + badge + kuota traffic                            | Must      | MVP        |
+| Tipe: Review                                                | Should    | MVP/Fase 2 |
+| Zapier/Make + Stripe + Shopify + WooCommerce                | Should    | Fase 2     |
+| Goals & A/B testing                                         | Should    | Fase 2     |
+| Verified label                                              | Should    | Fase 2     |
+| Tipe: Combo, FOMO/low-stock, Countdown                      | Could     | Fase 3     |
+| Katalog integrasi diperluas                                 | Could     | Fase 3     |
+| Conversion widgets (popup, spin-to-win, bar) — arah "Boost" | Could     | Fase 4     |
 
 ### 5.4 Di luar lingkup
 
@@ -198,7 +199,7 @@ Freemium + langganan bulanan/tahunan, **berbasis kuota traffic (visitor/bulan)**
 | -------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------- |
 | **MVP (bln 1–2)**    | Pixel + 4 tipe notifikasi + editor + targeting + webhook/auto-capture + analytics + freemium | Bisa dipasang & dijual                        |
 | **Fase 2 (bln 2–4)** | Zapier/Make + Stripe/Shopify/WooCommerce + Goals + A/B test + Review + verified label        | Notifikasi dari transaksi nyata, bukti dampak |
-| **Fase 3 (bln 4–8)** | Tipe tambahan (Combo/Social/YouTube/FOMO/Countdown) + katalog integrasi luas                 | Paritas fitur dengan incumbent                |
+| **Fase 3 (bln 4–8)** | Tipe tambahan (Combo/FOMO/Countdown) + katalog integrasi luas                                | Paritas fitur dengan incumbent                |
 | **Fase 4 (8 bln+)**  | Conversion widgets (popup/spin-to-win/bar), optimisasi                                       | Ekspansi & upsell                             |
 
 ---
@@ -220,3 +221,79 @@ Freemium + langganan bulanan/tahunan, **berbasis kuota traffic (visitor/bulan)**
 - **Deploy:** **Docker Compose** (postgres, redis, api, worker, proxy). Pixel/widget & SPA diserve statik via proxy/CDN; opsional dashboard di-deploy ke Cloudflare.
 
 Kunci teknis: widget script ringan (≤30 KB) & fail-safe; endpoint widget cacheable; ingestion event real-time (pixel/webhook); targeting & timing; privasi/GDPR (consent, tampil nama depan + kota); multi-tenant. Detail lengkap di SRS-Tacto.md (v4).
+
+---
+
+## 12. Analisis Kompetitor & Parity (WiserNotify · ProveSource)
+
+> **Metode.** Analisis dari permukaan fitur **publik** pada 14 Okt 2026 (situs
+> marketing, halaman `/features/`, FAQ, daftar integrasi, halaman analytics/
+> pricing). Dashboard ber-login (`app.wisernotify.com`, `console.provesrc.com`)
+> tidak dapat diakses (tanpa browser interaktif), sehingga perilaku detail di
+> dalam app diinferensi dari dokumentasi publik + pengetahuan produk sejenis.
+> Fidelitas fitur harus diverifikasi ulang saat implementasi.
+>
+> **Strategi:** memang sengaja **duplikat + modifikasi** kategori yang terbukti
+> (kategori besar; WiserNotify 20.000+ situs/200+ integrasi, ProveSource 40.000+
+> bisnis). Pembeda Tacto tetap: **onboarding lebih sederhana, harga lebih jelas,
+> verified proof**.
+
+### 12.1 Ringkasan posisi
+
+| Aspek           | WiserNotify                                                                  | ProveSource                                                             | Tacto (target)                            |
+| --------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------- |
+| Tipe notifikasi | 8+ (sales, signup, review, live, countdown, bar, inline, social)             | 6+ (stream, combo, live, review, informational, social) + Boost         | 12 tipe + inline + social counter + Boost |
+| Integrasi       | 200+ (native + Zapier)                                                       | 100+ (native + Zapier)                                                  | 44 + Zapier/Make → **connect sungguhan**  |
+| Analytics       | impression/klik/konversi, slice page/geo/device, revenue attribution, digest | visitors/impressions/hover/klik/CTR, compare period, top pages, revenue | dasar → **per-notifikasi + revenue**      |
+| A/B             | ≤5 varian, signifikansi, auto-promote                                        | variable testing                                                        | varian dasar → **signifikansi**           |
+| Free plan       | Tidak (trial 7 hari)                                                         | Ya (free forever)                                                       | Free + Starter/Growth/Agency              |
+| Harga           | dari $16/bln (per visitor)                                                   | free + paid                                                             | $12 / $35 / $79                           |
+| Multi-site      | Unlimited                                                                    | per paket                                                               | per paket                                 |
+
+### 12.2 Fitur yang diadopsi (parity) — menambah scope
+
+1. **Integrasi connect sungguhan** — bukan hanya generate key: authorize →
+   subscribe webhook/poll → **verify** → **mapping field** → health/status →
+   disconnect (revoke). Ini pengganti "integrasi 200+" yang dangkal.
+2. **Kuota traffic ditegakkan** — saat over-quota, notifikasi **dihentikan** +
+   CTA upgrade (bukan sekadar dihitung).
+3. **Targeting lengkap** — URL, **UTM, Referrer, Visitor**, **Country, City,
+   Language, Device/screen-size** (sebagian sudah di skema tapi belum jalan).
+4. **Sequencing & custom rules** — urutan manual, **show once/session**,
+   **skip repeats**, **cap frekuensi per visitor**, **max conversions**,
+   **anonymous**, **hide location/product**, **include/exclude produk**.
+5. **Inline embeds + Social counter** — proof di dalam halaman (badge/counter)
+   dan jumlah follower/subscriber/like (tipe notifikasi baru).
+6. **Custom JS (sandbox)** — selain Custom CSS (pertahankan keamanan via sandbox).
+7. **Analytics dalam** — **per-notifikasi**, **hover/engaged visitor**,
+   **compare periode sebelumnya**, **top pages/devices/countries/browsers**,
+   ekspor GA/BI.
+8. **Revenue attribution / ROAS** — hubungkan konversi ke notifikasi (Shopify/Woo
+   - custom goal) → dampak dolar.
+9. **A/B dengan signifikansi** (≤5 varian) + **auto-promote winner**.
+10. **Review & rating** sebagai social proof: sumber **manual** dan/atau
+    integrasi pihak ketiga (Judge.me/Loox/Yotpo/Trustpilot). **Google/Facebook
+    tetap di luar scope** (keputusan produk).
+11. **Lokalisasi** — daftar bahasa + template per-locale (FR-NED-12) & dukungan RTL.
+
+### 12.3 Diadopsi bertahap / opsional
+
+- WhatsApp button, AI widget builder/preview, auto-detect platform e-commerce,
+  weekly digest email, RTL penuh.
+
+### 12.4 Tetap di luar scope (beda posisi produk)
+
+- Mesin testimonial/Wall of Love/form funnel; aplikasi mobile native;
+  notifikasi palsu/fiktif; **Slack/Teams**; import review **Google/Facebook/
+  YouTube** (dihapus dari scope).
+
+### 12.5 Dampak ke roadmap
+
+- **MVP/MVP+** tidak berubah inti, tetapi **integrasi connect** dan **kuota
+  ditegakkan** naik menjadi **foundational** (dibutuhkan agar monetisasi &
+  integrasi berfungsi).
+- **Fase 3/4** diperkaya: inline embeds + social counter, targeting lengkap,
+  sequencing/rules, analytics dalam + revenue, A/B signifikansi, review manual.
+- Rencana task teknis detail ada di
+  [implementation/dev-implementation.md](implementation/dev-implementation.md)
+  (bagian _Audit_ + _Referensi Kompetitor & Rencana Parity_).
