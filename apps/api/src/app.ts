@@ -64,7 +64,7 @@ export function createApp({
     "clientOrigins" | "stripe" | "publicApiUrl" | "credentialsSecret" | "integrations" | "media"
   >;
 } & AppAsyncDeps) {
-  const loadSession = createSessionMiddleware(auth, db);
+  const loadSession = createSessionMiddleware(auth);
   // Organization + role, only on the tenant-scoped API (FR-AUTH-05).
   const loadMembership = createMembershipMiddleware(db);
   const goalsService = createGoalsService(db);

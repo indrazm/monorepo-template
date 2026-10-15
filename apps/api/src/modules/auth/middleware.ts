@@ -23,7 +23,7 @@ export type AuthProvider = {
 // Resolves the caller's session. Deliberately does no organization lookup:
 // routes like /profile and /users never need one, and this runs on every
 // authenticated request.
-export function createSessionMiddleware(auth: AuthProvider, db: Pick<Database, "select">) {
+export function createSessionMiddleware(auth: AuthProvider) {
   return async (c: Context<{ Variables: AuthVariables }>, next: Next) => {
     const session = await auth.getSession(c.req.raw.headers);
     c.set("session", session?.session ?? null);
