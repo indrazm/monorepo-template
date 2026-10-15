@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { Database } from "@repo/db";
-import { domainSetting, site } from "@repo/db/schema";
+import { domainSetting, event, site } from "@repo/db/schema";
 import type {
   CreateSiteInput,
   DomainLoopSettings,
@@ -39,7 +39,17 @@ function toSite(row: SiteRow): Site {
 }
 
 export function createSitesService(db: Pick<Database, "select" | "insert" | "update" | "delete">) {
-  return { list, get, create, update, remove, getSettings, upsertSettings };
+  return {
+    list,
+    get,
+    create,
+    update,
+    remove,
+    getSettings,
+    upsertSettings,
+    exportEvents,
+    purgeEvents,
+  };
 
   async function ownsSite(organizationId: string, siteId: string): Promise<boolean> {
     const rows = await db
@@ -140,5 +150,23 @@ export function createSitesService(db: Pick<Database, "select" | "insert" | "upd
       .where(and(eq(site.id, id), eq(site.organizationId, organizationId)))
       .returning({ id: site.id });
     return rows.length > 0;
+  }
+
+  // Data portability (NFR-PRIV-03): every stored event for the site, newest
+  // first. Null when the site is not in the caller's organization.
+  async function exportEvents(
+    organizationId: string,
+    siteId: string,
+  ): Promise<(typeof event.$inferSelect)[] | null> {
+    if (!(await ownsSite(organizationId, siteId))) return null;
+    return db.select().from(event).where(eq(event.siteId, siteId)).orderBy(desc(event.occurredAt));
+  }
+
+  // Right to erasure (NFR-PRIV-03): delete every event of the site. Impressions
+  // are anonymous counters and are kept for billing/analytics accuracy.
+  async function purgeEvents(organizationId: string, siteId: string): Promise<number | null> {
+    if (!(await ownsSite(organizationId, siteId))) return null;
+    const rows = await db.delete(event).where(eq(event.siteId, siteId)).returning({ id: event.id });
+    return rows.length;
   }
 }

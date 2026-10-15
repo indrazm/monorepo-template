@@ -4,6 +4,7 @@ import { event, integration, site } from "@repo/db/schema";
 import type { IntegrationConfig } from "@repo/contracts/integrations";
 import type { IngestEventInput } from "@repo/contracts/events";
 import type { WebhookJob } from "@repo/contracts/jobs";
+import type { EventType } from "@repo/contracts/notifications";
 import { getConnector } from "../integrations/connectors";
 
 const UNIQUE_VIOLATION = "23505";
@@ -41,6 +42,9 @@ function firstName(value: string | undefined): string | null {
 export type IngestServiceDeps = {
   enqueueWebhook?: (job: WebhookJob) => Promise<void>;
   enqueueCounter?: (siteId: string) => Promise<void> | void;
+  // Lets event-based goals record a conversion when an event is stored
+  // (FR-ANL-03). Best-effort.
+  onEvent?: (siteId: string, eventType: EventType) => Promise<void> | void;
 };
 
 export function createIngestService(
@@ -127,6 +131,7 @@ export function createIngestService(
       return "filtered";
     }
     await markDelivery(integrationId, { ok: true });
+    await fireEvent(siteRow.id, mapped.type);
 
     if (deps.enqueueWebhook) {
       await deps.enqueueWebhook({
@@ -140,8 +145,6 @@ export function createIngestService(
           product: mapped.product,
           dedupeKey: mapped.dedupeKey,
           occurredAt: mapped.occurredAt.toISOString(),
-          rating: mapped.rating ?? null,
-          text: mapped.text ?? null,
         },
       });
       return "created";
@@ -155,11 +158,7 @@ export function createIngestService(
         verified: true,
         displayName: mapped.displayName,
         city: mapped.city,
-        payload: {
-          ...(mapped.product ? { product: mapped.product } : {}),
-          ...(mapped.rating ? { rating: mapped.rating } : {}),
-          ...(mapped.text ? { text: mapped.text } : {}),
-        },
+        payload: mapped.product ? { product: mapped.product } : null,
         dedupeKey: mapped.dedupeKey,
         occurredAt: mapped.occurredAt,
       });
@@ -204,6 +203,16 @@ export function createIngestService(
     } catch (error) {
       if (isUniqueViolation(error)) return "duplicate";
       throw error;
+    }
+  }
+
+  // Records event-based goal conversions for a stored event (FR-ANL-03).
+  async function fireEvent(siteId: string, eventType: EventType): Promise<void> {
+    if (!deps.onEvent) return;
+    try {
+      await deps.onEvent(siteId, eventType);
+    } catch {
+      // Best-effort: goal recording must never fail an ingestion.
     }
   }
 

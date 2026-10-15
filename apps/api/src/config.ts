@@ -56,9 +56,6 @@ export const apiEnvSchema = z
     // Encrypts integration credentials at rest (AES-256-GCM). Falls back to
     // BETTER_AUTH_SECRET so development needs no extra setup.
     CREDENTIALS_SECRET: optionalStringSchema,
-    // Google Places API key — the sanctioned way to read Google reviews
-    // (FR-NOT-05). Without it the Google reviews connector stays unconfigured.
-    GOOGLE_MAPS_API_KEY: optionalStringSchema,
     // Public, internet-reachable base URL of this API. Used to build the
     // webhook URLs Tacto registers with providers. Defaults to BETTER_AUTH_URL.
     // A bare host (e.g. an ngrok domain) is accepted and assumed to be https.
@@ -119,7 +116,6 @@ export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
       staticMapTemplate: env.STATIC_MAP_URL_TEMPLATE ?? null,
     },
     integrations: {
-      googleMapsApiKey: env.GOOGLE_MAPS_API_KEY ?? null,
       hubspot:
         env.HUBSPOT_CLIENT_ID && env.HUBSPOT_CLIENT_SECRET
           ? { clientId: env.HUBSPOT_CLIENT_ID, clientSecret: env.HUBSPOT_CLIENT_SECRET }

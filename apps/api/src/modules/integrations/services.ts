@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { and, asc, desc, eq } from "drizzle-orm";
 import type { Database } from "@repo/db";
-import { event, integration, site } from "@repo/db/schema";
+import { integration, site } from "@repo/db/schema";
 import {
   integrationConfigSchema,
   integrationMeta,
@@ -14,7 +14,7 @@ import {
   type VerifyIntegrationResponse,
 } from "@repo/contracts/integrations";
 import type { CredentialCipher } from "./credentials";
-import { fetchGoogleReviews, getProviderApi, type ServerCredentials } from "./provider-api";
+import { getProviderApi, type ServerCredentials } from "./provider-api";
 
 type IntegrationRow = typeof integration.$inferSelect;
 
@@ -53,38 +53,7 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
     remove,
     resolveForWebhook,
     recordDelivery,
-    refreshGoogleReviews,
-    refreshAllGoogleReviews,
   };
-
-  // Scheduled refresh (FR-NOT-05): Places reviews are not realtime and capped
-  // at 5 per place, so every connected place is re-pulled on a timer and the
-  // cached events are deduped by author+timestamp.
-  async function refreshAllGoogleReviews(): Promise<{ places: number; imported: number }> {
-    const rows = await db
-      .select({ id: integration.id, organizationId: integration.organizationId })
-      .from(integration)
-      .where(eq(integration.provider, "google_reviews"));
-    let imported = 0;
-    for (const row of rows) {
-      try {
-        const result = await refreshGoogleReviews(row.organizationId, row.id);
-        imported += result.imported;
-        await db
-          .update(integration)
-          .set({
-            status: result.ok ? "connected" : "error",
-            lastCheckedAt: new Date(),
-            lastError: result.ok ? null : result.message.slice(0, 500),
-            ...(result.imported > 0 ? { lastEventAt: new Date() } : {}),
-          })
-          .where(eq(integration.id, row.id));
-      } catch {
-        // One broken place must not stop the rest of the refresh.
-      }
-    }
-    return { places: rows.length, imported };
-  }
 
   async function list(organizationId: string): Promise<Integration[]> {
     const rows = await db
@@ -190,12 +159,6 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
     const absent = required.filter((field) => !credentials[field.key]).map((field) => field.label);
     if (absent.length > 0) {
       return finish(row, "error", `Missing ${absent.join(", ")}.`, checkedAt);
-    }
-
-    // Google reviews: verifying means actually pulling the reviews in.
-    if (provider === "google_reviews") {
-      const result = await refreshGoogleReviews(organizationId, id);
-      return finish(row, result.ok ? "connected" : "error", result.message, checkedAt);
     }
 
     if (api?.test) {
@@ -355,66 +318,6 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
       .where(eq(integration.id, id));
   }
 
-  // Pulls Google Places reviews into cached `review` events (FR-NOT-05).
-  // Places returns at most 5 reviews and is not realtime, so this runs on a
-  // schedule and dedupes on author+timestamp.
-  async function refreshGoogleReviews(
-    organizationId: string,
-    id: string,
-  ): Promise<{ ok: boolean; message: string; imported: number }> {
-    const row = await findRow(organizationId, id);
-    if (!row) return { ok: false, message: "Integration not found.", imported: 0 };
-    const config = (row.config ?? {}) as IntegrationConfig;
-    const credentials = deps.cipher.decryptAll(config.credentials);
-    const placeId = credentials.placeId;
-    if (!placeId) return { ok: false, message: "No Google Place ID stored.", imported: 0 };
-    if (!deps.server.googleMapsApiKey) {
-      return {
-        ok: false,
-        message: "GOOGLE_MAPS_API_KEY is not configured on the server.",
-        imported: 0,
-      };
-    }
-    const siteId = await resolveSiteId(organizationId, config);
-    if (!siteId) return { ok: false, message: "Create a site first.", imported: 0 };
-
-    const result = await fetchGoogleReviews(placeId, deps.server.googleMapsApiKey);
-    if (!result.ok) return { ok: false, message: result.message, imported: 0 };
-
-    let imported = 0;
-    for (const review of result.reviews) {
-      const rows = await db
-        .insert(event)
-        .values({
-          siteId,
-          type: "review",
-          source: "google_reviews",
-          // Reviews come from Google's API over a verified place, so they
-          // carry the verified badge (FR-VER-01).
-          verified: true,
-          displayName: review.author ? review.author.trim().split(/\s+/)[0] : null,
-          city: null,
-          payload: {
-            rating: review.rating,
-            text: review.text,
-            source: "Google",
-            ...(review.profilePhoto ? { image: review.profilePhoto } : {}),
-            ...(result.placeName ? { place: result.placeName } : {}),
-          },
-          dedupeKey: review.dedupeKey,
-          occurredAt: review.occurredAt,
-        })
-        .onConflictDoNothing()
-        .returning({ id: event.id });
-      imported += rows.length;
-    }
-    return {
-      ok: true,
-      message: `${result.message} ${imported} new.`,
-      imported,
-    };
-  }
-
   async function findRow(organizationId: string, id: string): Promise<IntegrationRow | null> {
     const [row] = await db
       .select()
@@ -422,29 +325,6 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
       .where(and(eq(integration.id, id), eq(integration.organizationId, organizationId)))
       .limit(1);
     return row ?? null;
-  }
-
-  // The site inbound events are attributed to: the one picked in the wizard,
-  // otherwise the organization's first site.
-  async function resolveSiteId(
-    organizationId: string,
-    config: IntegrationConfig,
-  ): Promise<string | null> {
-    if (config.siteKey) {
-      const [row] = await db
-        .select({ id: site.id })
-        .from(site)
-        .where(and(eq(site.organizationId, organizationId), eq(site.siteKey, config.siteKey)))
-        .limit(1);
-      if (row) return row.id;
-    }
-    const [first] = await db
-      .select({ id: site.id })
-      .from(site)
-      .where(eq(site.organizationId, organizationId))
-      .orderBy(asc(site.createdAt))
-      .limit(1);
-    return first?.id ?? null;
   }
 
   async function buildWebhookUrl(

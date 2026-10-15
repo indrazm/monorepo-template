@@ -32,7 +32,7 @@ function app() {
       publicApiUrl: "http://localhost:8000",
       credentialsSecret: "test-credentials-secret",
       media: { staticMapTemplate: null },
-      integrations: { googleMapsApiKey: null, shopify: null, hubspot: null },
+      integrations: { shopify: null, hubspot: null },
     },
     auth: {
       // A session for whichever user the test is currently acting as.

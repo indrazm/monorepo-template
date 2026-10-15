@@ -128,4 +128,28 @@ describe("sites service (tenant isolation)", () => {
     expect(second?.loop.loopAfter).toBe(2);
     expect(second?.customCss).toBeNull();
   });
+
+  it("exports and purges the site's events, tenant-scoped (NFR-PRIV-03)", async () => {
+    const siteA = await service.create(ORG_A, { name: "A", domain: "a.example.com" });
+    await db.insert(schema.event).values([
+      {
+        siteId: siteA.id,
+        type: "purchase",
+        source: "manual",
+        displayName: "Ada",
+        city: "Jakarta",
+        occurredAt: new Date(),
+      },
+      { siteId: siteA.id, type: "signup", source: "pixel", occurredAt: new Date() },
+    ]);
+
+    const exported = await service.exportEvents(ORG_A, siteA.id);
+    expect(exported).toHaveLength(2);
+    // A foreign org cannot export or purge.
+    expect(await service.exportEvents(ORG_B, siteA.id)).toBeNull();
+    expect(await service.purgeEvents(ORG_B, siteA.id)).toBeNull();
+
+    expect(await service.purgeEvents(ORG_A, siteA.id)).toBe(2);
+    expect(await service.exportEvents(ORG_A, siteA.id)).toHaveLength(0);
+  });
 });

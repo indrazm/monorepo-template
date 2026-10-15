@@ -24,7 +24,7 @@ const app = createApp({
     publicApiUrl: "http://localhost:8000",
     credentialsSecret: "test-credentials-secret",
     media: { staticMapTemplate: null },
-    integrations: { googleMapsApiKey: null, shopify: null, hubspot: null },
+    integrations: { shopify: null, hubspot: null },
   },
   auth: {
     getSession: async () => null,

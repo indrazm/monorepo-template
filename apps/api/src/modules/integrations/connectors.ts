@@ -14,9 +14,6 @@ export type NormalizedEvent = {
   product: string | null;
   dedupeKey: string | null;
   occurredAt: Date;
-  // Review payload (FR-NOT-05) when the provider sends one.
-  rating?: number | null;
-  text?: string | null;
 };
 
 // Per-integration overrides applied on top of the connector's heuristics
@@ -195,7 +192,6 @@ function mapType(hint: string | undefined, fallback: EventType): EventType {
   if (/(signup|register|subscrib|account|lead|member|create_user|user_created)/.test(value)) {
     return "signup";
   }
-  if (/(review|rating)/.test(value)) return "review";
   if (/(form|submit|submission|response|contact|enquir|inquir|application)/.test(value)) {
     return "form_submit";
   }
@@ -340,9 +336,6 @@ function applyMapping(
   const dedupeKey = mapped(raw, mapping, "dedupeKey");
   const occurredAt = mapped(raw, mapping, "occurredAt");
   const typeHint = mapped(raw, mapping, "type");
-  const rating = mapped(raw, mapping, "rating");
-  const text = mapped(raw, mapping, "text");
-  const ratingValue = rating === undefined ? undefined : Number(rating);
   return {
     type: typeHint ? mapType(typeHint, base.type) : base.type,
     displayName: name !== undefined ? firstName(name) : base.displayName,
@@ -350,21 +343,12 @@ function applyMapping(
     product: product !== undefined ? str(product) : base.product,
     dedupeKey: dedupeKey !== undefined ? str(dedupeKey) : base.dedupeKey,
     occurredAt: occurredAt !== undefined ? dateOf(occurredAt) : base.occurredAt,
-    rating:
-      ratingValue !== undefined && Number.isFinite(ratingValue)
-        ? Math.max(1, Math.min(5, Math.round(ratingValue)))
-        : base.rating,
-    text: text !== undefined ? str(text) : base.text,
   };
 }
-
-const RATING_PATHS = ["rating", "score", "stars", "review.rating", "data.rating"];
-const TEXT_PATHS = ["text", "comment", "body", "review", "review.text", "message", "data.text"];
 
 function mapLoose(raw: unknown, fallback: EventType): NormalizedEvent | null {
   if (!raw || typeof raw !== "object") return null;
   const nameHint = pick(raw, NAME_PATHS) ?? pick(raw, EMAIL_PATHS)?.split("@")[0];
-  const ratingHint = Number(pick(raw, RATING_PATHS));
   return {
     type: mapType(pick(raw, TYPE_PATHS), fallback),
     displayName: firstName(nameHint),
@@ -372,8 +356,6 @@ function mapLoose(raw: unknown, fallback: EventType): NormalizedEvent | null {
     product: str(pick(raw, PRODUCT_PATHS)),
     dedupeKey: str(pick(raw, DEDUPE_PATHS)),
     occurredAt: dateOf(pick(raw, TIME_PATHS)),
-    rating: Number.isFinite(ratingHint) ? Math.max(1, Math.min(5, Math.round(ratingHint))) : null,
-    text: str(pick(raw, TEXT_PATHS)),
   };
 }
 
@@ -491,15 +473,6 @@ const registry: Record<IntegrationProvider, Connector> = {
   livechat: looseProvider("livechat", "signup"),
   quickbooks: looseProvider("quickbooks", "purchase"),
   xero: looseProvider("xero", "purchase"),
-
-  // Polled source: Tacto pulls from the Google Places API, so there is no
-  // inbound webhook to verify. The mapper handles the shape the reviews
-  // refresh job posts internally.
-  google_reviews: connector(
-    "google_reviews",
-    () => false,
-    (raw) => mapLoose(raw, "review"),
-  ),
 };
 
 export function getConnector(provider: string): Connector | null {

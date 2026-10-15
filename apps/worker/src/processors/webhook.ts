@@ -23,11 +23,7 @@ export function createWebhookProcessor(
         verified: true,
         displayName: mapped.displayName,
         city: mapped.city,
-        payload: {
-          ...(mapped.product ? { product: mapped.product } : {}),
-          ...(mapped.rating ? { rating: mapped.rating } : {}),
-          ...(mapped.text ? { text: mapped.text } : {}),
-        },
+        payload: mapped.product ? { product: mapped.product } : null,
         dedupeKey: mapped.dedupeKey,
         occurredAt: new Date(mapped.occurredAt),
       });

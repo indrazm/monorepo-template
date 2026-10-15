@@ -1,8 +1,14 @@
-import { and, desc, eq, gte, isNotNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, isNotNull, lt, or, sql } from "drizzle-orm";
 import type { Database } from "@repo/db";
 import { event, impression, notification, site } from "@repo/db/schema";
 import type { Activation, AnalyticsSummary } from "@repo/contracts/analytics";
 import type { EventRecord } from "@repo/contracts/events";
+import {
+  MIN_SAMPLE_PER_ARM,
+  SIGNIFICANCE_LEVEL,
+  twoProportionPValue,
+  wilsonInterval,
+} from "./stats";
 
 export class InvalidEventsCursorError extends Error {
   constructor() {
@@ -43,14 +49,18 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
       .where(and(eq(impression.siteId, siteId), gte(impression.createdAt, since)))
       .groupBy(sql`date_trunc('day', ${impression.createdAt})`, impression.kind);
 
-    const byDay = new Map<string, { views: number; clicks: number }>();
+    const byDay = new Map<string, { views: number; clicks: number; claims: number }>();
     let views = 0;
     let clicks = 0;
+    let claims = 0;
     for (const row of rows) {
-      const bucket = byDay.get(row.day) ?? { views: 0, clicks: 0 };
+      const bucket = byDay.get(row.day) ?? { views: 0, clicks: 0, claims: 0 };
       if (row.kind === "click") {
         bucket.clicks += row.count;
         clicks += row.count;
+      } else if (row.kind === "claim") {
+        bucket.claims += row.count;
+        claims += row.count;
       } else {
         bucket.views += row.count;
         views += row.count;
@@ -60,9 +70,63 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
 
     const perDay = [...byDay.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, value]) => ({ date, views: value.views, clicks: value.clicks }));
+      .map(([date, value]) => ({
+        date,
+        views: value.views,
+        clicks: value.clicks,
+        claims: value.claims,
+      }));
 
-    // Per-variant breakdown for A/B tests (FR-ANL-04).
+    // Per-notification breakdown (FR-ANL-02): views/clicks/claims per notification
+    // so the dashboard can show which notification actually works. Goal
+    // conversions also live in this table (refId = goal id) and are excluded,
+    // since they have no matching notification row.
+    const notifRows = await db
+      .select({
+        refId: impression.refId,
+        kind: impression.kind,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(impression)
+      .where(and(eq(impression.siteId, siteId), gte(impression.createdAt, since)))
+      .groupBy(impression.refId, impression.kind);
+    const notifMeta = await db
+      .select({
+        id: notification.id,
+        name: notification.name,
+        type: notification.type,
+        isActive: notification.isActive,
+      })
+      .from(notification)
+      .where(eq(notification.siteId, siteId));
+    const metaById = new Map(notifMeta.map((row) => [row.id, row]));
+    const notifMap = new Map<string, { views: number; clicks: number; claims: number }>();
+    for (const row of notifRows) {
+      if (!metaById.has(row.refId)) continue;
+      const bucket = notifMap.get(row.refId) ?? { views: 0, clicks: 0, claims: 0 };
+      if (row.kind === "click") bucket.clicks += row.count;
+      else if (row.kind === "claim") bucket.claims += row.count;
+      else bucket.views += row.count;
+      notifMap.set(row.refId, bucket);
+    }
+    const notifications = [...notifMap.entries()]
+      .map(([notificationId, bucket]) => {
+        const meta = metaById.get(notificationId)!;
+        return {
+          notificationId,
+          name: meta.name,
+          type: meta.type,
+          isActive: meta.isActive,
+          views: bucket.views,
+          clicks: bucket.clicks,
+          claims: bucket.claims,
+          ctr: bucket.views > 0 ? bucket.clicks / bucket.views : 0,
+        };
+      })
+      .sort((a, b) => b.views - a.views || b.clicks - a.clicks);
+
+    // Per-variant breakdown for A/B tests (FR-ANL-04), with a Wilson 95%
+    // interval so a difference in CTR can be read as real or as noise.
     const variantRows = await db
       .select({
         refId: impression.refId,
@@ -95,27 +159,89 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
         clicks: 0,
       };
       if (row.kind === "click") bucket.clicks += row.count;
-      else bucket.views += row.count;
+      else if (row.kind === "view") bucket.views += row.count;
       variantMap.set(key, bucket);
     }
-    const variants = [...variantMap.values()].map((bucket) => ({
-      ...bucket,
-      ctr: bucket.views > 0 ? bucket.clicks / bucket.views : 0,
-    }));
+    const variants = [...variantMap.values()].map((bucket) => {
+      const { low, high } = wilsonInterval(bucket.clicks, bucket.views);
+      return {
+        ...bucket,
+        ctr: bucket.views > 0 ? bucket.clicks / bucket.views : 0,
+        ctrLow: low,
+        ctrHigh: high,
+      };
+    });
 
-    return { views, clicks, ctr: views > 0 ? clicks / views : 0, days, perDay, variants };
+    // A/B readout per notification (FR-ANL-04): which variant leads, and whether
+    // the lead over the runner-up is statistically significant.
+    const byNotification = new Map<string, typeof variants>();
+    for (const variant of variants) {
+      const list = byNotification.get(variant.notificationId) ?? [];
+      list.push(variant);
+      byNotification.set(variant.notificationId, list);
+    }
+    const abTests: AnalyticsSummary["abTests"] = [];
+    for (const [notificationId, arms] of byNotification) {
+      if (arms.length < 2) continue;
+      const ranked = [...arms].sort((a, b) => b.ctr - a.ctr);
+      const leader = ranked[0]!;
+      const runnerUp = ranked[1]!;
+      const pValue = twoProportionPValue(
+        leader.clicks,
+        leader.views,
+        runnerUp.clicks,
+        runnerUp.views,
+      );
+      const enoughData = leader.views >= MIN_SAMPLE_PER_ARM && runnerUp.views >= MIN_SAMPLE_PER_ARM;
+      abTests.push({
+        notificationId,
+        name: metaById.get(notificationId)?.name ?? "Notification",
+        leaderVariantId: leader.variantId,
+        runnerUpVariantId: runnerUp.variantId,
+        pValue,
+        significant: enoughData && pValue !== null && pValue < SIGNIFICANCE_LEVEL,
+        enoughData,
+      });
+    }
+
+    return {
+      views,
+      clicks,
+      claims,
+      ctr: views > 0 ? clicks / views : 0,
+      days,
+      perDay,
+      notifications,
+      variants,
+      abTests,
+    };
   }
 
-  // Keyset-paginated events feed (newest first), cursor = last event id.
+  // Keyset-paginated events feed (newest first), cursor = last event id, with
+  // optional type/source/verified/name filters (FR-ING-11).
   async function eventsFeed(
     organizationId: string,
     siteId: string,
-    limit: number,
-    cursor?: string,
+    filters: {
+      limit: number;
+      cursor?: string;
+      type?: EventRecord["type"];
+      source?: EventRecord["source"];
+      verified?: boolean;
+      q?: string;
+    },
   ): Promise<EventsFeedPage | null> {
     if (!(await siteInOrg(organizationId, siteId))) return null;
+    const { limit, cursor, type, source, verified, q } = filters;
 
     let where = eq(event.siteId, siteId);
+    if (type) where = and(where, eq(event.type, type))!;
+    if (source) where = and(where, eq(event.source, source))!;
+    if (verified !== undefined) where = and(where, eq(event.verified, verified))!;
+    if (q) {
+      const like = `%${q}%`;
+      where = and(where, or(ilike(event.displayName, like), ilike(event.city, like)))!;
+    }
     if (cursor) {
       const [cursorRow] = await db
         .select({ occurredAt: event.occurredAt, id: event.id })

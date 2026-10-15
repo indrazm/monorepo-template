@@ -68,14 +68,6 @@ export function createIntegrationsRouter(service: IntegrationsService) {
         if (!result) return c.json(apiError("integration_not_found"), 404);
         return c.json(result, 200);
       })
-      // Pull Google Places reviews now instead of waiting for the daily refresh.
-      .post("/:id/refresh", async (c) => {
-        const allowed = manage(c);
-        if ("error" in allowed) return c.json(apiError(allowed.error), allowed.status);
-        const { organizationId } = allowed;
-        const result = await service.refreshGoogleReviews(organizationId, c.req.param("id"));
-        return c.json(result, result.ok ? 200 : 400);
-      })
       .delete("/:id", async (c) => {
         const allowed = manage(c);
         if ("error" in allowed) return c.json(apiError(allowed.error), allowed.status);

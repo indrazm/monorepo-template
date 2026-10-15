@@ -1,7 +1,11 @@
 import { apiError } from "@repo/contracts/errors";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { createGoalSchema, listGoalsQuerySchema } from "@repo/contracts/goals";
+import {
+  createGoalSchema,
+  goalStatsQuerySchema,
+  listGoalsQuerySchema,
+} from "@repo/contracts/goals";
 import { type AuthVariables, requireOrg } from "../auth/middleware";
 import type { createGoalsService } from "./services";
 
@@ -39,5 +43,19 @@ export function createGoalsRouter(service: ReturnType<typeof createGoalsService>
       const removed = await service.remove(organizationId, c.req.param("id"));
       if (!removed) return c.json(apiError("conflict"), 404);
       return c.json({ ok: true }, 200);
-    });
+    })
+    .get(
+      "/:id/stats",
+      zValidator("query", goalStatsQuerySchema, (result, c) => {
+        if (!result.success) return c.json(apiError("validation_error"), 400);
+      }),
+      async (c) => {
+        const organizationId = requireOrg(c);
+        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        const { days, windowMinutes } = c.req.valid("query");
+        const stats = await service.stats(organizationId, c.req.param("id"), days, windowMinutes);
+        if (!stats) return c.json(apiError("conflict"), 404);
+        return c.json({ stats }, 200);
+      },
+    );
 }

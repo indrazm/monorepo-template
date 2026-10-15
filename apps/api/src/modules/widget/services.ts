@@ -19,6 +19,7 @@ import type {
   EventType,
   NotificationConfig,
   NotificationDataSource,
+  NotificationMedia,
   NotificationMessage,
   NotificationStyle,
   NotificationTiming,
@@ -52,6 +53,11 @@ export type PayloadResult =
 export type WidgetServiceDeps = {
   store?: RealtimeStore;
   enqueueCounter?: (siteId: string) => Promise<void> | void;
+  // Records event-based goal conversions for pixel-captured events (FR-ANL-03).
+  onEvent?: (siteId: string, eventType: EventType) => Promise<void> | void;
+  // Keyed static-map template (with {lat}/{lng}) for the media fallback. Unset =
+  // no map fallback (audit O).
+  staticMapTemplate?: string | null;
   // Where an over-quota site owner is sent to upgrade (dashboard billing page).
   upgradeUrl?: string;
   // Called when an organization crosses a quota threshold (0.8 / 1.0) so the
@@ -189,6 +195,13 @@ export function createWidgetService(
       occurredAt: new Date(),
     });
     await notifyCounter(siteRow.id);
+    if (deps.onEvent) {
+      try {
+        await deps.onEvent(siteRow.id, "form_submit");
+      } catch {
+        // Best-effort: goal recording must not affect capture.
+      }
+    }
     return true;
   }
 
@@ -245,7 +258,9 @@ export function createWidgetService(
 
     const visitContext: VisitContext = {
       url: input.url,
-      country: input.country,
+      // Geo targeting is a privacy choice (NFR-PRIV-02): when the site turns
+      // `trackIpGeo` off, the visitor's country is never used to filter.
+      country: privacy.trackIpGeo ? input.country : null,
       params: input.params,
       referrer: input.referrer,
       visitor: input.visitor,
@@ -357,9 +372,27 @@ export function createWidgetService(
       case "custom":
       case "popup":
       case "bar":
-      case "spin_to_win":
         // Conversion widgets (F69) render a static message/CTA.
         return { ...base, message: render() };
+      case "spin_to_win": {
+        // Spin-to-win hands out a real reward (F69): the prize pool travels to
+        // the pixel, which draws a winner and reveals the code/URL on claim.
+        const spin = config.spin;
+        if (!spin || spin.prizes.length < 2) return { ...base, message: render() };
+        return {
+          ...base,
+          message: render(),
+          spin: {
+            prizes: spin.prizes.map((prize) => ({
+              label: prize.label,
+              weight: prize.weight,
+              ...(prize.code ? { code: prize.code } : {}),
+              ...(prize.url ? { url: prize.url } : {}),
+            })),
+            validForDays: spin.validForDays,
+          },
+        };
+      }
       case "countdown": {
         // Static urgency message + a live countdown rendered by the pixel.
         const endsAt = config.countdown?.endsAt;
@@ -415,27 +448,8 @@ export function createWidgetService(
           message: render({ count }),
         };
       }
-      case "review": {
-        // Latest review event rendered as stars + quote + first name.
-        const latest = await latestEvent(siteId, ["review"]);
-        if (!latest) return null;
-        const review = (latest.payload ?? {}) as { rating?: unknown; text?: unknown };
-        const rating =
-          typeof review.rating === "number" ? Math.max(1, Math.min(5, review.rating)) : 5;
-        const stars = "★".repeat(rating) + "☆".repeat(5 - rating);
-        const text = typeof review.text === "string" ? review.text.slice(0, 160) : "";
-        const author = latest.displayName ?? "A customer";
-        const message = text ? `${stars} "${text}" — ${author}` : `${stars} — ${author}`;
-        const mediaUrl = resolveMedia(latest.payload);
-        return {
-          ...base,
-          message,
-          timeAgo: timeAgoLabel(latest.occurredAt),
-          ...(mediaUrl ? { mediaUrl } : {}),
-        };
-      }
       default: {
-        // recent_sales / review / others: latest matching event.
+        // recent_sales / others: latest matching event.
         const latest = await latestEvent(siteId, eventTypesOf(config.dataSource));
         if (!latest) return null;
         const message = render({
@@ -444,7 +458,7 @@ export function createWidgetService(
           product: productOf(latest),
           occurredAt: latest.occurredAt,
         });
-        const mediaUrl = resolveMedia(latest.payload);
+        const mediaUrl = resolveMedia(latest.payload, deps.staticMapTemplate ?? null, config.media);
         return {
           ...base,
           message,
@@ -530,28 +544,47 @@ function firstString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
-// Media fallback priority (FR-NED-03): image → map → gravatar → flag. The pixel
+// Media (FR-NED-03): an explicit image wins; otherwise the configured fallback
+// preference is walked in order. `auto` keeps the historic priority
+// image → map → gravatar → flag. The map step needs a keyed template; the pixel
 // falls back to a type icon when this returns undefined.
-function resolveMedia(payload: unknown): string | undefined {
+function resolveMedia(
+  payload: unknown,
+  staticMapTemplate: string | null,
+  media?: NotificationMedia,
+): string | undefined {
   const data = (payload ?? {}) as Record<string, unknown>;
-  const image = firstString(data.image, data.imageUrl, data.avatar, data.photo, data.picture);
-  if (image) return image;
+  if (media?.imageUrl) return media.imageUrl;
+  const preference = media?.fallback ?? "auto";
+  if (preference === "none") return undefined;
 
-  const lat = Number(data.lat ?? data.latitude);
-  const lng = Number(data.lng ?? data.lon ?? data.longitude);
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
-    return `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=12&size=120x120&markers=${lat},${lng},red-pushpin`;
-  }
-
-  const email = firstString(data.email);
-  if (email) {
-    const hash = createHash("md5").update(email.toLowerCase()).digest("hex");
-    return `https://www.gravatar.com/avatar/${hash}?d=identicon&s=80`;
-  }
-
-  const country = firstString(data.country, data.countryCode);
-  if (country && /^[a-z]{2}$/i.test(country)) {
-    return `https://flagcdn.com/w80/${country.toLowerCase()}.png`;
+  const sources =
+    preference === "auto"
+      ? (["image", "map", "gravatar", "flag"] as const)
+      : ([preference] as const);
+  for (const source of sources) {
+    if (source === "image") {
+      const image = firstString(data.image, data.imageUrl, data.avatar, data.photo, data.picture);
+      if (image) return image;
+    } else if (source === "map") {
+      if (!staticMapTemplate) continue;
+      const lat = Number(data.lat ?? data.latitude);
+      const lng = Number(data.lng ?? data.lon ?? data.longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        return staticMapTemplate.replace(/\{lat\}/g, String(lat)).replace(/\{lng\}/g, String(lng));
+      }
+    } else if (source === "gravatar") {
+      const email = firstString(data.email);
+      if (email) {
+        const hash = createHash("md5").update(email.toLowerCase()).digest("hex");
+        return `https://www.gravatar.com/avatar/${hash}?d=identicon&s=80`;
+      }
+    } else {
+      const country = firstString(data.country, data.countryCode);
+      if (country && /^[a-z]{2}$/i.test(country)) {
+        return `https://flagcdn.com/w80/${country.toLowerCase()}.png`;
+      }
+    }
   }
   return undefined;
 }
@@ -595,6 +628,8 @@ function toConfig(row: NotificationRow): NotificationConfig {
   const extra = (row.extra ?? {}) as {
     countdown?: unknown;
     fomo?: unknown;
+    spin?: unknown;
+    media?: unknown;
     variants?: unknown;
   };
   return {
@@ -605,6 +640,8 @@ function toConfig(row: NotificationRow): NotificationConfig {
     timing: row.timing,
     ...(extra.countdown ? { countdown: extra.countdown } : {}),
     ...(extra.fomo ? { fomo: extra.fomo } : {}),
+    ...(extra.spin ? { spin: extra.spin } : {}),
+    ...(extra.media ? { media: extra.media } : {}),
     ...(extra.variants ? { variants: extra.variants } : {}),
   } as NotificationConfig;
 }

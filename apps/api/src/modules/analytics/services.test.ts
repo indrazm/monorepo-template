@@ -83,16 +83,19 @@ describe("analytics service", () => {
       { siteId: site.id, type: "purchase", source: "manual", occurredAt: new Date(base + 2000) },
     ]);
 
-    const first = await analytics.eventsFeed(ORG, site.id, 2);
+    const first = await analytics.eventsFeed(ORG, site.id, { limit: 2 });
     expect(first?.events).toHaveLength(2);
     expect(first?.nextCursor).toBeTruthy();
 
-    const second = await analytics.eventsFeed(ORG, site.id, 2, first?.nextCursor ?? undefined);
+    const second = await analytics.eventsFeed(ORG, site.id, {
+      limit: 2,
+      cursor: first?.nextCursor ?? undefined,
+    });
     expect(second?.events).toHaveLength(1);
     expect(second?.nextCursor).toBeNull();
 
-    await expect(analytics.eventsFeed(ORG, site.id, 2, "missing")).rejects.toBeInstanceOf(
-      InvalidEventsCursorError,
-    );
+    await expect(
+      analytics.eventsFeed(ORG, site.id, { limit: 2, cursor: "missing" }),
+    ).rejects.toBeInstanceOf(InvalidEventsCursorError);
   });
 });

@@ -12,7 +12,6 @@ export type ProviderCredentials = Record<string, string>;
 
 export type ServerCredentials = {
   // Tacto-level keys from the environment (not per-organization).
-  googleMapsApiKey: string | null;
   shopify: { apiKey: string; apiSecret: string } | null;
   hubspot: { clientId: string; clientSecret: string } | null;
 };
@@ -417,90 +416,6 @@ const activeCampaignApi: ProviderApi = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Google reviews (FR-NOT-05) — Places API Place Details. Scraping Google Maps
-// breaks Google's terms, so this is the sanctioned route: at most 5 reviews per
-// place, cached by Tacto and refreshed on a schedule.
-// ---------------------------------------------------------------------------
-export type GoogleReview = {
-  author: string | null;
-  rating: number;
-  text: string;
-  relativeTime: string | null;
-  profilePhoto: string | null;
-  // Stable-ish identity for dedupe: author + time.
-  dedupeKey: string;
-  occurredAt: Date;
-};
-
-export type GooglePlaceResult = {
-  ok: boolean;
-  message: string;
-  placeName?: string;
-  reviews: GoogleReview[];
-};
-
-const PLACE_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json";
-
-export async function fetchGoogleReviews(
-  placeId: string,
-  apiKey: string,
-): Promise<GooglePlaceResult> {
-  const url = `${PLACE_DETAILS_URL}?place_id=${encodeURIComponent(placeId)}&fields=name,rating,user_ratings_total,reviews&reviews_sort=most_relevant&key=${encodeURIComponent(apiKey)}`;
-  const result = await request(url);
-  if (!result.ok) return { ...failure("Google Places", result), reviews: [] };
-  const status = strAt(result.json, "status");
-  if (status !== "OK") {
-    const detail = strAt(result.json, "error_message") ?? status ?? "unknown error";
-    return { ok: false, message: `Google Places: ${detail}`, reviews: [] };
-  }
-  const raw = readPath(result.json, "result.reviews");
-  const reviews: GoogleReview[] = [];
-  if (Array.isArray(raw)) {
-    for (const item of raw) {
-      const rating = Number(readPath(item, "rating"));
-      const author = strAt(item, "author_name") ?? null;
-      const time = Number(readPath(item, "time"));
-      if (!Number.isFinite(rating)) continue;
-      const occurredAt = Number.isFinite(time) ? new Date(time * 1000) : new Date();
-      reviews.push({
-        author,
-        rating: Math.max(1, Math.min(5, Math.round(rating))),
-        text: (strAt(item, "text") ?? "").slice(0, 400),
-        relativeTime: strAt(item, "relative_time_description") ?? null,
-        profilePhoto: strAt(item, "profile_photo_url") ?? null,
-        dedupeKey: `google:${placeId}:${author ?? "anon"}:${Number.isFinite(time) ? time : 0}`,
-        occurredAt,
-      });
-    }
-  }
-  return {
-    ok: true,
-    message: `Fetched ${reviews.length} review${reviews.length === 1 ? "" : "s"} from Google.`,
-    placeName: strAt(result.json, "result.name"),
-    reviews,
-  };
-}
-
-const googleReviewsApi: ProviderApi = {
-  async test({ credentials, server }) {
-    const placeId = credentials.placeId;
-    if (!placeId) return missing(["Google Place ID"]);
-    if (!server.googleMapsApiKey) {
-      return {
-        ok: false,
-        message: "GOOGLE_MAPS_API_KEY is not configured on the server.",
-      };
-    }
-    const result = await fetchGoogleReviews(placeId, server.googleMapsApiKey);
-    if (!result.ok) return { ok: false, message: result.message };
-    return {
-      ok: true,
-      message: `${result.placeName ?? "Place"}: ${result.reviews.length} review(s) cached.`,
-    };
-  },
-};
-
 const registry: Partial<Record<IntegrationProvider, ProviderApi>> = {
   stripe: stripeApi,
   shopify: shopifyApi,
@@ -512,7 +427,6 @@ const registry: Partial<Record<IntegrationProvider, ProviderApi>> = {
   lemonsqueezy: lemonApi,
   mailchimp: mailchimpApi,
   activecampaign: activeCampaignApi,
-  google_reviews: googleReviewsApi,
 };
 
 export function getProviderApi(provider: string): ProviderApi | null {

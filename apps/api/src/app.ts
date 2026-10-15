@@ -34,6 +34,7 @@ import { createSitesRouter } from "./modules/sites/router";
 import { createSitesService } from "./modules/sites/services";
 import { createUsersRouter } from "./modules/users/router";
 import { createUsersService } from "./modules/users/services";
+import { recordRequest, renderMetrics, renderQueueMetrics } from "./modules/metrics/metrics";
 
 // Optional async infrastructure: when present, hot-path work is buffered in
 // Redis (impressions) or handed to the worker (webhook events, counter
@@ -47,6 +48,8 @@ export type AppAsyncDeps = {
   // Called when an organization reaches 80% / 100% of its monthly visitor
   // quota, so the owner can be warned before notifications stop (FR-BIL-01).
   onQuotaThreshold?: (organizationId: string, ratio: number) => void;
+  // BullMQ job-state depths for `/metrics` (NFR-OBS-02).
+  queueMetrics?: () => Promise<Record<string, Record<string, number>>>;
 };
 
 export function createApp({
@@ -56,6 +59,7 @@ export function createApp({
   store,
   enqueue,
   onQuotaThreshold,
+  queueMetrics,
 }: {
   auth: AuthProvider;
   db: Database;
@@ -78,14 +82,13 @@ export function createApp({
     cipher: createCredentialCipher(config.credentialsSecret),
     publicApiUrl: config.publicApiUrl,
     server: {
-      googleMapsApiKey: config.integrations.googleMapsApiKey,
       shopify: config.integrations.shopify,
       hubspot: config.integrations.hubspot,
     },
   });
   // Dashboard/auth: credentialed CORS restricted to the configured origins.
   const dashboardCors = cors({
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
     origin: (origin) => (config.clientOrigins.includes(origin) ? origin : null),
@@ -102,6 +105,14 @@ export function createApp({
       // HSTS). CORP is disabled so the public widget endpoints stay reachable
       // cross-origin; CORS above governs who may read them.
       .use("*", secureHeaders({ crossOriginResourcePolicy: false }))
+      // Request count + latency metrics for every route (NFR-OBS-01). Uses the
+      // matched route pattern, so cardinality stays bounded.
+      .use("*", async (c, next) => {
+        const start = performance.now();
+        await next();
+        const route = (c.req as unknown as { routePath?: string }).routePath ?? "unmatched";
+        recordRequest(c.req.method, route, c.res.status, (performance.now() - start) / 1000);
+      })
       .use("/widget/*", widgetCors)
       .use("/ingest/*", widgetCors)
       .use("/api/*", dashboardCors)
@@ -109,6 +120,14 @@ export function createApp({
       .use("/profile", dashboardCors)
       .use("/users", dashboardCors)
       .get("/health", (c) => c.json({ ok: true, service: "api" }, 200))
+      // Prometheus scrape endpoint (NFR-OBS-01/02). Intended for a private
+      // network or a reverse-proxy allowlist, not the public internet.
+      .get("/metrics", async (c) => {
+        const counts = queueMetrics ? await queueMetrics().catch(() => ({})) : {};
+        return c.text(renderMetrics(renderQueueMetrics(counts)), 200, {
+          "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
+        });
+      })
       .on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw))
       .use("/session", loadSession)
       .use("/profile", loadSession)
@@ -146,6 +165,8 @@ export function createApp({
           createWidgetService(db, {
             store,
             enqueueCounter: enqueue?.counter,
+            onEvent: (siteId, eventType) => goalsService.recordEventConversions(siteId, eventType),
+            staticMapTemplate: config.media.staticMapTemplate,
             upgradeUrl: dashboardOrigin ? `${dashboardOrigin}/billing` : undefined,
             onQuotaThreshold,
           }),
@@ -160,6 +181,7 @@ export function createApp({
           createIngestService(db, {
             enqueueWebhook: enqueue?.webhook,
             enqueueCounter: enqueue?.counter,
+            onEvent: (siteId, eventType) => goalsService.recordEventConversions(siteId, eventType),
           }),
           // Multi-instance rate limiting when Redis is available (NFR-SEC-04).
           store

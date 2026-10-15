@@ -64,4 +64,44 @@ describe("goals service", () => {
     expect(await goals.remove(ORG_B, created!.id)).toBe(false);
     expect(await goals.remove(ORG_A, created!.id)).toBe(true);
   });
+
+  it("records event-based conversions and attributes them to viewed notifications", async () => {
+    const site = await sites.create(ORG_A, { name: "B", domain: "b.example.com" });
+    const created = await goals.create(ORG_A, {
+      siteId: site.id,
+      name: "Purchases",
+      rule: { type: "event", eventType: "purchase" },
+    });
+    const [notif] = await db
+      .insert(schema.notification)
+      .values({
+        siteId: site.id,
+        name: "Sales pop",
+        type: "recent_sales",
+        message: {},
+        style: {},
+        display: {},
+        dataSource: {},
+        timing: {},
+      })
+      .returning();
+    // A view of the notification just before the conversions (default now()).
+    await db.insert(schema.impression).values({
+      siteId: site.id,
+      refId: notif!.id,
+      kind: "view",
+    });
+
+    await goals.recordEventConversions(site.id, "purchase");
+    await goals.recordEventConversions(site.id, "purchase");
+    await goals.recordEventConversions(site.id, "signup"); // no matching goal
+
+    const stats = await goals.stats(ORG_A, created!.id, 30, 30);
+    expect(stats?.total).toBe(2);
+    expect(stats?.attribution[0]?.notificationId).toBe(notif!.id);
+    expect(stats?.attribution[0]?.conversions).toBe(2);
+    expect(stats?.daily.at(-1)?.conversions).toBe(2);
+    // A goal from another org is invisible.
+    expect(await goals.stats(ORG_B, created!.id, 30, 30)).toBeNull();
+  });
 });

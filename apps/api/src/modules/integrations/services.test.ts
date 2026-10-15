@@ -13,7 +13,7 @@ const cipher = createCredentialCipher("test-credentials-secret");
 const service = createIntegrationsService(db, {
   cipher,
   publicApiUrl: "https://api.tacto.test",
-  server: { googleMapsApiKey: null, shopify: null, hubspot: null },
+  server: { shopify: null, hubspot: null },
 });
 
 describe("integrations service", () => {
@@ -112,15 +112,5 @@ describe("integrations service", () => {
     const result = await service.verify("org-a", created.id);
     expect(result?.status).toBe("pending");
     expect(result?.message).toContain("Waiting for the first signed delivery");
-  });
-
-  it("reports a Google reviews connection as unconfigured without a server key", async () => {
-    const created = await service.create("org-a", {
-      provider: "google_reviews",
-      config: { credentials: { placeId: "ChIJtest" } },
-    });
-    const result = await service.verify("org-a", created.id);
-    expect(result?.status).toBe("error");
-    expect(result?.message).toContain("GOOGLE_MAPS_API_KEY");
   });
 });

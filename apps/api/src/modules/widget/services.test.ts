@@ -318,6 +318,47 @@ describe("widget payload service", () => {
     expect(byType.spin_to_win?.message).toBe("WIN10");
   });
 
+  it("carries the spin prize pool to the pixel so a reward can be won (F69)", async () => {
+    const created = await seedSite();
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "Wheel",
+      type: "spin_to_win",
+      isActive: true,
+      config: config({
+        message: { template: "Spin to win", fallbacks: {} },
+        style: {
+          position: "center",
+          accent: "#3B82F6",
+          shape: "rounded",
+          size: "md",
+          animation: "slide",
+        },
+        spin: {
+          validForDays: 3,
+          prizes: [
+            { label: "10% off", code: "SAVE10", weight: 1 },
+            { label: "Free shipping", url: "https://shop.example.com/ship", weight: 1 },
+            { label: "Try again", code: "RETRY", weight: 4 },
+          ],
+        },
+      }),
+    });
+
+    const result = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+    });
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    const spin = result.payload.notifications.find((n) => n.type === "spin_to_win")?.spin;
+    expect(spin?.validForDays).toBe(3);
+    expect(spin?.prizes).toHaveLength(3);
+    expect(spin?.prizes[0]).toEqual({ label: "10% off", code: "SAVE10", weight: 1 });
+    expect(spin?.prizes[1]?.url).toBe("https://shop.example.com/ship");
+  });
+
   it("buckets A/B variants deterministically per visitor (FR-ANL-04)", async () => {
     const created = await seedSite();
     await notifications.create(ORG, {
@@ -432,6 +473,52 @@ describe("widget payload service", () => {
     );
   });
 
+  it("honors an explicit media image and fallback preference (FR-NED-03)", async () => {
+    const created = await seedSite();
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "Pinned",
+      type: "recent_sales",
+      isActive: true,
+      config: config({
+        media: { imageUrl: "https://cdn.example.com/pinned.png", fallback: "none" },
+      }),
+    });
+    await db.insert(event).values({
+      siteId: created.id,
+      type: "purchase",
+      source: "manual",
+      verified: true,
+      displayName: "mike",
+      payload: { product: "Nike", image: "https://cdn.example.com/event.png", country: "BR" },
+      occurredAt: new Date(),
+    });
+
+    // A pinned image overrides everything, even fallback "none".
+    const pinned = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+    });
+    expect(pinned.kind === "ok" && pinned.payload.notifications[0]?.mediaUrl).toBe(
+      "https://cdn.example.com/pinned.png",
+    );
+
+    // Drop the pinned image and ask for the country flag specifically.
+    const list = await notifications.list(ORG, created.id);
+    await notifications.update(ORG, list![0]!.id, {
+      config: config({ media: { fallback: "flag" } }),
+    });
+    const flagged = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+    });
+    expect(flagged.kind === "ok" && flagged.payload.notifications[0]?.mediaUrl).toBe(
+      "https://flagcdn.com/w80/br.png",
+    );
+  });
+
   it("honors the manual display order (FR-NGS-02)", async () => {
     const created = await seedSite();
     const first = await notifications.create(ORG, {
@@ -525,6 +612,42 @@ describe("widget payload service", () => {
     expect(us.kind === "ok" && us.payload.notifications).toHaveLength(1);
     expect(de.kind === "ok" && de.payload.notifications).toHaveLength(0);
     expect(unknown.kind === "ok" && unknown.payload.notifications).toHaveLength(1);
+  });
+
+  it("ignores geo targeting when the site turns off trackIpGeo (NFR-PRIV-02)", async () => {
+    const created = await seedSite();
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "US only",
+      type: "custom",
+      isActive: true,
+      config: config({
+        message: { template: "Hello US", fallbacks: {} },
+        display: { url: { mode: "all" }, countries: ["US"] },
+      }),
+    });
+    await sites.upsertSettings(ORG, created.id, {
+      loop: { loopAfter: 1, order: "random", manualOrder: [], showClose: true, closeForDays: 1 },
+      privacy: {
+        requireConsent: false,
+        trackIpGeo: false,
+        storeEmail: false,
+        blockedIps: [],
+        filterProfanity: false,
+      },
+      customCss: null,
+      customJs: null,
+      analyticsPassthrough: { gtag: false, dataLayer: false, fbq: false, mixpanel: false },
+    });
+
+    const de = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+      country: "DE",
+    });
+    // Geo tracking is off, so the country filter is not applied.
+    expect(de.kind === "ok" && de.payload.notifications).toHaveLength(1);
   });
 
   it("blocks listed IPs and masks profanity (FR-NGS-07)", async () => {
