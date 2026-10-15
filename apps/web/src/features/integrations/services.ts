@@ -41,16 +41,6 @@ export async function verifyIntegration(id: string): Promise<VerifyIntegrationRe
   return await response.json();
 }
 
-// Google reviews: pull now instead of waiting for the scheduled refresh.
-export async function refreshIntegration(
-  id: string,
-): Promise<{ ok: boolean; message: string; imported: number }> {
-  const response = await integrations[":id"].refresh.$post({ param: { id } });
-  const body = await response.json();
-  if (!("message" in body)) throw new Error("Failed to refresh reviews.");
-  return body;
-}
-
 export async function deleteIntegration(id: string): Promise<void> {
   const response = await integrations[":id"].$delete({ param: { id } });
   if (!response.ok) throw new Error("Failed to remove integration.");

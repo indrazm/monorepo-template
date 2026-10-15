@@ -1,5 +1,6 @@
 import type { Activation, AnalyticsSummary } from "@repo/contracts/analytics";
-import type { EventRecord } from "@repo/contracts/events";
+import type { EventRecord, EventSource } from "@repo/contracts/events";
+import type { EventType } from "@repo/contracts/notifications";
 import { apiClient } from "../../api";
 
 const analytics = apiClient.api.v1.analytics;
@@ -13,13 +14,30 @@ export async function getSummary(siteId: string, days = 7): Promise<AnalyticsSum
 
 export type EventsFeedPage = { events: EventRecord[]; nextCursor: string | null };
 
+export type EventsFeedFilters = {
+  type?: EventType;
+  source?: EventSource;
+  verified?: boolean;
+  q?: string;
+};
+
 export async function getEventsFeed(
   siteId: string,
   limit = 50,
   cursor?: string,
+  filters: EventsFeedFilters = {},
 ): Promise<EventsFeedPage> {
+  const verified = filters.verified === undefined ? undefined : filters.verified ? "true" : "false";
   const response = await analytics.events.$get({
-    query: { siteId, limit: String(limit), ...(cursor ? { cursor } : {}) },
+    query: {
+      siteId,
+      limit: String(limit),
+      ...(cursor ? { cursor } : {}),
+      ...(filters.type ? { type: filters.type } : {}),
+      ...(filters.source ? { source: filters.source } : {}),
+      ...(verified ? { verified } : {}),
+      ...(filters.q ? { q: filters.q } : {}),
+    },
   });
   if (!response.ok) throw new Error("Failed to load events.");
   return (await response.json()) as EventsFeedPage;

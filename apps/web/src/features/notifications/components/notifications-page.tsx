@@ -2,6 +2,7 @@ import type {
   NotificationConfig,
   NotificationType,
   Notification,
+  SpinPrize,
 } from "@repo/contracts/notifications";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
@@ -39,7 +40,6 @@ const TYPES: { value: NotificationType; label: string }[] = [
   { value: "counter", label: "Counter" },
   { value: "combo", label: "Combo (30-day count)" },
   { value: "live_visitors", label: "Live visitors" },
-  { value: "review", label: "Review" },
   { value: "low_stock", label: "Low stock (FOMO)" },
   { value: "countdown", label: "Countdown" },
   { value: "custom", label: "Custom" },
@@ -77,6 +77,20 @@ function defaultPositionFor(type: NotificationType): Position {
 const selectClass =
   "border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
 
+// The editor follows the PRD §5.1 flow as a stepper (FR-NED-01..10).
+const EDITOR_STEPS = ["Type", "Track", "Display", "Message", "Style", "Launch"] as const;
+const MEDIA_FALLBACKS: {
+  value: NonNullable<NotificationConfig["media"]>["fallback"];
+  label: string;
+}[] = [
+  { value: "auto", label: "Automatic (image → map → avatar → flag)" },
+  { value: "image", label: "Event image only" },
+  { value: "map", label: "Map (needs a configured provider)" },
+  { value: "gravatar", label: "Gravatar (from email)" },
+  { value: "flag", label: "Country flag" },
+  { value: "none", label: "None (type icon)" },
+];
+
 // ISO -> value for <input type="datetime-local"> (local time, no seconds).
 function toLocalInput(iso: string | undefined): string {
   if (!iso) return "";
@@ -107,7 +121,6 @@ function defaultConfig(): NotificationConfig {
 
 function eventTypesForType(type: NotificationType): NotificationConfig["dataSource"]["eventTypes"] {
   if (type === "live_visitors") return ["visit"];
-  if (type === "review") return ["review"];
   if (
     type === "custom" ||
     type === "countdown" ||
@@ -258,9 +271,52 @@ function NotificationEditorDialog({
   const create = useCreateNotificationMutation(siteId);
   const update = useUpdateNotificationMutation(siteId);
   const pending = create.isPending || update.isPending;
+  // Wizard navigation (PRD §5.1: Type → Track → Display → Message → Style →
+  // Launch) and the device the preview is rendered for.
+  const [step, setStep] = useState(0);
+  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const [isActive, setIsActive] = useState(existing?.isActive ?? true);
 
   function patchConfig(patch: Partial<NotificationConfig>) {
     setConfig((previous) => ({ ...previous, ...patch }));
+  }
+
+  // Media (FR-NED-03): an explicit image and the fallback the server walks.
+  function setMedia(patch: Partial<NonNullable<NotificationConfig["media"]>>) {
+    patchConfig({ media: { fallback: "auto", ...config.media, ...patch } });
+  }
+
+  // Spin-to-win prize pool (F69): the real rewards the wheel can hand out.
+  function setSpin(next: NotificationConfig["spin"]) {
+    patchConfig({ spin: next });
+  }
+  function seedSpin() {
+    setSpin({
+      prizes: [
+        { label: "10% off your order", code: "SAVE10", weight: 1 },
+        { label: "Free shipping", code: "FREESHIP", weight: 1 },
+        { label: "Better luck next time", code: "RETRY", weight: 2 },
+      ],
+      validForDays: 7,
+    });
+  }
+  function patchPrize(index: number, patch: Partial<SpinPrize>) {
+    if (!config.spin) return;
+    setSpin({
+      ...config.spin,
+      prizes: config.spin.prizes.map((prize, i) => (i === index ? { ...prize, ...patch } : prize)),
+    });
+  }
+  function addPrize() {
+    if (!config.spin || config.spin.prizes.length >= 12) return;
+    setSpin({
+      ...config.spin,
+      prizes: [...config.spin.prizes, { label: "New prize", code: "CODE", weight: 1 }],
+    });
+  }
+  function removePrize(index: number) {
+    if (!config.spin || config.spin.prizes.length <= 2) return;
+    setSpin({ ...config.spin, prizes: config.spin.prizes.filter((_, i) => i !== index) });
   }
 
   // Translations (FR-NED-12): a locale-keyed map of message templates.
@@ -333,11 +389,12 @@ function NotificationEditorDialog({
       dataSource: { ...config.dataSource, eventTypes: eventTypesForType(type) },
       countdown: type === "countdown" ? config.countdown : undefined,
       fomo: type === "low_stock" ? config.fomo : undefined,
+      spin: type === "spin_to_win" ? config.spin : undefined,
     };
     const onError = (error: Error) => toast.error(error.message);
     if (existing) {
       update.mutate(
-        { id: existing.id, input: { name, type, config: payloadConfig } },
+        { id: existing.id, input: { name, type, isActive, config: payloadConfig } },
         {
           onSuccess: () => {
             toast.success("Notification updated");
@@ -361,7 +418,13 @@ function NotificationEditorDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        setOpen(value);
+        if (value) setStep(0);
+      }}
+    >
       <DialogTrigger asChild>
         {existing ? (
           <Button variant="ghost" size="sm">
@@ -378,277 +441,630 @@ function NotificationEditorDialog({
           <DialogHeader>
             <DialogTitle>{existing ? "Edit notification" : "New notification"}</DialogTitle>
             <DialogDescription>
-              Set the type, message and style. The preview updates as you type.
+              Follow the steps — the preview updates as you type.
             </DialogDescription>
           </DialogHeader>
 
-          <NotificationPreview config={config} type={type} verified={existing?.verified} />
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="n-name">Name</Label>
-              <Input id="n-name" value={name} onChange={(e) => setName(e.target.value)} required />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="n-type">Type</Label>
-              <select
-                id="n-type"
-                className={selectClass}
-                value={type}
-                onChange={(e) => {
-                  const nextType = e.target.value as NotificationType;
-                  setType(nextType);
-                  patchConfig({
-                    style: { ...config.style, position: defaultPositionFor(nextType) },
-                  });
-                }}
-              >
-                {TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           <div className="grid gap-2">
-            <Label htmlFor="n-template">Message</Label>
-            <Textarea
-              id="n-template"
-              value={config.message.template}
-              onChange={(e) =>
-                patchConfig({ message: { ...config.message, template: e.target.value } })
-              }
-              rows={2}
-            />
-            <p className="text-xs text-muted-foreground">
-              Variables: {"{{first_name}}"}, {"{{city}}"}, {"{{product}}"}, {"{{count}}"},{" "}
-              {"{{time_ago}}"}
-            </p>
-          </div>
-
-          <div className="grid gap-2 rounded-md border p-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Translations</Label>
-              <Button type="button" variant="ghost" size="sm" onClick={addTranslation}>
-                <PlusIcon className="size-4" /> Add
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Shown when the visitor&apos;s language matches a locale code (e.g. id, es, pt-BR).
-            </p>
-            {Object.entries(translations).map(([locale, value]) => (
-              <div key={locale} className="grid gap-2 sm:grid-cols-[110px_1fr_auto]">
-                <Input
-                  aria-label="Locale"
-                  placeholder="es"
-                  value={locale}
-                  onChange={(e) => renameTranslation(locale, e.target.value)}
-                />
-                <Textarea
-                  aria-label={`${locale} template`}
-                  rows={2}
-                  value={value.template}
-                  onChange={(e) => patchTranslation(locale, e.target.value)}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => removeTranslation(locale)}
-                >
-                  Remove
-                </Button>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid gap-2 rounded-md border p-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">A/B variants</Label>
+            <div className="flex justify-end gap-1">
               <Button
                 type="button"
-                variant="ghost"
+                variant={device === "desktop" ? "secondary" : "ghost"}
                 size="sm"
-                onClick={addVariant}
-                disabled={variants.length >= 6}
+                onClick={() => setDevice("desktop")}
               >
-                <PlusIcon className="size-4" /> Add
+                Desktop
+              </Button>
+              <Button
+                type="button"
+                variant={device === "mobile" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setDevice("mobile")}
+              >
+                Mobile
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Two or more message variants, bucketed per visitor. Results appear in Analytics.
-            </p>
-            {variants.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No variants — showing the message above.
-              </p>
-            ) : null}
-            {variants.map((variant) => (
-              <div key={variant.id} className="grid gap-2 sm:grid-cols-[80px_90px_1fr_auto]">
-                <Input aria-label="Variant id" value={variant.id} readOnly />
-                <Input
-                  aria-label={`${variant.id} weight`}
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={variant.weight}
-                  onChange={(e) => patchVariantWeight(variant.id, Number(e.target.value) || 1)}
-                />
-                <Textarea
-                  aria-label={`${variant.id} template`}
-                  rows={2}
-                  value={variant.message.template}
-                  onChange={(e) => patchVariantTemplate(variant.id, e.target.value)}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => removeVariant(variant.id)}
-                >
-                  Remove
-                </Button>
-              </div>
+            <NotificationPreview
+              config={config}
+              type={type}
+              verified={existing?.verified}
+              device={device}
+            />
+          </div>
+
+          {/* Stepper */}
+          <div className="flex flex-wrap gap-1">
+            {EDITOR_STEPS.map((label, index) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setStep(index)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  index === step
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {index + 1}. {label}
+              </button>
             ))}
           </div>
 
-          {type === "countdown" ? (
-            <div className="grid gap-2">
-              <Label htmlFor="n-endsAt">Countdown ends at</Label>
-              <Input
-                id="n-endsAt"
-                type="datetime-local"
-                value={toLocalInput(config.countdown?.endsAt)}
-                onChange={(e) =>
-                  patchConfig({
-                    countdown: e.target.value
-                      ? { endsAt: new Date(e.target.value).toISOString() }
-                      : undefined,
-                  })
-                }
-              />
-            </div>
+          {step === 0 ? (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="n-name">Name</Label>
+                  <Input
+                    id="n-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="n-type">Type</Label>
+                  <select
+                    id="n-type"
+                    className={selectClass}
+                    value={type}
+                    onChange={(e) => {
+                      const nextType = e.target.value as NotificationType;
+                      setType(nextType);
+                      patchConfig({
+                        style: { ...config.style, position: defaultPositionFor(nextType) },
+                      });
+                    }}
+                  >
+                    {TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {type === "countdown" ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="n-endsAt">Countdown ends at</Label>
+                  <Input
+                    id="n-endsAt"
+                    type="datetime-local"
+                    value={toLocalInput(config.countdown?.endsAt)}
+                    onChange={(e) =>
+                      patchConfig({
+                        countdown: e.target.value
+                          ? { endsAt: new Date(e.target.value).toISOString() }
+                          : undefined,
+                      })
+                    }
+                  />
+                </div>
+              ) : null}
+
+              {type === "low_stock" ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="n-stock">Units left ({"{{count}}"})</Label>
+                  <Input
+                    id="n-stock"
+                    type="number"
+                    min={0}
+                    value={config.fomo?.stock ?? 0}
+                    onChange={(e) => patchConfig({ fomo: { stock: Number(e.target.value) } })}
+                  />
+                </div>
+              ) : null}
+
+              {type === "spin_to_win" ? (
+                <div className="grid gap-3 rounded-lg border border-border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <Label>Prizes &amp; odds</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Every prize needs a coupon code or a redemption URL. Weight sets how often
+                        it is drawn.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={config.spin ? addPrize : seedSpin}
+                    >
+                      {config.spin ? "Add prize" : "Configure prizes"}
+                    </Button>
+                  </div>
+                  {config.spin
+                    ? config.spin.prizes.map((prize, index) => (
+                        <div
+                          key={index}
+                          className="grid gap-2 border-t border-border pt-3 sm:grid-cols-[1.3fr_1fr_1fr_auto_auto] sm:items-end"
+                        >
+                          <div className="grid gap-1">
+                            <Label className="text-xs" htmlFor={`n-prize-label-${index}`}>
+                              Label
+                            </Label>
+                            <Input
+                              id={`n-prize-label-${index}`}
+                              value={prize.label}
+                              onChange={(e) => patchPrize(index, { label: e.target.value })}
+                            />
+                          </div>
+                          <div className="grid gap-1">
+                            <Label className="text-xs" htmlFor={`n-prize-code-${index}`}>
+                              Coupon code
+                            </Label>
+                            <Input
+                              id={`n-prize-code-${index}`}
+                              value={prize.code ?? ""}
+                              onChange={(e) =>
+                                patchPrize(index, { code: e.target.value.trim() || undefined })
+                              }
+                            />
+                          </div>
+                          <div className="grid gap-1">
+                            <Label className="text-xs" htmlFor={`n-prize-url-${index}`}>
+                              Or redeem URL
+                            </Label>
+                            <Input
+                              id={`n-prize-url-${index}`}
+                              placeholder="https://…"
+                              value={prize.url ?? ""}
+                              onChange={(e) =>
+                                patchPrize(index, { url: e.target.value.trim() || undefined })
+                              }
+                            />
+                          </div>
+                          <div className="grid gap-1">
+                            <Label className="text-xs" htmlFor={`n-prize-weight-${index}`}>
+                              Weight
+                            </Label>
+                            <Input
+                              id={`n-prize-weight-${index}`}
+                              type="number"
+                              min={1}
+                              max={100}
+                              className="w-20"
+                              value={prize.weight}
+                              onChange={(e) =>
+                                patchPrize(index, { weight: Math.max(1, Number(e.target.value)) })
+                              }
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => removePrize(index)}
+                            disabled={config.spin!.prizes.length <= 2}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))
+                    : null}
+                  {config.spin ? (
+                    <div className="grid gap-2 border-t border-border pt-3 sm:grid-cols-2 sm:items-end">
+                      <div className="grid gap-1">
+                        <Label className="text-xs" htmlFor="n-spin-valid">
+                          Reward valid (days)
+                        </Label>
+                        <Input
+                          id="n-spin-valid"
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={config.spin.validForDays}
+                          onChange={(e) =>
+                            setSpin({
+                              ...config.spin!,
+                              validForDays: Math.max(1, Number(e.target.value)),
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </>
           ) : null}
 
-          {type === "low_stock" ? (
-            <div className="grid gap-2">
-              <Label htmlFor="n-stock">Units left ({"{{count}}"})</Label>
-              <Input
-                id="n-stock"
-                type="number"
-                min={0}
-                value={config.fomo?.stock ?? 0}
-                onChange={(e) => patchConfig({ fomo: { stock: Number(e.target.value) } })}
+          {step === 1 ? (
+            <>
+              <div className="grid gap-4 sm:grid-cols-[160px_1fr]">
+                <div className="grid gap-2">
+                  <Label htmlFor="n-url-mode">Show on</Label>
+                  <select
+                    id="n-url-mode"
+                    className={selectClass}
+                    value={config.display.url.mode}
+                    onChange={(e) =>
+                      patchConfig({
+                        display: {
+                          ...config.display,
+                          url: {
+                            mode: e.target.value as NotificationConfig["display"]["url"]["mode"],
+                            value: config.display.url.value,
+                          },
+                        },
+                      })
+                    }
+                  >
+                    <option value="all">All pages</option>
+                    <option value="simple">Exact path</option>
+                    <option value="contains">Path contains</option>
+                    <option value="regex">Regex</option>
+                  </select>
+                </div>
+                {config.display.url.mode !== "all" ? (
+                  <div className="grid gap-2">
+                    <Label htmlFor="n-url-value">URL match</Label>
+                    <Input
+                      id="n-url-value"
+                      placeholder="/pricing"
+                      value={config.display.url.value ?? ""}
+                      onChange={(e) =>
+                        patchConfig({
+                          display: {
+                            ...config.display,
+                            url: { mode: config.display.url.mode, value: e.target.value },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              <TargetingFields
+                display={config.display}
+                onChange={(display) => patchConfig({ display })}
               />
-            </div>
+            </>
           ) : null}
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="grid gap-2">
-              <Label htmlFor="n-position">Position</Label>
-              <select
-                id="n-position"
-                className={selectClass}
-                value={config.style.position}
-                onChange={(e) =>
-                  patchConfig({
-                    style: {
-                      ...config.style,
-                      position: e.target.value as NotificationConfig["style"]["position"],
-                    },
-                  })
-                }
-              >
-                {positionsForType(type).map((position) => (
-                  <option key={position} value={position}>
-                    {POSITION_LABELS[position]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="n-accent">Accent</Label>
-              <Input
-                id="n-accent"
-                type="color"
-                className="h-9 w-full p-1"
-                value={config.style.accent}
-                onChange={(e) =>
-                  patchConfig({ style: { ...config.style, accent: e.target.value } })
-                }
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="n-duration">Duration (s)</Label>
-              <Input
-                id="n-duration"
-                type="number"
-                min={1}
-                value={Math.round(config.timing.durationMs / 1000)}
-                onChange={(e) =>
-                  patchConfig({
-                    timing: { ...config.timing, durationMs: Number(e.target.value) * 1000 },
-                  })
-                }
-              />
-            </div>
-          </div>
+          {step === 2 ? (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="n-position">Position</Label>
+                  <select
+                    id="n-position"
+                    className={selectClass}
+                    value={config.style.position}
+                    onChange={(e) =>
+                      patchConfig({
+                        style: {
+                          ...config.style,
+                          position: e.target.value as NotificationConfig["style"]["position"],
+                        },
+                      })
+                    }
+                  >
+                    {positionsForType(type).map((position) => (
+                      <option key={position} value={position}>
+                        {POSITION_LABELS[position]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="n-delay">Delay (s)</Label>
+                  <Input
+                    id="n-delay"
+                    type="number"
+                    min={0}
+                    value={config.timing.delayMs / 1000}
+                    onChange={(e) =>
+                      patchConfig({
+                        timing: {
+                          ...config.timing,
+                          delayMs: Math.max(0, Number(e.target.value)) * 1000,
+                        },
+                      })
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="n-duration">Visible for (s)</Label>
+                  <Input
+                    id="n-duration"
+                    type="number"
+                    min={1}
+                    value={Math.round(config.timing.durationMs / 1000)}
+                    onChange={(e) =>
+                      patchConfig({
+                        timing: {
+                          ...config.timing,
+                          durationMs: Math.max(1, Number(e.target.value)) * 1000,
+                        },
+                      })
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="n-interval">Gap between (s)</Label>
+                  <Input
+                    id="n-interval"
+                    type="number"
+                    min={0}
+                    value={config.timing.intervalMs / 1000}
+                    onChange={(e) =>
+                      patchConfig({
+                        timing: {
+                          ...config.timing,
+                          intervalMs: Math.max(0, Number(e.target.value)) * 1000,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              </div>
 
-          <div className="grid gap-4 sm:grid-cols-[160px_1fr]">
-            <div className="grid gap-2">
-              <Label htmlFor="n-url-mode">Show on</Label>
-              <select
-                id="n-url-mode"
-                className={selectClass}
-                value={config.display.url.mode}
-                onChange={(e) =>
-                  patchConfig({
-                    display: {
-                      ...config.display,
-                      url: {
-                        mode: e.target.value as NotificationConfig["display"]["url"]["mode"],
-                        value: config.display.url.value,
-                      },
-                    },
-                  })
-                }
-              >
-                <option value="all">All pages</option>
-                <option value="simple">Exact path</option>
-                <option value="contains">Path contains</option>
-                <option value="regex">Regex</option>
-              </select>
-            </div>
-            {config.display.url.mode !== "all" ? (
+              <div className="grid gap-4 rounded-lg border border-border p-3 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="n-media-image">Pinned image URL</Label>
+                  <Input
+                    id="n-media-image"
+                    placeholder="https://… (optional)"
+                    value={config.media?.imageUrl ?? ""}
+                    onChange={(e) => setMedia({ imageUrl: e.target.value.trim() || undefined })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="n-media-fallback">Media fallback</Label>
+                  <select
+                    id="n-media-fallback"
+                    className={selectClass}
+                    value={config.media?.fallback ?? "auto"}
+                    onChange={(e) =>
+                      setMedia({
+                        fallback: e.target.value as NonNullable<
+                          NotificationConfig["media"]
+                        >["fallback"],
+                      })
+                    }
+                  >
+                    {MEDIA_FALLBACKS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          {step === 3 ? (
+            <>
               <div className="grid gap-2">
-                <Label htmlFor="n-url-value">URL match</Label>
-                <Input
-                  id="n-url-value"
-                  placeholder="/pricing"
-                  value={config.display.url.value ?? ""}
+                <Label htmlFor="n-template">Message</Label>
+                <Textarea
+                  id="n-template"
+                  value={config.message.template}
                   onChange={(e) =>
-                    patchConfig({
-                      display: {
-                        ...config.display,
-                        url: { mode: config.display.url.mode, value: e.target.value },
-                      },
-                    })
+                    patchConfig({ message: { ...config.message, template: e.target.value } })
+                  }
+                  rows={2}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Variables: {"{{first_name}}"}, {"{{city}}"}, {"{{product}}"}, {"{{count}}"},{" "}
+                  {"{{time_ago}}"}
+                </p>
+              </div>
+
+              <div className="grid gap-2 rounded-md border p-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">Translations</Label>
+                  <Button type="button" variant="ghost" size="sm" onClick={addTranslation}>
+                    <PlusIcon className="size-4" /> Add
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Shown when the visitor&apos;s language matches a locale code (e.g. id, es, pt-BR).
+                </p>
+                {Object.entries(translations).map(([locale, value]) => (
+                  <div key={locale} className="grid gap-2 sm:grid-cols-[110px_1fr_auto]">
+                    <Input
+                      aria-label="Locale"
+                      placeholder="es"
+                      value={locale}
+                      onChange={(e) => renameTranslation(locale, e.target.value)}
+                    />
+                    <Textarea
+                      aria-label={`${locale} template`}
+                      rows={2}
+                      value={value.template}
+                      onChange={(e) => patchTranslation(locale, e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => removeTranslation(locale)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid gap-2 rounded-md border p-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">A/B variants</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={addVariant}
+                    disabled={variants.length >= 6}
+                  >
+                    <PlusIcon className="size-4" /> Add
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Two or more message variants, bucketed per visitor. Results appear in Analytics.
+                </p>
+                {variants.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No variants — showing the message above.
+                  </p>
+                ) : null}
+                {variants.map((variant) => (
+                  <div key={variant.id} className="grid gap-2 sm:grid-cols-[80px_90px_1fr_auto]">
+                    <Input aria-label="Variant id" value={variant.id} readOnly />
+                    <Input
+                      aria-label={`${variant.id} weight`}
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={variant.weight}
+                      onChange={(e) => patchVariantWeight(variant.id, Number(e.target.value) || 1)}
+                    />
+                    <Textarea
+                      aria-label={`${variant.id} template`}
+                      rows={2}
+                      value={variant.message.template}
+                      onChange={(e) => patchVariantTemplate(variant.id, e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => removeVariant(variant.id)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+
+          {step === 4 ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="n-accent">Accent colour</Label>
+                <Input
+                  id="n-accent"
+                  type="color"
+                  className="h-9 w-full p-1"
+                  value={config.style.accent}
+                  onChange={(e) =>
+                    patchConfig({ style: { ...config.style, accent: e.target.value } })
                   }
                 />
               </div>
-            ) : null}
-          </div>
+              <div className="grid gap-2">
+                <Label htmlFor="n-shape">Corner shape</Label>
+                <select
+                  id="n-shape"
+                  className={selectClass}
+                  value={config.style.shape}
+                  onChange={(e) =>
+                    patchConfig({
+                      style: {
+                        ...config.style,
+                        shape: e.target.value as NotificationConfig["style"]["shape"],
+                      },
+                    })
+                  }
+                >
+                  <option value="rounded">Rounded</option>
+                  <option value="square">Square</option>
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="n-size">Size</Label>
+                <select
+                  id="n-size"
+                  className={selectClass}
+                  value={config.style.size}
+                  onChange={(e) =>
+                    patchConfig({
+                      style: {
+                        ...config.style,
+                        size: e.target.value as NotificationConfig["style"]["size"],
+                      },
+                    })
+                  }
+                >
+                  <option value="sm">Small</option>
+                  <option value="md">Medium</option>
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="n-animation">Animation</Label>
+                <select
+                  id="n-animation"
+                  className={selectClass}
+                  value={config.style.animation}
+                  onChange={(e) =>
+                    patchConfig({
+                      style: {
+                        ...config.style,
+                        animation: e.target.value as NotificationConfig["style"]["animation"],
+                      },
+                    })
+                  }
+                >
+                  <option value="slide">Slide</option>
+                  <option value="fade">Fade</option>
+                </select>
+              </div>
+            </div>
+          ) : null}
 
-          <TargetingFields
-            display={config.display}
-            onChange={(display) => patchConfig({ display })}
-          />
+          {step === 5 ? (
+            <div className="grid gap-4">
+              <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <span className="text-sm">
+                  Active
+                  <span className="block text-xs text-muted-foreground">
+                    Turn off to pause without deleting.
+                  </span>
+                </span>
+                <Switch checked={isActive} onCheckedChange={setIsActive} />
+              </label>
+              <div className="rounded-lg border p-3 text-sm">
+                <p className="font-medium">{name}</p>
+                <p className="mt-1 text-muted-foreground">
+                  {TYPES.find((t) => t.value === type)?.label ?? type} ·{" "}
+                  {POSITION_LABELS[config.style.position]} · shows on{" "}
+                  {config.display.url.mode === "all"
+                    ? "all pages"
+                    : `${config.display.url.mode} ${config.display.url.value ?? ""}`}
+                </p>
+              </div>
+            </div>
+          ) : null}
 
-          <DialogFooter>
+          <DialogFooter className="flex-row items-center justify-between gap-2 sm:justify-between">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={step === 0}
+                onClick={() => setStep((s) => Math.max(0, s - 1))}
+              >
+                Back
+              </Button>
+              {step < EDITOR_STEPS.length - 1 ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setStep((s) => Math.min(EDITOR_STEPS.length - 1, s + 1))}
+                >
+                  Next
+                </Button>
+              ) : null}
+            </div>
             <Button type="submit" disabled={pending}>
               {pending ? "Saving…" : existing ? "Save changes" : "Publish notification"}
             </Button>

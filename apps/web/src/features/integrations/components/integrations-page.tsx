@@ -14,9 +14,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@repo/ui/components/card";
+import { Input } from "@repo/ui/components/input";
 import { toast } from "@repo/ui/components/sonner";
 import { useQuery } from "@tanstack/react-query";
-import { PlugIcon, PlusIcon, RefreshCwIcon, SettingsIcon } from "lucide-react";
+import { ExternalLinkIcon, PlugIcon, PlusIcon, SearchIcon, SettingsIcon } from "lucide-react";
 import { useState } from "react";
 import { env } from "../../../api";
 import { AppShell } from "../../app-shell/app-shell";
@@ -25,12 +26,12 @@ import {
   integrationsQueryOptions,
   useCreateIntegrationMutation,
   useDeleteIntegrationMutation,
-  useRefreshIntegrationMutation,
   useUpdateIntegrationMutation,
   useVerifyIntegrationMutation,
 } from "../hooks/use-integrations";
 import { ConnectWizard, StatusLine } from "./connect-wizard";
-import { CodeRow, selectClass } from "./shared";
+import { ProviderIcon } from "./provider-icon";
+import { CodeRow } from "./shared";
 
 const GROUP_ORDER = [
   "Generic",
@@ -50,14 +51,14 @@ const AUTH_LABEL: Record<string, string> = {
   webhook_secret: "Provider secret",
   api_key: "API credentials",
   oauth: "OAuth / token",
-  poll: "Scheduled pull",
 };
 
 export function IntegrationsPage() {
   const sites = useQuery(sitesQueryOptions);
   const integrations = useQuery(integrationsQueryOptions);
   const createIntegration = useCreateIntegrationMutation();
-  const [provider, setProvider] = useState<IntegrationProvider>("webhook");
+  const [provider, setProvider] = useState<IntegrationProvider>("stripe");
+  const [query, setQuery] = useState("");
   // The wizard opens on the connection being configured, not on the catalog.
   const [wizardId, setWizardId] = useState<string | null>(null);
 
@@ -67,6 +68,14 @@ export function IntegrationsPage() {
   const guide = integrationGuide(provider);
   const wizardTarget = integrations.data?.find((entry) => entry.id === wizardId) ?? null;
 
+  const needle = query.trim().toLowerCase();
+  const groups = PROVIDER_GROUPS.map(({ group, providers }) => ({
+    group,
+    providers: providers.filter((id) =>
+      needle ? integrationMeta[id].label.toLowerCase().includes(needle) : true,
+    ),
+  })).filter((entry) => entry.providers.length > 0);
+
   return (
     <AppShell>
       <section className="grid gap-6">
@@ -75,91 +84,149 @@ export function IntegrationsPage() {
             <p className="text-sm font-medium text-muted-foreground">Workspace</p>
             <h1 className="text-3xl font-extrabold tracking-tight">Integrations</h1>
             <p className="mt-2 max-w-prose text-sm leading-6 text-muted-foreground">
-              Connect the tools that already record your sales, sign-ups and reviews. Each
-              connection is set up step by step, verified, and monitored for delivery errors.
+              Connect the tools that already record your sales and sign-ups. Pick a platform below —
+              Tacto walks you through each step and verifies the connection.
             </p>
           </div>
         </div>
 
-        {/* Catalog: pick a provider, see what connecting it involves, add it. */}
+        {/* Catalog: browse every platform, then set one up step by step. */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-              Add a connection
-              <Badge variant="secondary">{AUTH_LABEL[meta.auth] ?? meta.auth}</Badge>
-              {meta.canTest ? (
-                <Badge variant="outline" className="font-normal">
-                  Verifiable
-                </Badge>
-              ) : null}
-              {meta.managesWebhook ? (
-                <Badge variant="outline" className="font-normal">
-                  Tacto registers the webhook
-                </Badge>
-              ) : null}
-            </CardTitle>
+            <CardTitle className="text-base">Add a connection</CardTitle>
             <CardDescription>
-              {guide.steps.length} steps · {guide.signature}
+              {integrationProviders.length} platforms · search or pick one to see how it connects.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                aria-label="Provider"
-                className={selectClass}
-                value={provider}
-                onChange={(e) => setProvider(e.target.value as IntegrationProvider)}
-              >
-                {PROVIDER_GROUPS.map(({ group, providers }) => (
-                  <optgroup key={group} label={group}>
-                    {providers.map((id) => (
-                      <option key={id} value={id}>
-                        {integrationMeta[id].label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-              <Button
-                disabled={createIntegration.isPending}
-                onClick={() =>
-                  createIntegration.mutate(
-                    {
-                      provider,
-                      config: activeSite ? { siteKey: activeSite.siteKey } : {},
-                    },
-                    {
-                      onSuccess: (created) => {
-                        toast.success(`${meta.label} added — finish the setup steps`);
-                        setWizardId(created.id);
-                      },
-                      onError: (error) => toast.error(error.message),
-                    },
-                  )
-                }
-              >
-                <PlusIcon className="size-4" /> Set up {meta.label}
-              </Button>
+          <CardContent className="grid gap-5">
+            <div className="relative">
+              <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Search platforms (Stripe, Shopify, Mailchimp…)"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
             </div>
 
-            <ol className="grid list-decimal gap-1 pl-5 text-sm text-muted-foreground">
-              {guide.steps.map((step) => (
-                <li key={step.id}>
-                  <span className="font-medium text-foreground">{step.title}</span> — {step.detail}
-                </li>
-              ))}
-            </ol>
-
-            {activeSite ? (
-              <CodeRow
-                label="Server-to-server ingest endpoint (Authorization: Bearer <site API key>)"
-                value={`${env.VITE_API_URL}/ingest/v1/event`}
-              />
+            {groups.length > 0 ? (
+              <div className="grid gap-4">
+                {groups.map(({ group, providers }) => (
+                  <div key={group} className="grid gap-2">
+                    <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                      {group}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                      {providers.map((id) => {
+                        const selected = id === provider;
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setProvider(id)}
+                            aria-pressed={selected}
+                            className={`flex items-center gap-2 rounded-lg border p-2 text-left transition-colors ${
+                              selected
+                                ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                : "hover:bg-accent"
+                            }`}
+                          >
+                            <ProviderIcon provider={id} size="sm" />
+                            <span className="truncate text-xs font-medium">
+                              {integrationMeta[id].label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                Create a site first — events always belong to a site.
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No platforms match “{query}”.
               </p>
             )}
+
+            {/* Selected platform detail + connect action. */}
+            <div className="grid gap-4 rounded-xl border bg-muted/30 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <ProviderIcon provider={provider} size="lg" />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-base font-bold">{meta.label}</p>
+                      <Badge variant="secondary">{AUTH_LABEL[meta.auth] ?? meta.auth}</Badge>
+                      {meta.canTest ? (
+                        <Badge variant="outline" className="font-normal">
+                          Verifiable
+                        </Badge>
+                      ) : null}
+                      {meta.managesWebhook ? (
+                        <Badge variant="outline" className="font-normal">
+                          Tacto registers the webhook
+                        </Badge>
+                      ) : null}
+                    </div>
+                    {meta.docsUrl ? (
+                      <a
+                        className="mt-1 inline-flex items-center gap-1 text-xs underline"
+                        href={meta.docsUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {meta.label} setup docs <ExternalLinkIcon className="size-3" />
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+                <Button
+                  disabled={createIntegration.isPending || !activeSite}
+                  onClick={() =>
+                    createIntegration.mutate(
+                      {
+                        provider,
+                        config: activeSite ? { siteKey: activeSite.siteKey } : {},
+                      },
+                      {
+                        onSuccess: (created) => {
+                          toast.success(`${meta.label} added — finish the setup steps`);
+                          setWizardId(created.id);
+                        },
+                        onError: (error) => toast.error(error.message),
+                      },
+                    )
+                  }
+                >
+                  <PlusIcon className="size-4" /> Set up {meta.label}
+                </Button>
+              </div>
+
+              <ol className="grid gap-2">
+                {guide.steps.map((step, position) => (
+                  <li key={step.id} className="flex items-start gap-3">
+                    <span className="grid size-6 flex-none place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                      {position + 1}
+                    </span>
+                    <span className="text-sm">
+                      <span className="font-medium">{step.title}</span>
+                      <span className="text-muted-foreground"> — {step.detail}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+
+              {activeSite ? (
+                <CodeRow
+                  label="Server-to-server ingest endpoint (Authorization: Bearer <site API key>)"
+                  value={`${env.publicApiUrl}/ingest/v1/event`}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Create a site first — events always belong to a site.
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -185,7 +252,7 @@ export function IntegrationsPage() {
             ) : (
               <p className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted-foreground">
                 <PlugIcon className="size-6" />
-                No connections yet. Pick a provider above to start.
+                No connections yet. Pick a platform above to start.
               </p>
             )}
           </CardContent>
@@ -217,23 +284,24 @@ function IntegrationRow({
   const meta = integrationMeta[integration.provider];
   const remove = useDeleteIntegrationMutation();
   const verify = useVerifyIntegrationMutation();
-  const refresh = useRefreshIntegrationMutation();
   const update = useUpdateIntegrationMutation();
-  const isPolled = meta.auth === "poll";
 
   return (
     <li className="grid gap-3 py-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Badge variant="secondary">{meta.label}</Badge>
-          <Badge variant="outline" className="font-normal">
-            {AUTH_LABEL[meta.auth] ?? meta.auth}
-          </Badge>
-          {integration.config.siteKey ? (
-            <span className="text-xs text-muted-foreground">
-              site {integration.config.siteKey.slice(0, 8)}…
-            </span>
-          ) : null}
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <ProviderIcon provider={integration.provider} />
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold">{meta.label}</span>
+            <Badge variant="outline" className="font-normal">
+              {AUTH_LABEL[meta.auth] ?? meta.auth}
+            </Badge>
+            {integration.config.siteKey ? (
+              <span className="text-xs text-muted-foreground">
+                site {integration.config.siteKey.slice(0, 8)}…
+              </span>
+            ) : null}
+          </div>
         </div>
         <div className="flex flex-wrap gap-1">
           <Button variant="ghost" size="sm" onClick={onConfigure}>
@@ -257,22 +325,6 @@ function IntegrationRow({
           >
             Verify
           </Button>
-          {isPolled ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={refresh.isPending}
-              onClick={() =>
-                refresh.mutate(integration.id, {
-                  onSuccess: (result) =>
-                    result.ok ? toast.success(result.message) : toast.error(result.message),
-                  onError: (error) => toast.error(error.message),
-                })
-              }
-            >
-              <RefreshCwIcon className="size-4" /> Pull now
-            </Button>
-          ) : null}
           <Button
             variant="ghost"
             size="sm"

@@ -3,7 +3,6 @@ import {
   createIntegration,
   deleteIntegration,
   listIntegrations,
-  refreshIntegration,
   updateIntegration,
   verifyIntegration,
 } from "../services";
@@ -32,10 +31,6 @@ export function useUpdateIntegrationMutation() {
 // "Verify" writes status/lastError on the server, so the list is refetched.
 export function useVerifyIntegrationMutation() {
   return useIntegrationMutation(verifyIntegration);
-}
-
-export function useRefreshIntegrationMutation() {
-  return useIntegrationMutation(refreshIntegration);
 }
 
 export function useDeleteIntegrationMutation() {

@@ -7,6 +7,9 @@ export function createApiClient(baseUrl: string) {
   return hc<AppType>(baseUrl, {
     init: {
       credentials: "include",
+      // Bypass the ngrok dev-tunnel interstitial so a public test URL works from
+      // the browser too; ignored by any other host (SRS NFR-REL-02).
+      headers: { "ngrok-skip-browser-warning": "true" },
     },
   });
 }

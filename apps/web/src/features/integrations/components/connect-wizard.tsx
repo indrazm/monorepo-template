@@ -25,6 +25,10 @@ import {
   CheckCircle2Icon,
   CircleDashedIcon,
   ExternalLinkIcon,
+  KeyRoundIcon,
+  LinkIcon,
+  ListChecksIcon,
+  ShieldCheckIcon,
   TriangleAlertIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -33,6 +37,7 @@ import {
   useUpdateIntegrationMutation,
   useVerifyIntegrationMutation,
 } from "../hooks/use-integrations";
+import { ProviderIcon } from "./provider-icon";
 import { CodeRow, Secret, selectClass } from "./shared";
 
 // ---------------------------------------------------------------------------
@@ -64,8 +69,8 @@ export function ConnectWizard({
   const site =
     sites.find((entry) => entry.siteKey === integration.config.siteKey) ?? sites[0] ?? null;
   const webhookUrl = site
-    ? `${env.VITE_API_URL}/ingest/v1/webhook/${integration.provider}?site=${site.siteKey}`
-    : `${env.VITE_API_URL}/ingest/v1/webhook/${integration.provider}`;
+    ? `${env.publicApiUrl}/ingest/v1/webhook/${integration.provider}?site=${site.siteKey}`
+    : `${env.publicApiUrl}/ingest/v1/webhook/${integration.provider}`;
 
   function save(patch: Parameters<typeof update.mutate>[0]["patch"], message: string) {
     update.mutate(
@@ -82,6 +87,7 @@ export function ConnectWizard({
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
+            <ProviderIcon provider={integration.provider} size="sm" />
             Connect {meta.label}
             <Badge variant="secondary">{modeLabel(guide.mode)}</Badge>
           </DialogTitle>
@@ -103,21 +109,27 @@ export function ConnectWizard({
 
         {/* Step rail */}
         <ol className="flex flex-wrap gap-2">
-          {guide.steps.map((entry, position) => (
-            <li key={entry.id}>
-              <button
-                type="button"
-                onClick={() => setIndex(position)}
-                className={`rounded-full border px-3 py-1 text-xs ${
-                  position === index
-                    ? "border-primary bg-primary/10 font-semibold"
-                    : "text-muted-foreground"
-                }`}
-              >
-                {position + 1}. {entry.title}
-              </button>
-            </li>
-          ))}
+          {guide.steps.map((entry, position) => {
+            const done = position < index;
+            return (
+              <li key={entry.id}>
+                <button
+                  type="button"
+                  onClick={() => setIndex(position)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${
+                    position === index
+                      ? "border-primary bg-primary/10 font-semibold"
+                      : done
+                        ? "border-emerald-500/40 text-emerald-600"
+                        : "text-muted-foreground"
+                  }`}
+                >
+                  {stepIcon(entry.action)}
+                  {position + 1}. {entry.title}
+                </button>
+              </li>
+            );
+          })}
         </ol>
 
         {step ? (
@@ -182,7 +194,24 @@ function modeLabel(mode: ReturnType<typeof integrationGuide>["mode"]): string {
     case "api":
       return "API connection";
     default:
-      return "Scheduled pull";
+      return "Webhook";
+  }
+}
+
+// A small glyph per step so the wizard reads at a glance.
+function stepIcon(action: IntegrationStep["action"]) {
+  switch (action) {
+    case "copy_url":
+      return <LinkIcon className="size-3.5" />;
+    case "copy_secret":
+    case "credentials":
+      return <KeyRoundIcon className="size-3.5" />;
+    case "verify":
+      return <ShieldCheckIcon className="size-3.5" />;
+    case "mapping":
+      return <ListChecksIcon className="size-3.5" />;
+    default:
+      return <CircleDashedIcon className="size-3.5" />;
   }
 }
 

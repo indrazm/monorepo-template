@@ -1,4 +1,4 @@
-import type { CreateGoalInput, Goal } from "@repo/contracts/goals";
+import type { CreateGoalInput, Goal, GoalStats } from "@repo/contracts/goals";
 import { apiClient } from "../../api";
 
 const goals = apiClient.api.v1.goals;
@@ -13,6 +13,15 @@ export async function createGoal(input: CreateGoalInput): Promise<Goal> {
   const response = await goals.$post({ json: input });
   if (!response.ok) throw new Error("Failed to create goal.");
   return (await response.json()).goal;
+}
+
+export async function getGoalStats(id: string, days = 30, windowMinutes = 30): Promise<GoalStats> {
+  const response = await goals[":id"].stats.$get({
+    param: { id },
+    query: { days: String(days), windowMinutes: String(windowMinutes) },
+  });
+  if (!response.ok) throw new Error("Failed to load goal stats.");
+  return (await response.json()).stats;
 }
 
 export async function deleteGoal(id: string): Promise<void> {

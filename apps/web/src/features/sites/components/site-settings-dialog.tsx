@@ -18,7 +18,12 @@ import { planLimits, type Plan } from "@repo/contracts/billing";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiClient } from "../../../api";
-import { getSiteSettings, updateSiteSettings } from "../services";
+import {
+  deleteSiteEvents,
+  downloadSiteEvents,
+  getSiteSettings,
+  updateSiteSettings,
+} from "../services";
 import { ManualOrderEditor } from "./manual-order-editor";
 
 // Example shown in the Custom JS field — the sandbox API in three lines.
@@ -100,6 +105,16 @@ function SettingsForm({
       toast.success("Settings saved");
       onSaved();
     },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const exportEvents = useMutation({
+    mutationFn: (format: "json" | "csv") => downloadSiteEvents(siteId, format),
+    onError: (error) => toast.error(error.message),
+  });
+  const purge = useMutation({
+    mutationFn: () => deleteSiteEvents(siteId),
+    onSuccess: (removed) => toast.success(`Deleted ${removed} events`),
     onError: (error) => toast.error(error.message),
   });
 
@@ -197,6 +212,20 @@ function SettingsForm({
         />
       </label>
 
+      <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
+        <span className="text-sm">
+          Use visitor location
+          <span className="block text-xs text-muted-foreground">
+            Geotarget by the visitor's country (from the CDN header). Off = country filters ignore
+            the visitor.
+          </span>
+        </span>
+        <Switch
+          checked={draft.privacy.trackIpGeo}
+          onCheckedChange={(checked) => setPrivacy({ trackIpGeo: checked })}
+        />
+      </label>
+
       <div className="grid gap-2">
         <Label htmlFor="blockedIps">Blocked IPs (one per line)</Label>
         <Textarea
@@ -213,6 +242,48 @@ function SettingsForm({
             })
           }
         />
+      </div>
+
+      <div className="grid gap-3 rounded-lg border p-3">
+        <div>
+          <p className="text-sm font-medium">Your data</p>
+          <p className="text-xs text-muted-foreground">
+            Export or erase the events stored for this site (GDPR).
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={exportEvents.isPending}
+            onClick={() => exportEvents.mutate("csv")}
+          >
+            Export CSV
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={exportEvents.isPending}
+            onClick={() => exportEvents.mutate("json")}
+          >
+            Export JSON
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            disabled={purge.isPending}
+            onClick={() => {
+              if (window.confirm("Delete all events for this site? This cannot be undone.")) {
+                purge.mutate();
+              }
+            }}
+          >
+            Delete all events
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-2">
