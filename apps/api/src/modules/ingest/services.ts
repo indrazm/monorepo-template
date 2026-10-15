@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { Database } from "@repo/db";
 import { event, integration, site } from "@repo/db/schema";
 import type { IntegrationConfig } from "@repo/contracts/integrations";
@@ -16,7 +16,9 @@ export type WebhookResult =
   | "not_found"
   | "no_connector"
   | "invalid"
-  | "filtered";
+  | "filtered"
+  // The integration exists but the user turned it off (FR-INT-04).
+  | "disabled";
 
 // Reads a dot-notation path from an unknown object (for integration filters).
 function readPath(obj: unknown, path: string): string | undefined {
@@ -42,7 +44,7 @@ export type IngestServiceDeps = {
 };
 
 export function createIngestService(
-  db: Pick<Database, "select" | "insert">,
+  db: Pick<Database, "select" | "insert"> & Partial<Pick<Database, "update">>,
   deps: IngestServiceDeps = {},
 ) {
   return { resolveSiteByApiKey, ingestEvent, processWebhook };
@@ -68,7 +70,11 @@ export function createIngestService(
     if (!siteRow) return "not_found";
 
     const [integrationRow] = await db
-      .select({ config: integration.config })
+      .select({
+        id: integration.id,
+        config: integration.config,
+        status: integration.status,
+      })
       .from(integration)
       .where(
         and(
@@ -76,11 +82,21 @@ export function createIngestService(
           eq(integration.provider, input.provider),
         ),
       )
+      .orderBy(asc(integration.createdAt))
       .limit(1);
     const config = integrationRow?.config as IntegrationConfig | undefined;
+    const integrationId = integrationRow?.id;
+    if (integrationRow?.status === "disabled") return "disabled";
+
     const secret = config?.secret;
     if (!secret) return "unauthorized";
     if (!connector.verify({ rawBody: input.rawBody, headers: input.headers, secret })) {
+      // Record *why* the delivery was rejected so the dashboard can show it
+      // instead of the user guessing (FR-INT-04).
+      await markDelivery(integrationId, {
+        ok: false,
+        error: `Signature check failed for ${input.provider}. Expected ${connector.provider} signature or x-tacto-signature.`,
+      });
       return "unauthorized";
     }
 
@@ -88,14 +104,29 @@ export function createIngestService(
     try {
       raw = JSON.parse(input.rawBody);
     } catch {
+      await markDelivery(integrationId, { ok: false, error: "Delivery body was not valid JSON." });
       return "invalid";
     }
     // Per-integration data filter (FR-INT-03): ack but skip non-matching events.
     if (config?.filter && readPath(raw, config.filter.path) !== config.filter.equals) {
+      await markDelivery(integrationId, { ok: true });
       return "filtered";
     }
-    const mapped = connector.mapToEvent(raw);
-    if (!mapped) return "invalid";
+    // Per-integration field mapping (FR-INT-03) overrides the heuristics.
+    const mapped = connector.mapToEvent(raw, { mapping: config?.mapping });
+    if (!mapped) {
+      await markDelivery(integrationId, {
+        ok: false,
+        error: "Could not map the payload onto an event. Set a field mapping for this integration.",
+      });
+      return "invalid";
+    }
+    // Only create the event types this integration is allowed to produce.
+    if (config?.events && config.events.length > 0 && !config.events.includes(mapped.type)) {
+      await markDelivery(integrationId, { ok: true });
+      return "filtered";
+    }
+    await markDelivery(integrationId, { ok: true });
 
     if (deps.enqueueWebhook) {
       await deps.enqueueWebhook({
@@ -109,6 +140,8 @@ export function createIngestService(
           product: mapped.product,
           dedupeKey: mapped.dedupeKey,
           occurredAt: mapped.occurredAt.toISOString(),
+          rating: mapped.rating ?? null,
+          text: mapped.text ?? null,
         },
       });
       return "created";
@@ -122,7 +155,11 @@ export function createIngestService(
         verified: true,
         displayName: mapped.displayName,
         city: mapped.city,
-        payload: mapped.product ? { product: mapped.product } : {},
+        payload: {
+          ...(mapped.product ? { product: mapped.product } : {}),
+          ...(mapped.rating ? { rating: mapped.rating } : {}),
+          ...(mapped.text ? { text: mapped.text } : {}),
+        },
         dedupeKey: mapped.dedupeKey,
         occurredAt: mapped.occurredAt,
       });
@@ -167,6 +204,29 @@ export function createIngestService(
     } catch (error) {
       if (isUniqueViolation(error)) return "duplicate";
       throw error;
+    }
+  }
+
+  // Connection health (FR-INT-04): a verified delivery promotes the
+  // integration to "connected"; a rejected one records the reason. Best-effort
+  // — health bookkeeping must never fail an otherwise valid delivery.
+  async function markDelivery(
+    integrationId: string | undefined,
+    outcome: { ok: true } | { ok: false; error: string },
+  ): Promise<void> {
+    if (!integrationId || !("update" in db)) return;
+    const now = new Date();
+    try {
+      await (db as Database)
+        .update(integration)
+        .set(
+          outcome.ok
+            ? { status: "connected", lastEventAt: now, lastCheckedAt: now, lastError: null }
+            : { status: "error", lastCheckedAt: now, lastError: outcome.error.slice(0, 500) },
+        )
+        .where(eq(integration.id, integrationId));
+    } catch {
+      // ignore
     }
   }
 

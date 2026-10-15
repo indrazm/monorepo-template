@@ -190,7 +190,7 @@ Bundel vanilla JS terpisah (`apps/widget` → `t.js`): membaca `data-site`; mema
 | FR-NOT-04 | Custom/Informational (teks & CTA bebas, mis. "garansi 30 hari") | M   |
 | FR-NOT-05 | Review (tampilkan review/rating dari event/integrasi)           | S   |
 | FR-NOT-06 | Combo (jumlah besar aksi 24h/7/30 hari)                         | C   |
-| FR-NOT-07 | Social counter, YouTube, FOMO/low-stock, Countdown              | C   |
+| FR-NOT-07 | FOMO/low-stock, Countdown                                       | C   |
 
 ### 4.4 Notifikasi — Editor (alur Type→Track→Display→Message→Style→Launch)
 
@@ -234,7 +234,6 @@ Bundel vanilla JS terpisah (`apps/widget` → `t.js`): membaca `data-site`; mema
 | FR-ING-07 | Idempotency (tolak duplikat via dedupeKey)                            | M   |
 | FR-ING-08 | Integrasi Zapier/Make                                                 | S   |
 | FR-ING-09 | Integrasi Stripe (purchase), Shopify, WooCommerce                     | S   |
-| FR-ING-10 | Import review Google/Facebook                                         | S   |
 | FR-ING-11 | Events Feed (log event masuk, untuk debug)                            | S   |
 
 ### 4.7 Integrasi (framework)
@@ -303,8 +302,8 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "review",
   "custom",
   "combo",
-  "social_counter",
-  "youtube",
+  "social_counter", // reserved, tidak dipakai (integrasi sosial di luar scope)
+  "youtube", // reserved, tidak dipakai (integrasi YouTube dihapus dari scope)
   "low_stock",
   "countdown",
 ]);
@@ -606,6 +605,6 @@ Siap rilis MVP bila:
 | Fase   | FR utama                                                                                                             |
 | ------ | -------------------------------------------------------------------------------------------------------------------- |
 | MVP    | AUTH-01..03, SITE-01..05, NOT-01..04, NED-01..11, NGS-01..03/05, ING-01..07, INT-01, ANL-01/02, BIL-01/03/04, VER-03 |
-| Fase 2 | AUTH-04..06, NOT-05, ING-08..11, INT-02..04, VER-01/02, ANL-03..05, BIL-02/05, NGS-04                                |
+| Fase 2 | AUTH-04..06, NOT-05, ING-08/09/11, INT-02..04, VER-01/02, ANL-03..05, BIL-02/05, NGS-04                              |
 | Fase 3 | NOT-06/07, NGS-06/07, NED-12, katalog integrasi luas                                                                 |
 | Fase 4 | Conversion widgets (popup/spin-to-win/bar), optimisasi                                                               |

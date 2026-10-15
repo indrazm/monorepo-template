@@ -252,13 +252,32 @@ bintang + kutipan singkat + nama/kota + sumber.
 datang via webhook/ingest. Import Google/Facebook **dibatalkan** → praktis tipe
 ini kosong tanpa integrasi review.
 
-**Perilaku yang benar (opsi sumber; pilih salah satu/lebih).**
+**KEPUTUSAN (15 Okt 2026): sumber Review = Google Maps / Google Business.**
+Ini **membalik** keputusan lama F62 ("import Google/Facebook dibatalkan") — khusus
+untuk **Google** kini diaktifkan kembali; Facebook/YouTube tetap di luar scope.
 
-1. **Entry manual + moderasi ringan** di dashboard: nama, rating, teks, kota,
-   sumber → dipakai tipe `review`.
-2. **Integrasi platform review** non-FB/Google (sesuai keputusan produk):
-   Judge.me, Loox, Yotpo, Trustpilot — lewat webhook/API → event `review`.
-3. **Scoping jujur**: sembunyikan tipe Review sampai sumbernya tersedia.
+**Batasan nyata yang WAJIB dihormati implementasi.**
+
+- **Jangan scraping Google Maps** (melanggar ToS Google). Jalur sah:
+  1. **Google Places API — Place Details** (`reviews` field): hanya **≤5 review
+     per lokasi**, tak bisa difilter, **tidak real-time** → wajib **cache** di DB
+     - refresh terjadwal (mis. harian via worker). Butuh `GOOGLE_MAPS_API_KEY`.
+  2. **Google Business Profile API**: bisa menampilkan **semua** review bisnis
+     sendiri, tapi perlu **OAuth pemilik bisnis** (verifikasi kepemilikan lokasi)
+     → lebih berat; jadikan Fase lanjutan.
+- Model produk: tipe `review` Google = **"tampilkan beberapa review terbaik
+  (≤5) yang di-cache"**, bukan feed real-time seperti sales pop.
+
+**Tugas implementasi.**
+
+- `apps/api/src/modules/reviews/` (service+router): hubungkan lokasi via
+  `placeId`; worker tarik Place Details → simpan `event`/`review` ter-cache
+  (`source="google"`, `rating,text,author,city`), refresh terjadwal.
+- Env: `GOOGLE_MAPS_API_KEY` (+ OAuth Business Profile bila Fase lanjutan).
+- UI: input/cari `placeId`, pratinjau review yang ditarik, pilih mana yang tampil.
+- `t.js`: tipe `review` render bintang + kutipan + nama/kota + sumber "Google".
+- (Opsional menyusul) **entry manual + moderasi** sebagai pelengkap bila lokasi
+  belum punya cukup review.
 
 **Tugas implementasi.** Modul `reviews` (service+router+UI) atau konektor review;
 event `review` payload `{ rating, text, source }`; gating paket.
@@ -420,15 +439,135 @@ field) dan pakai di `mapToEvent`.
 
 # Referensi Kompetitor & Rencana Parity (WiserNotify · ProveSource)
 
-> **Metode.** Analisis dari **permukaan fitur publik** kedua platform (situs
-> marketing `wisernotify.com` & `provesrc.com`, halaman `/features/`, FAQ, dan
-> daftar integrasi) pada 14 Okt 2026. Dashboard ber-login
-> (`app.wisernotify.com`, `console.provesrc.com`) **tidak dapat diakses** dari
-> environment ini (tidak ada browser interaktif), jadi perilaku di dalam app
-> disimpulkan dari dokumentasi publik + pengetahuan produk sejenis. Tacto
-> memakai pendekatan **duplikat + modifikasi** dari kategori ini.
+> **Metode (diperbarui 15 Okt 2026).** Analisis kini berdasarkan **eksplorasi
+> langsung di dalam dashboard ber-login** kedua platform
+> (`app.wisernotify.com` — akun `ziyadanil2108`; `console.provesrc.com` — akun
+> `mubakal0`), bukan lagi hanya halaman marketing publik. Alur editor, langkah
+> wizard, opsi targeting, kontrol data/timing, katalog integrasi, dan struktur
+> navigasi diverifikasi dari UI nyata. Bagian **"Alur proses bisnis nyata"** di
+> bawah adalah hasil verifikasi itu dan menjadi acuan agar implementasi Tacto
+> meniru **alur**-nya (duplikat + modifikasi), bukan sekadar nama fitur.
 >
-> Catatan: angka & fitur bisa berubah; verifikasi ulang saat implementasi.
+> Catatan: beberapa layar di balik paywall (mis. wizard _Connect_ integrasi di
+> WiserNotify tier gratis, aturan display lanjutan ProveSource di langkah
+> _Customize_) hanya terlihat sebagian; ditandai eksplisit di bawah. Angka &
+> fitur bisa berubah; verifikasi ulang saat implementasi.
+
+## Alur proses bisnis nyata (terverifikasi in-app · 15 Okt 2026)
+
+> Tujuan subbab ini: memetakan **alur kerja sebenarnya** di WiserNotify &
+> ProveSource ke implementasi Tacto, supaya fitur Tacto mengikuti proses bisnis
+> yang terbukti — bukan hanya meng-expose field. Setiap alur menyebut **sumber
+> fakta → perilaku nyata → implikasi untuk Tacto**.
+
+### 1. Model editor notifikasi — WiserNotify = editor ber-tab, ProveSource = wizard linear
+
+**WiserNotify (fakta in-app).** Editor **bukan satu form**, melainkan editor
+ber-tab dengan tombol **Back / Next / Pause**:
+
+- Grup **Design**: `Display` · `Data source` · `Text Editor` · `Click actions` ·
+  `Position & animation` · `Style` · `Embed code`
+- Tab terpisah: **`Data control`** · **`Timing control`** · **`Verify label`**
+
+**ProveSource (fakta in-app).** **Wizard linear 6 langkah** (langkah terkunci
+sampai langkah sebelumnya valid): **`Type → Track → Display → Message →
+Customize → Launch`**.
+
+**Implikasi Tacto (koreksi audit L / FR-NED-01..10).** Wizard Tacto
+`Type→Track→Display→Message→Style→Launch` sudah sejalan **ProveSource**. Tetapi
+tambahkan dua "tab lanjutan" ala WiserNotify yang hari ini belum ada sebagai
+langkah eksplisit: **Data control** (jendela data, jumlah record, _skip seen_,
+_cap per halaman_) dan **Timing control** (delay/durasi/jeda/randomize). Keduanya
+di Tacto masih tersebar di `timing`/`dataSource` tanpa UI setara — lihat alur #3.
+
+### 2. Targeting — WiserNotify meng-expose penuh di tab Display
+
+**WiserNotify (fakta in-app, tab `Display`).** Opsi nyata:
+
+- **Where to display**: `All pages` / `Pages when URL condition matches`
+  (+`Use absolute URLs`) / **`Display on multiple websites`**.
+- **Target Audience** (panel eksplisit): **Visitor · Country · UTMs · Cookies &
+  Referrer**.
+
+**ProveSource (fakta in-app, langkah `Display`).** Lebih sederhana di wizard:
+`Use Absolute URLs` (abaikan http/www/param) + URL match (`Simple/Contains/Regex/
+All Pages`) + **`Exclude from pages`** + catatan "bisa pakai JavaScript atau
+inline embed". Targeting geo/device/visitor ProveSource ada di pengaturan
+lanjutan (sebagian di balik langkah Customize — tidak sepenuhnya terlihat).
+
+**Implikasi Tacto (koreksi audit B / FR-NED-07 & T3).** Target yang terbukti
+dipakai pesaing: **URL match + exclude pages + Country + UTM + Referrer +
+Cookies + Visitor (baru/returning) + multi-site**. Ini yang harus **dieksekusi
+di runtime + punya UI**, bukan sekadar ada di skema. Prioritaskan `exclude from
+pages` (ProveSource) dan panel `Target Audience` (WiserNotify) sebagai bentuk UI.
+
+### 3. Sequencing / frekuensi — ada di "Data control" + "Timing control" WiserNotify
+
+**WiserNotify (fakta in-app).**
+
+- **Tab `Data control`**: `Display data from the last N days` · `Display records
+(last 15)` · **`Skip seen data` + `Set time duration` (mis. 1 jam)** ·
+  **`Set max data limit to display per page`**.
+- **Tab `Timing control`**: `Initial delay` · `Display notification time`
+  (durasi) · `Apply fix delay between two notifications` · `Randomize delay`.
+- **Global per-domain (Settings)**: Loop & Close (loop jika > N, pause X hari,
+  selalu tampil ikon close), Notification order (random / drag-manual +
+  prioritas negara), Custom code & CSS, Privacy & GDPR, passthrough analytics,
+  Others (profanity, duplicate, block IP, country-specific).
+
+**Implikasi Tacto (koreksi audit C/T4 — "show once/skip repeats/cap").** Fitur
+yang di parity ditandai "WiserNotify ✅, Tacto ❌" **terbukti** berbentuk:
+`skipSeen{durationHrs}` + `maxPerPage` (per-notifikasi, di Data control) — **bukan**
+sekadar "once per session" global. Implementasikan di `timing`/`dataControl`
+notifikasi + eksekusi di `t.js` (localStorage per-visitor untuk _skip seen_).
+
+### 4. Sumber data (Track) — kuncinya integrasi + auto-capture + webhook
+
+**ProveSource (fakta in-app, langkah `Track`).** "What events would you like to
+capture?" → **Form Submissions · Webhook · Product Purchase** (terikat integrasi:
+**Wix Events, Thinkific Events, Stripe Purchases**, dst) + "Where to capture"
+(URL match) + "Check captured submissions". Jadi **sumber event = per-notifikasi**,
+dipilih di wizard.
+
+**WiserNotify (fakta in-app, tab `Data source`).** Pilih integrasi sebagai sumber
+
+- **data filtering** (kondisi untuk memfilter data yang tampil).
+
+**Implikasi Tacto (FR-ING / audit A).** Model yang benar: **sumber event dipilih
+per-notifikasi** (bukan hanya global), dengan filter data. Tacto `dataSource`
+sudah ada; tambahkan UI "pilih sumber + filter" setara, dan di Track tampilkan
+"cek submission terakhir" (bukti data benar masuk).
+
+### 5. Integrasi "Connect" — katalog besar; ProveSource bahkan outsourcing review
+
+**WiserNotify (fakta in-app).** Katalog **200+** integrasi berkategori
+(Marketing, Page builder, Platform, CRM, Reviews, Communication, Booking,
+Billing, Custom, Social) termasuk **Custom Webhooks, Zapier, Make, Pabbly,
+Stripe, Shopify, WooCommerce/WordPress, dan puluhan sumber review** (Google,
+Yelp, Trustpilot-sejenis, Judge.me via konektor, dll). Alur _Connect_ aktual
+berada **di balik paywall** pada akun gratis (tidak bisa diverifikasi penuh),
+tetapi kategorisasi + "Installed (0)" + health menegaskan model lifecycle.
+
+**ProveSource (fakta in-app).** **Review widgets = produk partner eksternal
+(Shapo)** — tautan keluar, **bukan native**. **Conversion widgets (Boost)** =
+popups, spin-to-win, announcement bars, countdown timers (produk kedua).
+
+**Implikasi Tacto (audit A/T1 & G/T2).** (a) Model integrasi harus
+lifecycle-lengkap (authorize → verify → health → disconnect) seperti audit A —
+tetap P0. (b) Karena **ProveSource saja meng-outsource review widget**, membangun
+**sumber Review native di Tacto (manual + moderasi)** adalah **diferensiasi yang
+masuk akal**, bukan sekadar parity. Lihat pertanyaan konfirmasi di akhir.
+
+### 6. Conversion widgets & analytics
+
+**ProveSource.** Navigasi: `Review widgets` · `Conversion widgets` ·
+`Notifications` · `Events Feed` · `Goals` · `Analytics`. Spin-to-win ada sebagai
+bagian **Boost** (conversion widget), konsisten dengan rencana T11 Tacto (hadiah
+spin nyata). **WiserNotify** menonjolkan A/B Test per-notifikasi (tombol **A/B
+Test** di daftar) + analytics per-notifikasi.
+
+**Implikasi Tacto.** Pertahankan T7 (analytics per-notifikasi), T9 (A/B ≤5
+varian), T11 (spin reward). Semua terbukti ada di pesaing.
 
 ## Perbandingan kapabilitas
 
@@ -500,9 +639,8 @@ field) dan pakai di `mapToEvent`.
 - **Diadopsi (parity wajib):** T1, T12, T2, T3, T4, T5, T6, T7.
 - **Diadopsi bertahap:** T8, T9, T10, T13, T11.
 - **Ditunda/opsional:** WhatsApp button, AI widget builder/preview, auto-detect platform, weekly digest, RTL (bergantung permintaan pasar Asia/global).
-- **Tetap ditolak (beda posisi produk):** mesin testimonial/Wall of Love, Slack/Teams, notifikasi fiktif. Import review **Google/Facebook** tetap di luar scope (keputusan produk) — review via sumber lain/manual.
-
-> Konfirmasi yang diminta: pilih **sumber Review (T2)** — manual, integrasi pihak ketiga, atau keduanya.
+- **Tetap ditolak (beda posisi produk):** mesin testimonial/Wall of Love, Slack/Teams, notifikasi fiktif. Import review **Facebook/YouTube** tetap di luar scope.
+- **Diputuskan 15 Okt 2026:** sumber **Review = Google Maps / Google Business** (membalik F62 khusus Google) via **Google Places API (≤5 review, cache)** dan/atau **Business Profile API (OAuth pemilik)** — lihat audit **G**. Entry manual jadi pelengkap opsional.
 
 ---
 
@@ -850,7 +988,7 @@ field) dan pakai di `mapToEvent`.
 - **F59** Stripe checkout + webhook status langganan. ✅ (checkout butuh STRIPE_SECRET_KEY; webhook update plan teruji) — FR-BIL-02/05
 - **F60** Konektor Stripe/Shopify/WooCommerce (purchase→event verified) via framework F44. ✅ — FR-ING-09, FR-VER-01/02
 - **F61** Zapier/Make ✅ (lewat ingest API key + konektor "zapier" + UI Integrations). — FR-ING-08, FR-INT-04
-- **F62** Import review Google/Facebook — DIBATALKAN (di luar prioritas; FB/YouTube/Google review dihapus atas keputusan produk). Tipe Review (F37) tetap via webhook/ingest. — FR-ING-10
+- **F62** Import review — **DIREVISI (15 Okt 2026): Google Maps/Business diaktifkan** (Places API ≤5 review+cache, dan/atau Business Profile API OAuth); **Facebook/YouTube tetap dibatalkan**. Tipe Review (F37) juga tetap bisa via webhook/ingest/manual. — FR-ING-10, FR-NOT-05
 - **F63** Goals ✅ (konversi URL + stats + UI) + **A/B testing varian ✅** (variants per-notifikasi, bucketing deterministik per visitor, breakdown views/klik/CTR di Analytics + editor varian). — FR-ANL-03/04
 - **F64** Katalog integrasi UI + data filtering per-integrasi ✅ — FR-INT-02/03
 - **F65** Custom CSS + domain settings UI + passthrough GA/GTM/FB/Mixpanel ✅ — FR-NGS-01..06

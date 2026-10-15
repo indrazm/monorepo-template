@@ -89,6 +89,20 @@ export function liveVisitorsKey(siteId: string): string {
 export function counterKey(notificationId: string): string {
   return `tacto:counter:${notificationId}`;
 }
+// Monthly visitor quota keys (FR-BIL-01). `month` is YYYY-MM.
+export function visitorCountKey(organizationId: string, month: string): string {
+  return `tacto:visitors:${organizationId}:${month}`;
+}
+export function visitorSeenKey(organizationId: string, visitorId: string, month: string): string {
+  return `tacto:visitor-seen:${organizationId}:${month}:${visitorId}`;
+}
+// Keep the counters (and per-visitor markers) for ~40 days so a month-end
+// read still works while old months fall out on their own.
+const VISITOR_TTL_SECONDS = 40 * 86_400;
+
+export function currentMonthKey(now: Date = new Date()): string {
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+}
 
 export type RealtimeStore = {
   // Append an impression to the flush buffer (RPUSH).
@@ -106,6 +120,13 @@ export type RealtimeStore = {
   // Small JSON/value cache for the widget payload (NFR-PERF-02/03).
   cacheGet: (key: string) => Promise<string | null>;
   cacheSet: (key: string, value: string, ttlSeconds: number) => Promise<void>;
+  // Single-winner lock (SET NX EX) so a scheduled task runs once across all
+  // API/worker instances — used by the Google reviews refresh (FR-NOT-05).
+  acquireLock: (key: string, ttlSeconds: number) => Promise<boolean>;
+  // Monthly unique-visitor counter per organization, for the traffic quota
+  // (FR-BIL-01). Returns the running count for the current month.
+  hitVisitor: (organizationId: string, visitorId: string, month: string) => Promise<number>;
+  getVisitorCount: (organizationId: string, month: string) => Promise<number>;
 };
 
 // A plain data connection (separate from BullMQ's blocking connections).
@@ -166,6 +187,27 @@ export function createRealtimeStore(redis: Redis): RealtimeStore {
     async cacheSet(key, value, ttlSeconds) {
       if (ttlSeconds > 0) await redis.set(key, value, "EX", ttlSeconds);
       else await redis.set(key, value);
+    },
+    async acquireLock(key, ttlSeconds) {
+      const result = await redis.set(`tacto:lock:${key}`, "1", "EX", ttlSeconds, "NX");
+      return result === "OK";
+    },
+    async hitVisitor(organizationId, visitorId, month) {
+      const seenKey = visitorSeenKey(organizationId, visitorId, month);
+      const countKey = visitorCountKey(organizationId, month);
+      // One visitor counts once per month: a NX marker guards the counter.
+      const first = await redis.set(seenKey, "1", "EX", VISITOR_TTL_SECONDS, "NX");
+      if (first === "OK") {
+        const count = await redis.incr(countKey);
+        await redis.expire(countKey, VISITOR_TTL_SECONDS);
+        return count;
+      }
+      const current = await redis.get(countKey);
+      return current === null ? 0 : Number(current);
+    },
+    async getVisitorCount(organizationId, month) {
+      const value = await redis.get(visitorCountKey(organizationId, month));
+      return value === null ? 0 : Number(value);
     },
   };
 }

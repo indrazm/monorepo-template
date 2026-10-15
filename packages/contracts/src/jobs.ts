@@ -20,6 +20,9 @@ export const webhookEventSchema = z.object({
   product: z.string().nullable(),
   dedupeKey: z.string().nullable(),
   occurredAt: z.iso.datetime(),
+  // Review payload (FR-NOT-05), when the provider sent one.
+  rating: z.number().int().min(1).max(5).nullish(),
+  text: z.string().max(400).nullish(),
 });
 export const webhookQueueName = "webhook";
 export const webhookJobSchema = z.object({

@@ -9,6 +9,16 @@ const originSchema = z.url({ protocol: /^https?$/ }).pipe(
     return ["http:", "https:"].includes(url.protocol) && url.origin === value;
   }, "Expected an http or https origin without a path."),
 );
+// Accepts "https://host", "http://host" or a bare "host", and always yields an
+// origin without a trailing slash. Tunnel URLs are usually pasted bare.
+const publicUrlSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== "string" || value.trim() === "") return undefined;
+    const raw = value.trim().replace(/\/+$/, "");
+    return /^https?:\/\//.test(raw) ? raw : `https://${raw}`;
+  },
+  z.url({ protocol: /^https?$/ }).optional(),
+);
 const originsSchema = z
   .string()
   .transform((value) => value.split(",").map((item) => item.trim()))
@@ -37,12 +47,25 @@ export const apiEnvSchema = z
     SMTP_USER: optionalStringSchema,
     SMTP_PASSWORD: optionalStringSchema,
     SMTP_FROM: optionalStringSchema,
-    // Reserved for OAuth/polling integration connectors. Webhook-based
-    // integrations use per-integration secrets stored in the dashboard instead.
+    // Integration connectors. Per-organization provider credentials live in
+    // the database (encrypted); these are the Tacto-level app credentials.
     HUBSPOT_CLIENT_ID: optionalStringSchema,
     HUBSPOT_CLIENT_SECRET: optionalStringSchema,
     SHOPIFY_API_KEY: optionalStringSchema,
     SHOPIFY_API_SECRET: optionalStringSchema,
+    // Encrypts integration credentials at rest (AES-256-GCM). Falls back to
+    // BETTER_AUTH_SECRET so development needs no extra setup.
+    CREDENTIALS_SECRET: optionalStringSchema,
+    // Google Places API key — the sanctioned way to read Google reviews
+    // (FR-NOT-05). Without it the Google reviews connector stays unconfigured.
+    GOOGLE_MAPS_API_KEY: optionalStringSchema,
+    // Public, internet-reachable base URL of this API. Used to build the
+    // webhook URLs Tacto registers with providers. Defaults to BETTER_AUTH_URL.
+    // A bare host (e.g. an ngrok domain) is accepted and assumed to be https.
+    PUBLIC_API_URL: publicUrlSchema,
+    // Optional keyed static-map provider for the notification media fallback
+    // (FR-NED-03). Unset = no map fallback (we do not call an unkeyed service).
+    STATIC_MAP_URL_TEMPLATE: optionalStringSchema,
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== "production") return;
@@ -89,7 +112,14 @@ export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
       password: env.SMTP_PASSWORD ?? null,
       from: env.SMTP_FROM ?? null,
     },
+    publicApiUrl: env.PUBLIC_API_URL ?? env.BETTER_AUTH_URL,
+    credentialsSecret: env.CREDENTIALS_SECRET ?? env.BETTER_AUTH_SECRET,
+    media: {
+      // e.g. "https://maps.example.com/staticmap?center={lat},{lng}&key=..."
+      staticMapTemplate: env.STATIC_MAP_URL_TEMPLATE ?? null,
+    },
     integrations: {
+      googleMapsApiKey: env.GOOGLE_MAPS_API_KEY ?? null,
       hubspot:
         env.HUBSPOT_CLIENT_ID && env.HUBSPOT_CLIENT_SECRET
           ? { clientId: env.HUBSPOT_CLIENT_ID, clientSecret: env.HUBSPOT_CLIENT_SECRET }

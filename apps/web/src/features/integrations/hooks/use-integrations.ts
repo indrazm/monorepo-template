@@ -1,23 +1,43 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createIntegration, deleteIntegration, listIntegrations } from "../services";
+import {
+  createIntegration,
+  deleteIntegration,
+  listIntegrations,
+  refreshIntegration,
+  updateIntegration,
+  verifyIntegration,
+} from "../services";
 
 export const integrationsQueryOptions = queryOptions({
   queryKey: ["integrations"],
   queryFn: listIntegrations,
 });
 
-export function useCreateIntegrationMutation() {
+function useIntegrationMutation<TInput, TResult>(mutationFn: (input: TInput) => Promise<TResult>) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: createIntegration,
+    mutationFn,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["integrations"] }),
   });
 }
 
+export function useCreateIntegrationMutation() {
+  return useIntegrationMutation(createIntegration);
+}
+
+export function useUpdateIntegrationMutation() {
+  return useIntegrationMutation(updateIntegration);
+}
+
+// "Verify" writes status/lastError on the server, so the list is refetched.
+export function useVerifyIntegrationMutation() {
+  return useIntegrationMutation(verifyIntegration);
+}
+
+export function useRefreshIntegrationMutation() {
+  return useIntegrationMutation(refreshIntegration);
+}
+
 export function useDeleteIntegrationMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: deleteIntegration,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["integrations"] }),
-  });
+  return useIntegrationMutation(deleteIntegration);
 }

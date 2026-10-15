@@ -71,6 +71,13 @@
       "when": 1791977377665,
       "tag": "0009_harsh_harrier",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792038086624,
+      "tag": "0010_daffy_starbolt",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { webhookEventSchema } from "@repo/contracts/integrations";
-import type { IntegrationProvider } from "@repo/contracts/integrations";
+import { integrationMeta, webhookEventSchema } from "@repo/contracts/integrations";
+import type {
+  IntegrationAuthKind,
+  IntegrationMapping,
+  IntegrationProvider,
+} from "@repo/contracts/integrations";
 import type { EventType } from "@repo/contracts/notifications";
 
 export type NormalizedEvent = {
@@ -10,6 +14,15 @@ export type NormalizedEvent = {
   product: string | null;
   dedupeKey: string | null;
   occurredAt: Date;
+  // Review payload (FR-NOT-05) when the provider sends one.
+  rating?: number | null;
+  text?: string | null;
+};
+
+// Per-integration overrides applied on top of the connector's heuristics
+// (FR-INT-03). Any mapped path that resolves wins over the guessed value.
+export type MapOptions = {
+  mapping?: IntegrationMapping;
 };
 
 export type VerifyContext = {
@@ -20,10 +33,13 @@ export type VerifyContext = {
 
 export type Connector = {
   provider: string;
+  // How this provider is connected (FR-INT-01) — mirrors the catalog metadata
+  // so the ingestion path can tell a signed webhook from a polled source.
+  auth: IntegrationAuthKind;
   // Verifies the provider's webhook signature (SRS FR-ING-04). Tolerant: tries
   // the provider's native scheme, then falls back to the generic Tacto header.
   verify: (ctx: VerifyContext) => boolean;
-  mapToEvent: (raw: unknown) => NormalizedEvent | null;
+  mapToEvent: (raw: unknown, options?: MapOptions) => NormalizedEvent | null;
 };
 
 // ---------- signature helpers ----------
@@ -299,9 +315,56 @@ const TYPE_PATHS = [
   "data.attributes.type",
 ];
 
+// Reads a single mapped path, if the user configured one for this field.
+function mapped(
+  raw: unknown,
+  mapping: IntegrationMapping | undefined,
+  field: keyof IntegrationMapping,
+): string | undefined {
+  const path = mapping?.[field];
+  if (!path) return undefined;
+  return pick(raw, [path]);
+}
+
+// Applies the per-integration field mapping on top of a heuristic result
+// (FR-INT-03). Explicit paths always win; blank paths keep the guess.
+function applyMapping(
+  base: NormalizedEvent,
+  raw: unknown,
+  mapping: IntegrationMapping | undefined,
+): NormalizedEvent {
+  if (!mapping) return base;
+  const name = mapped(raw, mapping, "name");
+  const city = mapped(raw, mapping, "city");
+  const product = mapped(raw, mapping, "product");
+  const dedupeKey = mapped(raw, mapping, "dedupeKey");
+  const occurredAt = mapped(raw, mapping, "occurredAt");
+  const typeHint = mapped(raw, mapping, "type");
+  const rating = mapped(raw, mapping, "rating");
+  const text = mapped(raw, mapping, "text");
+  const ratingValue = rating === undefined ? undefined : Number(rating);
+  return {
+    type: typeHint ? mapType(typeHint, base.type) : base.type,
+    displayName: name !== undefined ? firstName(name) : base.displayName,
+    city: city !== undefined ? str(city) : base.city,
+    product: product !== undefined ? str(product) : base.product,
+    dedupeKey: dedupeKey !== undefined ? str(dedupeKey) : base.dedupeKey,
+    occurredAt: occurredAt !== undefined ? dateOf(occurredAt) : base.occurredAt,
+    rating:
+      ratingValue !== undefined && Number.isFinite(ratingValue)
+        ? Math.max(1, Math.min(5, Math.round(ratingValue)))
+        : base.rating,
+    text: text !== undefined ? str(text) : base.text,
+  };
+}
+
+const RATING_PATHS = ["rating", "score", "stars", "review.rating", "data.rating"];
+const TEXT_PATHS = ["text", "comment", "body", "review", "review.text", "message", "data.text"];
+
 function mapLoose(raw: unknown, fallback: EventType): NormalizedEvent | null {
   if (!raw || typeof raw !== "object") return null;
   const nameHint = pick(raw, NAME_PATHS) ?? pick(raw, EMAIL_PATHS)?.split("@")[0];
+  const ratingHint = Number(pick(raw, RATING_PATHS));
   return {
     type: mapType(pick(raw, TYPE_PATHS), fallback),
     displayName: firstName(nameHint),
@@ -309,6 +372,8 @@ function mapLoose(raw: unknown, fallback: EventType): NormalizedEvent | null {
     product: str(pick(raw, PRODUCT_PATHS)),
     dedupeKey: str(pick(raw, DEDUPE_PATHS)),
     occurredAt: dateOf(pick(raw, TIME_PATHS)),
+    rating: Number.isFinite(ratingHint) ? Math.max(1, Math.min(5, Math.round(ratingHint))) : null,
+    text: str(pick(raw, TEXT_PATHS)),
   };
 }
 
@@ -330,12 +395,16 @@ function mapNormalized(raw: unknown): NormalizedEvent | null {
 function connector(
   provider: IntegrationProvider,
   check: (ctx: VerifyContext) => boolean,
-  mapToEvent: (raw: unknown) => NormalizedEvent | null,
+  map: (raw: unknown) => NormalizedEvent | null,
 ): Connector {
   return {
     provider,
+    auth: integrationMeta[provider].auth,
     verify: (ctx) => check(ctx) || verifyGeneric(ctx),
-    mapToEvent,
+    mapToEvent: (raw, options) => {
+      const base = map(raw);
+      return base ? applyMapping(base, raw, options?.mapping) : null;
+    },
   };
 }
 
@@ -422,6 +491,15 @@ const registry: Record<IntegrationProvider, Connector> = {
   livechat: looseProvider("livechat", "signup"),
   quickbooks: looseProvider("quickbooks", "purchase"),
   xero: looseProvider("xero", "purchase"),
+
+  // Polled source: Tacto pulls from the Google Places API, so there is no
+  // inbound webhook to verify. The mapper handles the shape the reviews
+  // refresh job posts internally.
+  google_reviews: connector(
+    "google_reviews",
+    () => false,
+    (raw) => mapLoose(raw, "review"),
+  ),
 };
 
 export function getConnector(provider: string): Connector | null {

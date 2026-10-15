@@ -279,7 +279,15 @@ export const integration = pgTable(
     organizationId: text("organization_id").notNull(),
     provider: text("provider").notNull(),
     config: jsonb("config").notNull(),
-    status: text("status").notNull().default("active"),
+    // Lifecycle (FR-INT-04): pending | connected | error | disabled.
+    status: text("status").notNull().default("pending"),
+    // Connection health, written by "Verify" and by inbound deliveries.
+    lastCheckedAt: timestamp("last_checked_at"),
+    lastEventAt: timestamp("last_event_at"),
+    lastError: text("last_error"),
+    // Provider-side id of the webhook Tacto registered, so disconnect can
+    // revoke it (e.g. Stripe `we_...`, Shopify webhook id, Calendly uri).
+    externalRef: text("external_ref"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("integration_org_idx").on(t.organizationId)],

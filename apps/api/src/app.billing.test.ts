@@ -21,6 +21,10 @@ const app = createApp({
       webhookSecret: WEBHOOK_SECRET,
       prices: { starter: null, growth: null, agency: null },
     },
+    publicApiUrl: "http://localhost:8000",
+    credentialsSecret: "test-credentials-secret",
+    media: { staticMapTemplate: null },
+    integrations: { googleMapsApiKey: null, shopify: null, hubspot: null },
   },
   auth: {
     getSession: async () => null,

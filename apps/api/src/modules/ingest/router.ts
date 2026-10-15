@@ -48,6 +48,9 @@ export function createIngestRouter(
       switch (result) {
         case "created":
         case "filtered":
+        // A disabled integration is acknowledged so the provider stops
+        // retrying, but nothing is stored (FR-INT-04).
+        case "disabled":
           return c.body(null, 202);
         case "duplicate":
           return c.json(apiError("conflict"), 409);

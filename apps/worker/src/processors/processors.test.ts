@@ -47,6 +47,15 @@ function createFakeStore() {
     async cacheSet() {
       /* no-op */
     },
+    async acquireLock() {
+      return true;
+    },
+    async hitVisitor() {
+      return 1;
+    },
+    async getVisitorCount() {
+      return 0;
+    },
   };
   return { store, buffer, counters };
 }

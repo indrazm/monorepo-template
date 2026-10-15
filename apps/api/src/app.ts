@@ -24,6 +24,7 @@ import { createIngestService } from "./modules/ingest/services";
 import { INGEST_RATE_LIMIT } from "./modules/ingest/rate-limit";
 import { createIntegrationsRouter } from "./modules/integrations/router";
 import { createIntegrationsService } from "./modules/integrations/services";
+import { createCredentialCipher } from "./modules/integrations/credentials";
 import { createWidgetRouter } from "./modules/widget/router";
 import { createWidgetService } from "./modules/widget/services";
 import { createProfileRouter } from "./modules/profile/router";
@@ -53,10 +54,25 @@ export function createApp({
 }: {
   auth: AuthProvider;
   db: Database;
-  config: Pick<ReturnType<typeof createApiConfig>, "clientOrigins" | "stripe">;
+  config: Pick<
+    ReturnType<typeof createApiConfig>,
+    "clientOrigins" | "stripe" | "publicApiUrl" | "credentialsSecret" | "integrations" | "media"
+  >;
 } & AppAsyncDeps) {
   const loadSession = createSessionMiddleware(auth, db);
   const goalsService = createGoalsService(db);
+  // Integration connections own provider credentials, so they need the cipher
+  // (encryption at rest), the Tacto-level app keys, and the public URL that
+  // provider webhooks are registered against (FR-INT-01/04).
+  const integrationsService = createIntegrationsService(db, {
+    cipher: createCredentialCipher(config.credentialsSecret),
+    publicApiUrl: config.publicApiUrl,
+    server: {
+      googleMapsApiKey: config.integrations.googleMapsApiKey,
+      shopify: config.integrations.shopify,
+      hubspot: config.integrations.hubspot,
+    },
+  });
   // Dashboard/auth: credentialed CORS restricted to the configured origins.
   const dashboardCors = cors({
     allowHeaders: ["Content-Type", "Authorization"],
@@ -114,7 +130,7 @@ export function createApp({
         "/api/v1/billing",
         createBillingRouter(createBillingService(db), config.stripe, config.clientOrigins[0] ?? ""),
       )
-      .route("/api/v1/integrations", createIntegrationsRouter(createIntegrationsService(db)))
+      .route("/api/v1/integrations", createIntegrationsRouter(integrationsService))
       .route("/api/v1/goals", createGoalsRouter(goalsService))
       .route(
         "/widget",
