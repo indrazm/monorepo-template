@@ -2,7 +2,7 @@ import { apiError } from "@repo/contracts/errors";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { createSiteSchema, domainSettingSchema, updateSiteSchema } from "@repo/contracts/sites";
-import { type AuthVariables, requireOrg } from "../auth/middleware";
+import { MANAGER_ROLES, type AuthVariables, requireOrg, requireRole } from "../auth/middleware";
 import type { createBillingService } from "../billing/services";
 import type { createSitesService } from "./services";
 
@@ -22,8 +22,10 @@ export function createSitesRouter(
         if (!result.success) return c.json(apiError("validation_error"), 400);
       }),
       async (c) => {
-        const organizationId = requireOrg(c);
-        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        // Only owners/admins manage sites (FR-AUTH-05).
+        const allowed = requireRole(c, ...MANAGER_ROLES);
+        if ("error" in allowed) return c.json(apiError(allowed.error), roleStatus(allowed.error));
+        const { organizationId } = allowed;
         if (!(await billing.canCreateSite(organizationId))) {
           return c.json(apiError("plan_limit_reached"), 403);
         }
@@ -44,16 +46,18 @@ export function createSitesRouter(
         if (!result.success) return c.json(apiError("validation_error"), 400);
       }),
       async (c) => {
-        const organizationId = requireOrg(c);
-        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        const allowed = requireRole(c, ...MANAGER_ROLES);
+        if ("error" in allowed) return c.json(apiError(allowed.error), roleStatus(allowed.error));
+        const { organizationId } = allowed;
         const site = await service.update(organizationId, c.req.param("id"), c.req.valid("json"));
         if (!site) return c.json(apiError("site_not_found"), 404);
         return c.json({ site }, 200);
       },
     )
     .delete("/:id", async (c) => {
-      const organizationId = requireOrg(c);
-      if (!organizationId) return c.json(apiError("unauthorized"), 401);
+      const allowed = requireRole(c, ...MANAGER_ROLES);
+      if ("error" in allowed) return c.json(apiError(allowed.error), roleStatus(allowed.error));
+      const { organizationId } = allowed;
       const removed = await service.remove(organizationId, c.req.param("id"));
       if (!removed) return c.json(apiError("site_not_found"), 404);
       return c.json({ ok: true }, 200);
@@ -71,8 +75,9 @@ export function createSitesRouter(
         if (!result.success) return c.json(apiError("validation_error"), 400);
       }),
       async (c) => {
-        const organizationId = requireOrg(c);
-        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        const allowed = requireRole(c, ...MANAGER_ROLES);
+        if ("error" in allowed) return c.json(apiError(allowed.error), roleStatus(allowed.error));
+        const { organizationId } = allowed;
         const settings = await service.upsertSettings(
           organizationId,
           c.req.param("id"),
@@ -82,4 +87,9 @@ export function createSitesRouter(
         return c.json({ settings }, 200);
       },
     );
+}
+
+// 401 when there is no session/organization, 403 when the role is too low.
+function roleStatus(error: "unauthorized" | "forbidden"): 401 | 403 {
+  return error === "unauthorized" ? 401 : 403;
 }

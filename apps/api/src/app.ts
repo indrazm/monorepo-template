@@ -9,6 +9,7 @@ import type { createApiConfig } from "./config";
 import {
   type AuthVariables,
   type AuthProvider,
+  createMembershipMiddleware,
   createSessionMiddleware,
 } from "./modules/auth/middleware";
 import { createNotificationsRouter } from "./modules/notifications/router";
@@ -64,6 +65,8 @@ export function createApp({
   >;
 } & AppAsyncDeps) {
   const loadSession = createSessionMiddleware(auth, db);
+  // Organization + role, only on the tenant-scoped API (FR-AUTH-05).
+  const loadMembership = createMembershipMiddleware(db);
   const goalsService = createGoalsService(db);
   // Usage comes from the Redis visitor counter when available (FR-BIL-01).
   const billingService = createBillingService(db, { store });
@@ -122,6 +125,7 @@ export function createApp({
       .use("/api/v1/billing/portal", loadSession)
       .use("/api/v1/integrations", loadSession)
       .use("/api/v1/integrations/*", loadSession)
+      .use("/api/v1/*", loadMembership)
       .get("/session", (c) => {
         const user = c.get("user");
         const session = c.get("session");

@@ -10,7 +10,7 @@ import {
   type Plan,
   type PlanOffer,
 } from "@repo/contracts/billing";
-import { type AuthVariables, requireOrg } from "../auth/middleware";
+import { MANAGER_ROLES, type AuthVariables, requireOrg, requireRole } from "../auth/middleware";
 import type { createBillingService } from "./services";
 import {
   createBillingPortalSession,
@@ -92,8 +92,12 @@ export function createBillingRouter(
           if (!result.success) return c.json(apiError("validation_error"), 400);
         }),
         async (c) => {
-          const organizationId = requireOrg(c);
-          if (!organizationId) return c.json(apiError("unauthorized"), 401);
+          // Paying is an owner/admin decision, not a member's (FR-AUTH-05).
+          const allowed = requireRole(c, ...MANAGER_ROLES);
+          if ("error" in allowed) {
+            return c.json(apiError(allowed.error), allowed.error === "unauthorized" ? 401 : 403);
+          }
+          const { organizationId } = allowed;
           if (!stripe.secretKey) return c.json(apiError("integration_unconfigured"), 400);
           const plan = c.req.valid("json").plan;
           const priceId = stripe.prices?.[plan] ?? null;
@@ -117,8 +121,11 @@ export function createBillingRouter(
       // Authenticated: open the Stripe Billing Portal for self-serve
       // upgrade/downgrade/cancel (FR-BIL-05).
       .post("/portal", async (c) => {
-        const organizationId = requireOrg(c);
-        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        const allowed = requireRole(c, ...MANAGER_ROLES);
+        if ("error" in allowed) {
+          return c.json(apiError(allowed.error), allowed.error === "unauthorized" ? 401 : 403);
+        }
+        const { organizationId } = allowed;
         if (!stripe.secretKey) return c.json(apiError("integration_unconfigured"), 400);
         const customerId = await service.getCustomerId(organizationId);
         if (!customerId) return c.json(apiError("conflict"), 400);

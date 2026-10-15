@@ -2,8 +2,20 @@ import { apiError } from "@repo/contracts/errors";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { createIntegrationSchema, updateIntegrationSchema } from "@repo/contracts/integrations";
-import { type AuthVariables, requireOrg } from "../auth/middleware";
+import { MANAGER_ROLES, type AuthVariables, requireOrg, requireRole } from "../auth/middleware";
 import type { IntegrationsService } from "./services";
+
+// Connecting a provider hands Tacto credentials and changes what shows on the
+// customer's site, so it is an owner/admin action (FR-AUTH-05).
+function manage(
+  c: Parameters<typeof requireRole>[0],
+): { organizationId: string } | { error: "unauthorized" | "forbidden"; status: 401 | 403 } {
+  const result = requireRole(c, ...MANAGER_ROLES);
+  if ("error" in result) {
+    return { error: result.error, status: result.error === "unauthorized" ? 401 : 403 };
+  }
+  return result;
+}
 
 export function createIntegrationsRouter(service: IntegrationsService) {
   return (
@@ -19,8 +31,9 @@ export function createIntegrationsRouter(service: IntegrationsService) {
           if (!result.success) return c.json(apiError("validation_error"), 400);
         }),
         async (c) => {
-          const organizationId = requireOrg(c);
-          if (!organizationId) return c.json(apiError("unauthorized"), 401);
+          const allowed = manage(c);
+          if ("error" in allowed) return c.json(apiError(allowed.error), allowed.status);
+          const { organizationId } = allowed;
           const integration = await service.create(organizationId, c.req.valid("json"));
           return c.json({ integration }, 201);
         },
@@ -33,8 +46,9 @@ export function createIntegrationsRouter(service: IntegrationsService) {
           if (!result.success) return c.json(apiError("validation_error"), 400);
         }),
         async (c) => {
-          const organizationId = requireOrg(c);
-          if (!organizationId) return c.json(apiError("unauthorized"), 401);
+          const allowed = manage(c);
+          if ("error" in allowed) return c.json(apiError(allowed.error), allowed.status);
+          const { organizationId } = allowed;
           const integration = await service.update(
             organizationId,
             c.req.param("id"),
@@ -47,22 +61,25 @@ export function createIntegrationsRouter(service: IntegrationsService) {
       // Test connection (FR-INT-04): calls the provider, registers the webhook
       // when possible, and records status/lastError on the integration.
       .post("/:id/verify", async (c) => {
-        const organizationId = requireOrg(c);
-        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        const allowed = manage(c);
+        if ("error" in allowed) return c.json(apiError(allowed.error), allowed.status);
+        const { organizationId } = allowed;
         const result = await service.verify(organizationId, c.req.param("id"));
         if (!result) return c.json(apiError("integration_not_found"), 404);
         return c.json(result, 200);
       })
       // Pull Google Places reviews now instead of waiting for the daily refresh.
       .post("/:id/refresh", async (c) => {
-        const organizationId = requireOrg(c);
-        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        const allowed = manage(c);
+        if ("error" in allowed) return c.json(apiError(allowed.error), allowed.status);
+        const { organizationId } = allowed;
         const result = await service.refreshGoogleReviews(organizationId, c.req.param("id"));
         return c.json(result, result.ok ? 200 : 400);
       })
       .delete("/:id", async (c) => {
-        const organizationId = requireOrg(c);
-        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        const allowed = manage(c);
+        if ("error" in allowed) return c.json(apiError(allowed.error), allowed.status);
+        const { organizationId } = allowed;
         const removed = await service.remove(organizationId, c.req.param("id"));
         if (!removed) return c.json(apiError("integration_not_found"), 404);
         return c.json({ ok: true }, 200);
