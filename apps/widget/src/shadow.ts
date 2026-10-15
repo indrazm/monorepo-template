@@ -76,6 +76,16 @@ const BASE_CSS = `
 .tacto-spin-btn[disabled] { cursor: default; opacity: .85; }
 .tacto-spin-result { margin: 10px 0 0; font-weight: 800; font-size: 14px; opacity: 0; transform: translateY(6px); transition: opacity .25s ease, transform .25s ease; }
 .tacto-spin-result[data-shown="1"] { opacity: 1; transform: none; }
+.tacto-spin-reward { margin-top: 10px; }
+.tacto-spin-code {
+  display: inline-block; padding: 6px 12px; border: 1px dashed #c4c8d4; border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 800; font-size: 15px;
+  letter-spacing: .04em; color: #17181c; background: #f8f9fc; user-select: all;
+}
+.tacto-spin-redeem {
+  display: inline-block; margin-left: 8px; padding: 7px 14px; border-radius: 8px;
+  background: #17181c; color: #fff; font-weight: 800; font-size: 13px; text-decoration: none;
+}
 @media (prefers-reduced-motion: reduce) { .tacto-card, .tacto-bar, .tacto-overlay, .tacto-modal, .tacto-wheel { transition: none; } }
 `;
 

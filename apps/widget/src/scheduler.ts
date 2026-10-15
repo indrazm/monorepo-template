@@ -42,8 +42,10 @@ export function startScheduler(options: {
   settings: WidgetSettings;
   onView: (refId: string, variantId?: string) => void;
   onClick: (refId: string, variantId?: string) => void;
+  // A conversion widget handed out a reward (F69); reported once per claim.
+  onClaim: (refId: string, variantId?: string) => void;
 }): () => void {
-  const { host, siteKey, notifications, settings, onView, onClick } = options;
+  const { host, siteKey, notifications, settings, onView, onClick, onClaim } = options;
   let stopped = false;
   const timers: ReturnType<typeof setTimeout>[] = [];
   const wait = (ms: number) => new Promise<void>((resolve) => timers.push(setTimeout(resolve, ms)));
@@ -70,6 +72,7 @@ export function startScheduler(options: {
       const { card, close } = renderCard(notification, {
         showClose: settings.showClose,
         showBadge: settings.showBadge,
+        onClaim: (refId, variantId) => onClaim(refId, variantId),
       });
       host.stack.appendChild(card);
       onView(notification.id, notification.variantId);

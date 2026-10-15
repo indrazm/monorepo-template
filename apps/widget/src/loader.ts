@@ -1,4 +1,5 @@
 import type { WidgetPayloadResponse } from "@repo/contracts/widget";
+import { tunnelHeaders } from "./net";
 import { isReturningVisitor, visitorId } from "./visitor";
 
 // Fetches the notification payload for the current page. Fail-safe: any error
@@ -21,7 +22,10 @@ export async function loadPayload(
     )}&url=${encodeURIComponent(url)}&lang=${encodeURIComponent(lang)}&vid=${encodeURIComponent(
       vid,
     )}&q=${encodeURIComponent(query)}&ref=${encodeURIComponent(referrer)}&vs=${segment}`;
-    const response = await fetch(endpoint, { credentials: "omit" });
+    const response = await fetch(endpoint, {
+      credentials: "omit",
+      headers: tunnelHeaders(apiBase),
+    });
     if (!response.ok) return null;
     return (await response.json()) as WidgetPayloadResponse;
   } catch {

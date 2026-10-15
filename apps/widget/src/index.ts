@@ -77,6 +77,13 @@ function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string)
       forwardAnalytics(payload.settings, "click", refId);
       sandbox?.emit({ event: "click", id: refId, type: typeOf(refId) });
     },
+    onClaim: (refId, variantId) => {
+      // A spin reward was won and handed to the visitor (F69): record the claim
+      // as a first-class outcome so it shows up in analytics and goals.
+      track(apiBase, { site: siteKey, refId, kind: "claim", variantId });
+      forwardAnalytics(payload.settings, "claim", refId);
+      sandbox?.emit({ event: "click", id: refId, type: typeOf(refId) });
+    },
   });
 }
 

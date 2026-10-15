@@ -1,4 +1,5 @@
 import type { CaptureEventInput } from "@repo/contracts/widget";
+import { postBeacon } from "./net";
 
 // Auto-captures form submissions on the host page and forwards the named fields
 // to the ingest endpoint (SRS FR-ING-01). Fail-safe and non-blocking.
@@ -18,13 +19,7 @@ export function attachCapture(apiBase: string, siteKey: string): void {
           }
         }
         const body: CaptureEventInput = { site: siteKey, url: location.pathname, fields };
-        const url = `${apiBase}/widget/v1/capture`;
-        const payload = JSON.stringify(body);
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
-        } else {
-          void fetch(url, { method: "POST", body: payload, keepalive: true, credentials: "omit" });
-        }
+        postBeacon(apiBase, "/widget/v1/capture", JSON.stringify(body));
       } catch {
         /* fail-safe */
       }

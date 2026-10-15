@@ -2,7 +2,6 @@ import type { WidgetNotification } from "@repo/contracts/widget";
 
 const ICONS: Record<string, string> = {
   recent_sales: "🛒",
-  review: "★",
   live_visitors: "👀",
   counter: "📈",
   combo: "📈",
@@ -15,7 +14,23 @@ const ICONS: Record<string, string> = {
 };
 
 type RenderResult = { card: HTMLElement; close: HTMLElement | null };
-type RenderOptions = { showClose: boolean; showBadge: boolean };
+type RenderOptions = {
+  showClose: boolean;
+  showBadge: boolean;
+  // Fired once when a conversion widget hands out a reward (F69).
+  onClaim?: (refId: string, variantId?: string) => void;
+};
+
+// Weighted draw over the spin prize pool (F69). Weights are relative chances.
+function drawPrize<T extends { weight: number }>(prizes: T[]): T {
+  const total = prizes.reduce((sum, prize) => sum + prize.weight, 0);
+  let roll = Math.random() * total;
+  for (const prize of prizes) {
+    roll -= prize.weight;
+    if (roll < 0) return prize;
+  }
+  return prizes[prizes.length - 1]!;
+}
 
 function formatRemaining(ms: number): string {
   if (ms <= 0) return "00:00:00";
@@ -190,7 +205,9 @@ function renderPopup(notification: WidgetNotification, options: RenderOptions): 
   return { card: overlay, close };
 }
 
-// Spin-to-win overlay: a wheel that spins once to reveal the reward message.
+// Spin-to-win overlay: a wheel that spins once to reveal a real reward (F69).
+// The prize is drawn from the configured weighted pool; when it carries a coupon
+// code or redemption URL the winner gets it, and the claim is reported once.
 function renderSpin(notification: WidgetNotification, options: RenderOptions): RenderResult {
   const { overlay, modal } = overlayWithModal(notification.style.shape ?? "rounded");
   const close = buildClose();
@@ -217,6 +234,7 @@ function renderSpin(notification: WidgetNotification, options: RenderOptions): R
   const result = document.createElement("p");
   result.className = "tacto-spin-result";
 
+  const prizes = notification.spin?.prizes ?? [];
   let spun = false;
   button.addEventListener("click", () => {
     if (spun) return;
@@ -225,8 +243,39 @@ function renderSpin(notification: WidgetNotification, options: RenderOptions): R
     const degrees = 1440 + Math.floor(Math.random() * 360);
     wheel.style.transform = `rotate(${degrees}deg)`;
     setTimeout(() => {
-      result.textContent = `🎉 ${notification.message}`;
       result.setAttribute("data-shown", "1");
+      if (prizes.length > 0) {
+        const prize = drawPrize(prizes);
+        result.textContent = `🎉 ${prize.label}`;
+        if (prize.code || prize.url) {
+          const reward = document.createElement("div");
+          reward.className = "tacto-spin-reward";
+          if (prize.code) {
+            const code = document.createElement("code");
+            code.className = "tacto-spin-code";
+            code.textContent = prize.code;
+            reward.appendChild(code);
+          }
+          if (prize.url) {
+            const link = document.createElement("a");
+            link.className = "tacto-spin-redeem";
+            link.href = prize.url;
+            link.target = "_blank";
+            link.rel = "noopener";
+            link.textContent = "Redeem now";
+            reward.appendChild(link);
+          }
+          const valid = document.createElement("div");
+          valid.className = "tacto-sub";
+          valid.textContent = `Valid for ${notification.spin?.validForDays ?? 7} days`;
+          reward.appendChild(valid);
+          modal.insertBefore(reward, button);
+        }
+        // A real reward was handed out — report the claim for analytics/goals.
+        options.onClaim?.(notification.id, notification.variantId);
+      } else {
+        result.textContent = `🎉 ${notification.message}`;
+      }
       button.textContent = "You won!";
     }, 3200);
   });

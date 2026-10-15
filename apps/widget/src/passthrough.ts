@@ -7,11 +7,11 @@ type AnalyticsWindow = Window & {
   mixpanel?: { track?: (name: string, props?: unknown) => void };
 };
 
-// Forwards a widget view/click to whatever analytics the host page already has
-// (FR-NGS-06). Uses existing globals only; never loads anything. Fail-safe.
+// Forwards a widget view/click/claim to whatever analytics the host page already
+// has (FR-NGS-06). Uses existing globals only; never loads anything. Fail-safe.
 export function forwardAnalytics(
   settings: WidgetSettings,
-  kind: "view" | "click",
+  kind: "view" | "click" | "claim",
   notificationId: string,
 ): void {
   const pass = settings.analyticsPassthrough;

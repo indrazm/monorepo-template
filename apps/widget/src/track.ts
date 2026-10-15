@@ -1,16 +1,12 @@
 import type { TrackEventInput } from "@repo/contracts/widget";
+import { postBeacon } from "./net";
 import { visitorId } from "./visitor";
 
 // Fire-and-forget impression/click beacon (SRS FR-ANL-01). Never throws.
 export function track(apiBase: string, body: TrackEventInput): void {
   try {
-    const url = `${apiBase}/widget/v1/track`;
     const payload = JSON.stringify({ ...body, visitorId: visitorId() });
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
-    } else {
-      void fetch(url, { method: "POST", body: payload, keepalive: true, credentials: "omit" });
-    }
+    postBeacon(apiBase, "/widget/v1/track", payload);
   } catch {
     /* fail-safe */
   }
