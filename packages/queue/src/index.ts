@@ -45,6 +45,8 @@ export function createWebhookQueue(connection: ConnectionOptions) {
   const queue = new Queue<WebhookJob>(webhookQueueName, { connection });
   return {
     add: (input: WebhookJob) => queue.add(webhookQueueName, webhookJobSchema.parse(input)),
+    // Job-state depths for the /metrics endpoint (NFR-OBS-02).
+    counts: () => queue.getJobCounts("waiting", "active", "failed", "completed", "delayed"),
     close: () => queue.close(),
   };
 }
@@ -62,6 +64,7 @@ export function createAnalyticsQueue(connection: ConnectionOptions) {
         { every: everyMs },
         { data: analyticsJobSchema.parse({}) },
       ),
+    counts: () => queue.getJobCounts("waiting", "active", "failed", "completed", "delayed"),
     close: () => queue.close(),
   };
 }
@@ -70,6 +73,7 @@ export function createCounterQueue(connection: ConnectionOptions) {
   const queue = new Queue<CounterJob>(counterQueueName, { connection });
   return {
     add: (input: CounterJob) => queue.add(counterQueueName, counterJobSchema.parse(input)),
+    counts: () => queue.getJobCounts("waiting", "active", "failed", "completed", "delayed"),
     close: () => queue.close(),
   };
 }
@@ -121,7 +125,7 @@ export type RealtimeStore = {
   cacheGet: (key: string) => Promise<string | null>;
   cacheSet: (key: string, value: string, ttlSeconds: number) => Promise<void>;
   // Single-winner lock (SET NX EX) so a scheduled task runs once across all
-  // API/worker instances — used by the Google reviews refresh (FR-NOT-05).
+  // API/worker instances.
   acquireLock: (key: string, ttlSeconds: number) => Promise<boolean>;
   // Monthly unique-visitor counter per organization, for the traffic quota
   // (FR-BIL-01). Returns the running count for the current month.

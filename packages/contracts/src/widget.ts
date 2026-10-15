@@ -2,6 +2,14 @@ import { z } from "zod";
 import { notificationPositionSchema, notificationTypeSchema } from "./notifications";
 
 // ---------- payload served to the pixel (GET /widget/v1/payload) ----------
+export const widgetRewardSchema = z.object({
+  label: z.string(),
+  code: z.string().optional(),
+  url: z.string().optional(),
+  // Relative chance the pixel uses to draw this outcome for this visitor.
+  weight: z.number().int().min(1),
+});
+
 export const widgetNotificationSchema = z.object({
   id: z.string(),
   type: notificationTypeSchema,
@@ -12,6 +20,14 @@ export const widgetNotificationSchema = z.object({
   countdownEndsAt: z.string().optional(),
   // Which A/B variant produced this notification, if any (FR-ANL-04).
   variantId: z.string().optional(),
+  // Spin-to-win prizes the pixel draws from (F69). The winner is selected in the
+  // browser so the cached payload stays visitor-independent.
+  spin: z
+    .object({
+      prizes: z.array(widgetRewardSchema).min(2),
+      validForDays: z.number().int().min(1),
+    })
+    .optional(),
   style: z.object({
     position: notificationPositionSchema,
     accent: z.string(),
@@ -73,7 +89,9 @@ export const widgetPayloadQuerySchema = z.object({
 export const trackEventSchema = z.object({
   site: z.string().trim().min(1),
   refId: z.string().trim().min(1),
-  kind: z.enum(["view", "click"]),
+  // "claim" is a conversion-widget outcome (e.g. a spin reward was won), kept
+  // separate from a generic click so it can drive analytics and goals.
+  kind: z.enum(["view", "click", "claim"]),
   // Stable per-browser id used only to count distinct live visitors (F33).
   visitorId: z.string().trim().min(1).max(128).optional(),
   // A/B variant that produced the shown notification, for per-variant analytics.

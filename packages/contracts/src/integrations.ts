@@ -52,8 +52,6 @@ export const integrationProviders = [
   "livechat",
   "quickbooks",
   "xero",
-  // Reviews (FR-NOT-05): Google Places reviews pulled on a schedule.
-  "google_reviews",
 ] as const;
 export const integrationProviderSchema = z.enum(integrationProviders);
 
@@ -71,14 +69,12 @@ export type IntegrationProvider = (typeof integrationProviders)[number];
 //   the provider to verify them and (where supported) registers the webhook.
 // - "oauth":            the user authorizes Tacto on the provider; Tacto stores
 //   the access token and registers the webhook on their behalf.
-// - "poll":             no webhook at all — Tacto pulls on a schedule.
 // ---------------------------------------------------------------------------
 export const integrationAuthKinds = [
   "generated_secret",
   "webhook_secret",
   "api_key",
   "oauth",
-  "poll",
 ] as const;
 export const integrationAuthSchema = z.enum(integrationAuthKinds);
 export type IntegrationAuthKind = (typeof integrationAuthKinds)[number];
@@ -413,24 +409,6 @@ export const integrationMeta: Record<IntegrationProvider, IntegrationMeta> = {
   livechat: forwarded("LiveChat", "Forms & CRM"),
   quickbooks: forwarded("QuickBooks", "E-commerce"),
   xero: forwarded("Xero", "E-commerce"),
-
-  google_reviews: {
-    label: "Google reviews",
-    group: "Marketing & sites",
-    auth: "poll",
-    header: "- (Tacto pulls from the Google Places API)",
-    docsUrl: "https://developers.google.com/maps/documentation/places/web-service/place-details",
-    canTest: true,
-    credentials: [
-      {
-        key: "placeId",
-        label: "Google Place ID",
-        kind: "text",
-        placeholder: "ChIJN1t_tDeuEmsRUsoyG83frY4",
-        help: "Find it with Google's Place ID finder. Tacto caches up to 5 reviews and refreshes them daily.",
-      },
-    ],
-  },
 };
 
 // ---------------------------------------------------------------------------
@@ -445,20 +423,16 @@ export const integrationMappingSchema = z.object({
   product: pathSchema.optional(),
   dedupeKey: pathSchema.optional(),
   occurredAt: pathSchema.optional(),
-  rating: pathSchema.optional(),
-  text: pathSchema.optional(),
 });
 export type IntegrationMapping = z.output<typeof integrationMappingSchema>;
 
 export const integrationMappingFields = [
-  { key: "type", label: "Event type", help: "purchase / signup / review / form_submit" },
+  { key: "type", label: "Event type", help: "purchase / signup / form_submit" },
   { key: "name", label: "Customer name", help: "Only the first name is stored" },
   { key: "city", label: "City" },
   { key: "product", label: "Product / plan" },
   { key: "dedupeKey", label: "Unique id", help: "Used to reject duplicate deliveries" },
   { key: "occurredAt", label: "Timestamp" },
-  { key: "rating", label: "Rating", help: "Review notifications only" },
-  { key: "text", label: "Review text", help: "Review notifications only" },
 ] as const;
 
 // Optional data filter (FR-INT-03): only accept events whose raw payload has
@@ -559,34 +533,6 @@ export type IntegrationGuide = {
 export function integrationGuide(provider: IntegrationProvider): IntegrationGuide {
   const meta = integrationMeta[provider];
   const name = meta.label;
-
-  if (meta.auth === "poll") {
-    return {
-      mode: "poll",
-      signature: meta.header,
-      steps: [
-        {
-          id: "credentials",
-          title: `Identify your ${name} source`,
-          detail: "Enter the Place ID of the location whose reviews you want to show.",
-          action: "credentials",
-        },
-        {
-          id: "verify",
-          title: "Fetch reviews",
-          detail:
-            "Tacto calls the Google Places API, caches up to 5 reviews and refreshes them daily. Scraping Google Maps is not allowed, so this is the sanctioned path.",
-          action: "verify",
-        },
-        {
-          id: "mapping",
-          title: "Choose what shows",
-          detail: "Reviews land as events; create a Review notification to display them.",
-          action: "mapping",
-        },
-      ],
-    };
-  }
 
   if (meta.auth === "api_key" || meta.auth === "oauth") {
     return {

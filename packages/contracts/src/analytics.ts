@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { eventSourceSchema } from "./events";
+import { eventTypeSchema, notificationTypeSchema } from "./notifications";
 
 export const analyticsQuerySchema = z.object({
   siteId: z.string().trim().min(1),
@@ -8,12 +10,33 @@ export const analyticsQuerySchema = z.object({
 export const analyticsSummarySchema = z.object({
   views: z.number().int(),
   clicks: z.number().int(),
+  // Conversion-widget outcomes such as a claimed spin reward (F69).
+  claims: z.number().int(),
   ctr: z.number(), // 0..1
   days: z.number().int(),
   perDay: z.array(
-    z.object({ date: z.string(), views: z.number().int(), clicks: z.number().int() }),
+    z.object({
+      date: z.string(),
+      views: z.number().int(),
+      clicks: z.number().int(),
+      claims: z.number().int(),
+    }),
   ),
-  // Per-variant breakdown for A/B tests (FR-ANL-04).
+  // Per-notification breakdown (FR-ANL-02): which notification actually works.
+  notifications: z.array(
+    z.object({
+      notificationId: z.string(),
+      name: z.string(),
+      type: notificationTypeSchema,
+      isActive: z.boolean(),
+      views: z.number().int(),
+      clicks: z.number().int(),
+      claims: z.number().int(),
+      ctr: z.number(),
+    }),
+  ),
+  // Per-variant breakdown for A/B tests (FR-ANL-04), with a Wilson 95%
+  // interval so a difference in CTR can be read as real or as noise.
   variants: z.array(
     z.object({
       variantId: z.string(),
@@ -21,6 +44,24 @@ export const analyticsSummarySchema = z.object({
       views: z.number().int(),
       clicks: z.number().int(),
       ctr: z.number(),
+      ctrLow: z.number(),
+      ctrHigh: z.number(),
+    }),
+  ),
+  // One entry per notification running an A/B test (FR-ANL-04): which variant
+  // leads and whether the difference against the runner-up is significant.
+  abTests: z.array(
+    z.object({
+      notificationId: z.string(),
+      name: z.string(),
+      leaderVariantId: z.string(),
+      runnerUpVariantId: z.string().nullable(),
+      // Two-proportion z-test p-value against the runner-up, null when there
+      // is nothing to compare against yet.
+      pValue: z.number().nullable(),
+      significant: z.boolean(),
+      // Enough data to call it (both arms past a minimum sample).
+      enoughData: z.boolean(),
     }),
   ),
 });
@@ -30,6 +71,15 @@ export const eventsFeedQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   // Keyset pagination cursor: the id of the last event on the previous page.
   cursor: z.string().trim().min(1).optional(),
+  // Filters (FR-ING-11). Absent = no filtering on that field.
+  type: eventTypeSchema.optional(),
+  source: eventSourceSchema.optional(),
+  verified: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
+    .optional(),
+  // Free-text match on the displayed name or city.
+  q: z.string().trim().max(120).optional(),
 });
 
 // Hot-path impression buffered in Redis and flushed to Postgres by the worker
@@ -37,7 +87,7 @@ export const eventsFeedQuerySchema = z.object({
 export const bufferedImpressionSchema = z.object({
   siteId: z.string().trim().min(1),
   refId: z.string().trim().min(1),
-  kind: z.enum(["view", "click"]),
+  kind: z.enum(["view", "click", "claim"]),
   variantId: z.string().optional(),
   createdAt: z.iso.datetime(),
 });

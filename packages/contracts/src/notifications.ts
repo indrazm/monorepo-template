@@ -4,7 +4,6 @@ export const notificationTypes = [
   "recent_sales",
   "counter",
   "live_visitors",
-  "review",
   "custom",
   "combo",
   "social_counter",
@@ -18,14 +17,7 @@ export const notificationTypes = [
 ] as const;
 export const notificationTypeSchema = z.enum(notificationTypes);
 
-export const eventTypes = [
-  "purchase",
-  "signup",
-  "visit",
-  "form_submit",
-  "custom",
-  "review",
-] as const;
+export const eventTypes = ["purchase", "signup", "visit", "form_submit", "custom"] as const;
 export const eventTypeSchema = z.enum(eventTypes);
 
 const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/i, "Expected a hex color like #3B82F6.");
@@ -124,6 +116,40 @@ export const notificationTimingSchema = z.object({
 export const countdownConfigSchema = z.object({ endsAt: z.iso.datetime() });
 export const fomoConfigSchema = z.object({ stock: z.number().int().min(0).max(1_000_000) });
 
+// Media (FR-NED-03). The editor can pin an explicit image and choose which
+// fallback source the server walks when an event carries no image:
+// auto (image → map → gravatar → flag), a single source, or none.
+export const mediaFallbacks = ["auto", "image", "map", "gravatar", "flag", "none"] as const;
+export const notificationMediaSchema = z.object({
+  imageUrl: z.string().trim().url().max(2048).optional(),
+  fallback: z.enum(mediaFallbacks).default("auto"),
+});
+export type MediaFallback = (typeof mediaFallbacks)[number];
+
+// Spin-to-win rewards (F69, PRD Fase 4). A conversion widget only earns its keep
+// when it actually hands out something: each prize is a real label plus an
+// optional coupon `code` or redemption `url`, drawn with a weighted probability.
+export const spinPrizeSchema = z
+  .object({
+    label: z.string().trim().min(1).max(60),
+    // A coupon code shown to the winner (copyable), and/or a link to redeem.
+    code: z.string().trim().min(1).max(80).optional(),
+    url: z.string().trim().url().max(2048).optional(),
+    // Relative chance of this prize; "no prize" is expressed by a low weight.
+    weight: z.number().int().min(1).max(100).default(1),
+  })
+  .refine((prize) => Boolean(prize.code || prize.url), {
+    message: "A prize needs a code or a redemption URL.",
+    path: ["code"],
+  });
+
+export const spinConfigSchema = z.object({
+  // At least two outcomes, and one of them can be a low-value "try again".
+  prizes: z.array(spinPrizeSchema).min(2).max(12),
+  // How long the reward code/URL stays valid (shown as an expiry hint).
+  validForDays: z.number().int().min(1).max(365).default(7),
+});
+
 // A/B testing (FR-ANL-04): each variant is an alternative message (and
 // optionally style). Variants are shown deterministically per visitor by weight.
 export const notificationVariantSchema = z.object({
@@ -139,8 +165,10 @@ export const notificationConfigSchema = z.object({
   display: notificationDisplaySchema,
   dataSource: notificationDataSourceSchema,
   timing: notificationTimingSchema,
+  media: notificationMediaSchema.optional(),
   countdown: countdownConfigSchema.optional(),
   fomo: fomoConfigSchema.optional(),
+  spin: spinConfigSchema.optional(),
   variants: z.array(notificationVariantSchema).min(2).max(6).optional(),
 });
 
@@ -179,6 +207,9 @@ export type NotificationDataSource = z.output<typeof notificationDataSourceSchem
 export type NotificationTiming = z.output<typeof notificationTimingSchema>;
 export type NotificationConfig = z.output<typeof notificationConfigSchema>;
 export type NotificationVariant = z.output<typeof notificationVariantSchema>;
+export type SpinConfig = z.output<typeof spinConfigSchema>;
+export type SpinPrize = z.output<typeof spinPrizeSchema>;
+export type NotificationMedia = z.output<typeof notificationMediaSchema>;
 export type CreateNotificationInput = z.output<typeof createNotificationSchema>;
 export type UpdateNotificationInput = z.output<typeof updateNotificationSchema>;
 export type Notification = z.output<typeof notificationSchema>;
