@@ -266,6 +266,8 @@ export const subscription = pgTable("subscription", {
   // Provider-side customer id (e.g. Stripe `cus_...`) for the billing portal.
   externalCustomerId: text("external_customer_id"),
   renewsAt: timestamp("renews_at"),
+  // Stripe: the subscription is scheduled to cancel at the period end.
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
 });
 
 export const integration = pgTable(

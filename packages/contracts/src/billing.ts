@@ -69,6 +69,19 @@ export function planAllowsNotificationType(
   return allowed === "all" || allowed.includes(type);
 }
 
+// Subscription access rights (FR-BIL-01/05): a plan only grants its paid
+// entitlements while the subscription is active or trialing. Every other status
+// (past_due, unpaid, canceled, incomplete, paused, …) keeps the record but the
+// organization falls back to the Free plan's limits. This is the single rule the
+// backend uses so access never depends on what the UI happens to show.
+export const paidAccessStatuses = ["active", "trialing"] as const;
+export function effectivePlanFor(plan: Plan, status: string | null | undefined): Plan {
+  return status && (paidAccessStatuses as readonly string[]).includes(status) ? plan : "free";
+}
+export function hasPaidAccess(status: string | null | undefined): boolean {
+  return Boolean(status && (paidAccessStatuses as readonly string[]).includes(status));
+}
+
 // One purchasable plan as the dashboard should render it. `amount` is in the
 // currency's minor unit (cents) and comes from the Stripe Price when it is
 // configured; `source` says which it is, so the UI can flag a stale fallback.
@@ -104,3 +117,41 @@ export const subscriptionSchema = z.object({
   renewsAt: z.iso.datetime().nullable(),
 });
 export type Subscription = z.output<typeof subscriptionSchema>;
+
+// What GET /api/v1/billing returns. `plan`/`status` describe the stored
+// subscription; `effectivePlan` is what access is actually granted on
+// (Free while the subscription is not active). Prices are never here — they
+// come from /billing/plans, read live from Stripe.
+export const billingOverviewSchema = z.object({
+  plan: planSchema,
+  status: z.string(),
+  active: z.boolean(),
+  effectivePlan: planSchema,
+  trafficQuota: z.number().int(),
+  usage: z.number().int(),
+  sitesUsed: z.number().int(),
+  maxSites: z.number().int(),
+  removeBadge: z.boolean(),
+  customCode: z.boolean(),
+  renewsAt: z.iso.datetime().nullable(),
+  cancelAtPeriodEnd: z.boolean(),
+  // A provider customer exists → the billing portal can be opened.
+  manageable: z.boolean(),
+  // Stripe is reachable/configured, so checkout and the portal can work.
+  billingConfigured: z.boolean(),
+});
+export type BillingOverview = z.output<typeof billingOverviewSchema>;
+
+// One line in the payment history, read from the provider's invoices.
+export const invoiceSchema = z.object({
+  id: z.string(),
+  number: z.string().nullable(),
+  amount: z.number().int(),
+  currency: z.string(),
+  status: z.string(),
+  createdAt: z.iso.datetime(),
+  hostedUrl: z.string().nullable(),
+  pdfUrl: z.string().nullable(),
+});
+export const invoicesResponseSchema = z.object({ invoices: z.array(invoiceSchema) });
+export type Invoice = z.output<typeof invoiceSchema>;
