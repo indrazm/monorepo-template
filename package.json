@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --parallel --filter \"./apps/*\" dev",
-    "deploy:web": "pnpm --filter @repo/web deploy",
+    "deploy:web": "pnpm --filter @repo/web run deploy",
     "build": "pnpm --filter \"./apps/*\" build",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r typecheck",

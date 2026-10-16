@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
       POSTGRES_DB: tacto
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -42,7 +42,7 @@ services:
       BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}"
       BETTER_AUTH_URL: "${BETTER_AUTH_URL:-http://localhost:8000}"
       CLIENT_ORIGINS: "${CLIENT_ORIGINS:-http://localhost:3000}"
-      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/tacto}"
+      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/tacto}"
       REDIS_URL: "${DOCKER_REDIS_URL:-redis://redis:6379}"
     ports:
       - "${API_HOST_PORT:-8000}:8000"
@@ -71,7 +71,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: "production"
-      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/tacto}"
+      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/tacto}"
       REDIS_URL: "${DOCKER_REDIS_URL:-redis://redis:6379}"
     depends_on:
       postgres:

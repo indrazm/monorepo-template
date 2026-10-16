@@ -1,5 +1,7 @@
 # Backend
 
+ngrok http 8000 --url https://celena-draughtiest-marylee.ngrok-free.dev
+
 The Hono API lives in `apps/api`. Use `pnpm --filter @repo/api dev` to run it.
 
 ## Rules

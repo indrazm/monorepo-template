@@ -35,3 +35,6 @@ Validate the deployment bundle without publishing:
 pnpm build
 pnpm --filter @repo/web exec wrangler deploy --dry-run
 ```
+
+Backend
+ngrok http 8000 --url https://celena-draughtiest-marylee.ngrok-free.dev
