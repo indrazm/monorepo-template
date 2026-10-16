@@ -15,23 +15,91 @@ export function createAuth(
   mailer: Mailer,
 ) {
   const appUrl = config.trustedOrigins[0] ?? config.url;
+  // The dashboard is served from a different site than the API (Cloudflare
+  // Worker vs tunnel/host), so session cookies must be SameSite=None to be
+  // sent cross-site. Secure follows the API scheme: plain-http local dev
+  // keeps working (browsers ignore SameSite=None without Secure and fall
+  // back to Lax, which is fine same-site on localhost).
+  const crossSiteSecure = config.url.startsWith("https://");
+  const sessionCookieAttributes = {
+    sameSite: "none" as const,
+    secure: crossSiteSecure,
+  };
   return betterAuth({
     appName: "Tacto",
     telemetry: { enabled: false },
     baseURL: config.url,
+    advanced: {
+      cookies: {
+        session_token: { attributes: sessionCookieAttributes },
+        session_data: { attributes: sessionCookieAttributes },
+        dont_remember: { attributes: sessionCookieAttributes },
+      },
+    },
     database: drizzleAdapter(db, {
       provider: "pg",
       schema,
     }),
     emailAndPassword: {
       enabled: true,
-      // Password reset via email (FR-AUTH-06). `url` is Better Auth's reset link.
+      // Activation gate (FR-AUTH-01): an email+password account cannot log in
+      // until its email is verified. Sign-up therefore returns no session and
+      // the user must open the verification link first.
+      requireEmailVerification: true,
+      // Password reset link lifetime (FR-AUTH-06).
+      resetPasswordTokenExpiresIn: config.passwordResetTokenTtl,
+      // A successful reset revokes every existing session so a stolen session
+      // cannot survive the password change.
+      revokeSessionsOnPasswordReset: true,
+      // `url` is Better Auth's reset link; it points at the API, validates the
+      // token and then redirects back to the dashboard's /reset-password page.
       sendResetPassword: async ({ user, url }) => {
         await mailer.send({
           to: user.email,
           subject: "Reset your Tacto password",
-          text: `Reset your password: ${url}`,
-          html: `<p>Reset your Tacto password:</p><p><a href="${url}">${url}</a></p>`,
+          text: [
+            `Hi ${user.name},`,
+            "",
+            "We received a request to reset your Tacto password. Open the link below to choose a new one:",
+            url,
+            "",
+            "This link expires in 1 hour. If you did not request this, you can ignore this email.",
+          ].join("\n"),
+          html: [
+            `<p>Hi ${escapeHtml(user.name)},</p>`,
+            "<p>We received a request to reset your Tacto password. Click the button below to choose a new one.</p>",
+            `<p><a href="${url}">Reset password</a></p>`,
+            "<p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>",
+          ].join(""),
+        });
+      },
+    },
+    // Sign-up email verification (FR-AUTH-01). The link points at the API,
+    // verifies the token and redirects back to the dashboard.
+    emailVerification: {
+      expiresIn: config.verificationTokenTtl,
+      sendOnSignUp: true,
+      // Opening the link both verifies the address and starts a session, so the
+      // user lands on the dashboard already signed in.
+      autoSignInAfterVerification: true,
+      sendVerificationEmail: async ({ user, url }) => {
+        await mailer.send({
+          to: user.email,
+          subject: "Activate your Tacto account",
+          text: [
+            `Welcome to Tacto, ${user.name}.`,
+            "",
+            "Confirm your email address to activate your account:",
+            url,
+            "",
+            "This link expires in 24 hours. If you did not create an account, you can ignore this email.",
+          ].join("\n"),
+          html: [
+            `<p>Welcome to Tacto, ${escapeHtml(user.name)}.</p>`,
+            "<p>Confirm your email address to activate your account.</p>",
+            `<p><a href="${url}">Activate my account</a></p>`,
+            "<p>This link expires in 24 hours. If you did not create an account, you can ignore this email.</p>",
+          ].join(""),
         });
       },
     },
@@ -120,3 +188,14 @@ export function createAuth(
 export type Auth = ReturnType<typeof createAuth>;
 export type AuthSession = Auth["$Infer"]["Session"]["session"];
 export type AuthUser = Auth["$Infer"]["Session"]["user"];
+
+// User names are interpolated into HTML emails; escape them so a crafted name
+// cannot inject markup.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}

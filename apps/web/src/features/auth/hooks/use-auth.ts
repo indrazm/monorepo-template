@@ -23,15 +23,11 @@ export function useLoginMutation() {
 }
 
 export function useRegisterMutation() {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-
+  // Sign-up no longer starts a session (email verification is required), so the
+  // page stays on screen and shows a "check your email" state instead of
+  // navigating into the dashboard.
   return useMutation({
     mutationFn: register,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: authQueryKey });
-      await navigate({ to: "/" });
-    },
   });
 }
 

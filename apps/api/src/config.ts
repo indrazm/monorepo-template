@@ -23,6 +23,13 @@ const originsSchema = z
   .string()
   .transform((value) => value.split(",").map((item) => item.trim()))
   .pipe(z.array(originSchema).min(1));
+// A positive integer of seconds, or the fallback when unset/blank. Used for the
+// email-verification and password-reset token lifetimes.
+const optionalSecondsSchema = (fallback: number) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.coerce.number().int().positive().default(fallback),
+  );
 
 export const apiEnvSchema = z
   .object({
@@ -35,6 +42,11 @@ export const apiEnvSchema = z
     REDIS_URL: z.url({ protocol: /^rediss?$/ }).default("redis://localhost:16379"),
     GOOGLE_CLIENT_ID: optionalStringSchema,
     GOOGLE_CLIENT_SECRET: optionalStringSchema,
+    // Activation/reset token lifetimes in seconds. Verification defaults to a
+    // full day so users do not have to race the clock; password reset stays
+    // strict at one hour.
+    EMAIL_VERIFICATION_EXPIRES_IN: optionalSecondsSchema(60 * 60 * 24),
+    PASSWORD_RESET_EXPIRES_IN: optionalSecondsSchema(60 * 60),
     STRIPE_SECRET_KEY: optionalStringSchema,
     STRIPE_WEBHOOK_SECRET: optionalStringSchema,
     // Stripe Price IDs from the Dashboard (one per paid plan).
@@ -83,7 +95,14 @@ export const apiEnvSchema = z
   });
 
 export function parseApiEnv(environment: Record<string, string | undefined>) {
-  return apiEnvSchema.parse(environment);
+  const env = apiEnvSchema.parse(environment);
+  if (env.NODE_ENV !== "production" && env.BETTER_AUTH_SECRET === defaultBetterAuthSecret) {
+    console.warn(
+      "[tacto] BETTER_AUTH_SECRET is unset: using the insecure development default. " +
+        "Set a unique value in .env so sessions/cookies are actually signed.",
+    );
+  }
+  return env;
 }
 export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
   return {
@@ -129,6 +148,9 @@ export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
       secret: env.BETTER_AUTH_SECRET,
       trustedOrigins: env.CLIENT_ORIGINS,
       url: env.BETTER_AUTH_URL,
+      // Token lifetimes for the email-verification and password-reset links.
+      verificationTokenTtl: env.EMAIL_VERIFICATION_EXPIRES_IN,
+      passwordResetTokenTtl: env.PASSWORD_RESET_EXPIRES_IN,
       google:
         env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
           ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }

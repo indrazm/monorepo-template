@@ -22,6 +22,7 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SitesRouteImport } from './routes/sites'
 import { Route as TeamRouteImport } from './routes/team'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AcceptInvitationInvitationIdRouteImport } from './routes/accept-invitation.$invitationId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -89,6 +90,11 @@ const TeamRoute = TeamRouteImport.update({
   path: '/team',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AcceptInvitationInvitationIdRoute =
   AcceptInvitationInvitationIdRouteImport.update({
     id: '/accept-invitation/$invitationId',
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/sites': typeof SitesRoute
   '/team': typeof TeamRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
 }
 export interface FileRoutesByTo {
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/sites': typeof SitesRoute
   '/team': typeof TeamRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
 }
 export interface FileRoutesById {
@@ -143,6 +151,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/sites': typeof SitesRoute
   '/team': typeof TeamRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
 }
 export interface FileRouteTypes {
@@ -161,6 +170,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sites'
     | '/team'
+    | '/verify-email'
     | '/accept-invitation/$invitationId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sites'
     | '/team'
+    | '/verify-email'
     | '/accept-invitation/$invitationId'
   id:
     | '__root__'
@@ -193,6 +204,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sites'
     | '/team'
+    | '/verify-email'
     | '/accept-invitation/$invitationId'
   fileRoutesById: FileRoutesById
 }
@@ -210,6 +222,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SitesRoute: typeof SitesRoute
   TeamRoute: typeof TeamRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
   AcceptInvitationInvitationIdRoute: typeof AcceptInvitationInvitationIdRoute
 }
 
@@ -306,6 +319,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TeamRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/accept-invitation/$invitationId': {
       id: '/accept-invitation/$invitationId'
       path: '/accept-invitation/$invitationId'
@@ -330,6 +350,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SitesRoute: SitesRoute,
   TeamRoute: TeamRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
   AcceptInvitationInvitationIdRoute: AcceptInvitationInvitationIdRoute,
 }
 export const routeTree = rootRouteImport
