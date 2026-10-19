@@ -18,6 +18,7 @@ import { AppShell } from "../../app-shell/app-shell";
 import { meQueryOptions } from "../../auth/hooks/use-auth";
 import { useUpdateProfileMutation } from "../hooks/use-profile";
 import { updateProfileSchema } from "@repo/contracts/profile";
+import { exportAccountData } from "../services";
 import { SecuritySettings } from "./security-settings";
 
 export function ProfilePage() {
@@ -149,6 +150,7 @@ function ProfileEditor({ currentUser }: { currentUser: SessionUser }) {
           </Card>
         </div>
 
+        <DataExportCard />
         <SecuritySettings
           twoFactorEnabled={Boolean(
             (currentUser as { twoFactorEnabled?: boolean }).twoFactorEnabled,
@@ -156,6 +158,46 @@ function ProfileEditor({ currentUser }: { currentUser: SessionUser }) {
         />
       </section>
     </AppShell>
+  );
+}
+
+function DataExportCard() {
+  const [busy, setBusy] = useState(false);
+
+  async function download() {
+    setBusy(true);
+    try {
+      const data = await exportAccountData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "tacto-account-export.json";
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("Account export downloaded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not export your data.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Download your data</CardTitle>
+        <CardDescription>
+          Export your profile, sites, events, goals, and integration metadata. Secrets are never
+          included.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button variant="outline" onClick={() => void download()} disabled={busy}>
+          {busy ? "Preparing…" : "Download JSON"}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 

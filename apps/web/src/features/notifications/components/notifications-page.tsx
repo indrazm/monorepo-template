@@ -1550,8 +1550,10 @@ function NotificationEditorDialog({
                 <p className="text-xs text-muted-foreground">
                   Shown when the visitor&apos;s language matches a locale code (e.g. id, es, pt-BR).
                 </p>
-                {Object.entries(translations).map(([locale, value]) => (
-                  <div key={locale} className="grid gap-2 sm:grid-cols-[110px_1fr_auto]">
+                {Object.entries(translations).map(([locale, value], index) => (
+                  // Key by position, not by the editable locale, so renaming a
+                  // translation does not remount the input and drop focus.
+                  <div key={index} className="grid gap-2 sm:grid-cols-[110px_1fr_auto]">
                     <Input
                       aria-label="Locale"
                       placeholder="es"

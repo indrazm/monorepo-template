@@ -6,25 +6,36 @@ import { updateProfileSchema } from "@repo/contracts/profile";
 import { ProfileNotFoundError, type createProfileService } from "./services";
 
 export function createProfileRouter(service: ReturnType<typeof createProfileService>) {
-  return new Hono<{ Variables: AuthVariables }>().patch(
-    "/",
-    zValidator("json", updateProfileSchema, (result, c) => {
-      if (!result.success) return c.json(apiError("validation_error"), 400);
-    }),
-    async (c) => {
+  return new Hono<{ Variables: AuthVariables }>()
+    .get("/export", async (c) => {
       const user = c.get("user");
-
-      if (!user) {
-        return c.json(apiError("unauthorized"), 401);
-      }
-
+      if (!user) return c.json(apiError("unauthorized"), 401);
       try {
-        const result = await service.updateProfile(user.id, c.req.valid("json"));
-        return c.json(result, 200);
+        return c.json(await service.exportAccount(user.id), 200);
       } catch (error) {
         if (error instanceof ProfileNotFoundError) return c.json(apiError("user_not_found"), 404);
         throw error;
       }
-    },
-  );
+    })
+    .patch(
+      "/",
+      zValidator("json", updateProfileSchema, (result, c) => {
+        if (!result.success) return c.json(apiError("validation_error"), 400);
+      }),
+      async (c) => {
+        const user = c.get("user");
+
+        if (!user) {
+          return c.json(apiError("unauthorized"), 401);
+        }
+
+        try {
+          const result = await service.updateProfile(user.id, c.req.valid("json"));
+          return c.json(result, 200);
+        } catch (error) {
+          if (error instanceof ProfileNotFoundError) return c.json(apiError("user_not_found"), 404);
+          throw error;
+        }
+      },
+    );
 }

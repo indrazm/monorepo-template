@@ -978,3 +978,12 @@ Catat keputusan yang memengaruhi arsitektur di `docs/decision/` sesuai template.
 - Contracts **16 tests** ✅
 - Widget build **9.93 kB gzip** ✅
 - Web build ✅
+
+### Tambahan (lanjutan)
+
+- **R6.6** Account-level export selesai: `GET /profile/export` + tombol “Download JSON” di profil; secret/credentials integrasi tidak disertakan.
+- **R6.9** Input translation memakai key posisi sehingga fokus tidak hilang saat locale diketik.
+- **R6.16** Widget sekarang punya `vitest` + test `safe-url` (scheme berbahaya ditolak).
+- **R6.1** Organization switcher ditambahkan di sidebar.
+
+Sisa yang masih membutuhkan keputusan produk atau pekerjaan lanjutan: R6.13 (gating fitur per plan), R5.2 penuh (Mailchimp/ActiveCampaign/Wix JWT), R5.4 event-id idempotency integrasi, R6.4 pembatalan Stripe saat workspace dihapus, dan test route-level/worker concurrency.
