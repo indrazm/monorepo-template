@@ -5,8 +5,28 @@ import { apiClient } from "../../api";
 
 const analytics = apiClient.api.v1.analytics;
 
-export async function getSummary(siteId: string, days = 7): Promise<AnalyticsSummary> {
-  const response = await analytics.summary.$get({ query: { siteId, days: String(days) } });
+export type SummaryParams = {
+  days?: number;
+  from?: string;
+  to?: string;
+  compare?: boolean;
+  includeBots?: boolean;
+};
+
+export async function getSummary(
+  siteId: string,
+  params: SummaryParams = {},
+): Promise<AnalyticsSummary> {
+  const response = await analytics.summary.$get({
+    query: {
+      siteId,
+      days: String(params.days ?? 7),
+      ...(params.from ? { from: params.from } : {}),
+      ...(params.to ? { to: params.to } : {}),
+      ...(params.compare ? { compare: "true" as const } : {}),
+      ...(params.includeBots ? { includeBots: "true" as const } : {}),
+    },
+  });
   if (!response.ok) throw new Error("Failed to load analytics.");
   const data = await response.json();
   return data.summary;

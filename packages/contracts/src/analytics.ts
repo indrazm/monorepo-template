@@ -2,9 +2,23 @@ import { z } from "zod";
 import { eventSourceSchema } from "./events";
 import { eventTypeSchema, notificationTypeSchema } from "./notifications";
 
+export const analyticsRangePresets = ["24h", "7d", "30d", "90d", "custom"] as const;
 export const analyticsQuerySchema = z.object({
   siteId: z.string().trim().min(1),
+  // `days` stays for back-compat; an explicit `from`/`to` window wins when set.
   days: z.coerce.number().int().min(1).max(90).default(7),
+  from: z.iso.datetime().optional(),
+  to: z.iso.datetime().optional(),
+  // Compare the chosen window against the preceding window of equal length.
+  compare: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
+    .optional(),
+  // Include traffic flagged as bots in the totals/breakdown (default excludes).
+  includeBots: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
+    .optional(),
 });
 
 export const analyticsSummarySchema = z.object({
@@ -64,6 +78,28 @@ export const analyticsSummarySchema = z.object({
       enoughData: z.boolean(),
     }),
   ),
+  // The resolved window (ISO), echoed so the dashboard can label the chart.
+  rangeStart: z.string(),
+  rangeEnd: z.string(),
+  // Totals for the preceding window of equal length, when `compare` is on.
+  previous: z
+    .object({
+      views: z.number().int(),
+      clicks: z.number().int(),
+      claims: z.number().int(),
+      ctr: z.number(),
+    })
+    .nullable(),
+  // Audience breakdown (FR-ANL-02) over the window: top values by impression
+  // (device/country/browser) and most-active pages. Empty until the pixel
+  // reports them. See T4.
+  audience: z.object({
+    devices: z.array(z.object({ key: z.string(), count: z.number().int() })),
+    countries: z.array(z.object({ key: z.string(), count: z.number().int() })),
+    browsers: z.array(z.object({ key: z.string(), count: z.number().int() })),
+    pages: z.array(z.object({ key: z.string(), count: z.number().int() })),
+    botViews: z.number().int(),
+  }),
 });
 
 export const eventsFeedQuerySchema = z.object({
@@ -90,6 +126,12 @@ export const bufferedImpressionSchema = z.object({
   kind: z.enum(["view", "click", "claim"]),
   variantId: z.string().optional(),
   createdAt: z.iso.datetime(),
+  // Audience dimensions derived at record time (FR-ANL-02), all optional.
+  device: z.string().optional(),
+  browser: z.string().optional(),
+  country: z.string().optional(),
+  path: z.string().optional(),
+  isBot: z.boolean().optional(),
 });
 
 // Onboarding activation snapshot (F70): where a site is in the time-to-value

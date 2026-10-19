@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
-import { admin, organization } from "better-auth/plugins";
+import { admin, organization, twoFactor } from "better-auth/plugins";
 import { eq } from "drizzle-orm";
 import type { Database } from "@repo/db";
 import { member, organization as organizationTable, subscription } from "@repo/db/schema";
@@ -40,6 +40,12 @@ export function createAuth(
       provider: "pg",
       schema,
     }),
+    // Self-serve account deletion (feedback T12, GDPR). Deleting cascades to the
+    // user's sessions/accounts; domain data is scoped to the org, removed
+    // separately when the org is deleted.
+    user: {
+      deleteUser: { enabled: true },
+    },
     emailAndPassword: {
       enabled: true,
       // Activation gate (FR-AUTH-01): an email+password account cannot log in
@@ -116,6 +122,9 @@ export function createAuth(
         }
       : {}),
     plugins: [
+      // TOTP two-factor authentication (feedback T12). Enrollment is opt-in; the
+      // sign-in flow only challenges users who have enabled it.
+      twoFactor({ issuer: "Tacto" }),
       admin({
         adminRoles: ["admin"],
         defaultRole: "user",

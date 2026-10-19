@@ -67,7 +67,16 @@ export function createWidgetRouter(
           c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
           c.req.header("x-real-ip") ??
           undefined;
-        await service.recordImpression(input, { visitorId });
+        // Audience dimensions (FR-ANL-02): UA → device/browser/bot, edge header
+        // → country. Derived here so the pixel never has to report them.
+        const userAgent = c.req.header("user-agent") ?? null;
+        const country =
+          c.req.header("cf-ipcountry") ??
+          c.req.header("x-vercel-ip-country") ??
+          c.req.header("x-geo-country") ??
+          c.req.header("x-country") ??
+          null;
+        await service.recordImpression(input, { visitorId, userAgent, country });
         return c.body(null, 204); // best-effort beacon; always ack
       },
     )

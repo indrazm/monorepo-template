@@ -27,12 +27,19 @@ function app() {
       stripe: {
         secretKey: "sk_test_x",
         webhookSecret: "whsec_x",
-        prices: { starter: "price_x", growth: null, agency: null },
+        prices: {
+          starter: { month: "price_x", year: null },
+          growth: { month: null, year: null },
+          agency: { month: null, year: null },
+        },
+        trialDays: 0,
       },
       publicApiUrl: "http://localhost:8000",
       credentialsSecret: "test-credentials-secret",
       media: { staticMapTemplate: null },
       integrations: { shopify: null, hubspot: null },
+      reviews: { googlePlacesApiKey: null, facebookPageToken: null },
+      social: { youtubeApiKey: null },
     },
     auth: {
       // A session for whichever user the test is currently acting as.

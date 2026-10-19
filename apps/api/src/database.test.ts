@@ -37,12 +37,19 @@ const app = createApp({
     stripe: {
       secretKey: null,
       webhookSecret: null,
-      prices: { starter: null, growth: null, agency: null },
+      prices: {
+        starter: { month: null, year: null },
+        growth: { month: null, year: null },
+        agency: { month: null, year: null },
+      },
+      trialDays: 0,
     },
     publicApiUrl: "http://localhost:8000",
     credentialsSecret: "test-credentials-secret",
     media: { staticMapTemplate: null },
     integrations: { shopify: null, hubspot: null },
+    reviews: { googlePlacesApiKey: null, facebookPageToken: null },
+    social: { youtubeApiKey: null },
   },
 });
 const { updateProfile } = createProfileService(db);

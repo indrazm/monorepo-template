@@ -18,6 +18,13 @@ export const widgetNotificationSchema = z.object({
   timeAgo: z.string().optional(),
   mediaUrl: z.string().optional(),
   countdownEndsAt: z.string().optional(),
+  // Review notification extras (feedback T6): star rating 0–5 and the author.
+  rating: z.number().min(0).max(5).optional(),
+  author: z.string().optional(),
+  // Small source label, e.g. "Google" for a review or "Instagram" for a counter.
+  sourceLabel: z.string().optional(),
+  // Inline placement target (feedback T8): a CSS selector on the host page.
+  inlineSelector: z.string().optional(),
   // Which A/B variant produced this notification, if any (FR-ANL-04).
   variantId: z.string().optional(),
   // Spin-to-win prizes the pixel draws from (F69). The winner is selected in the
@@ -32,9 +39,13 @@ export const widgetNotificationSchema = z.object({
     position: notificationPositionSchema,
     accent: z.string(),
     shape: z.enum(["rounded", "square"]).default("rounded"),
-    size: z.enum(["sm", "md"]).default("md"),
-    animation: z.enum(["slide", "fade"]).default("slide"),
+    size: z.enum(["sm", "md", "lg"]).default("md"),
+    animation: z.enum(["slide", "fade", "scale", "none"]).default("slide"),
+    font: z.enum(["system", "rounded", "serif", "mono"]).optional(),
   }),
+  // Click action (feedback T9): when present, clicking the card opens this URL.
+  clickUrl: z.string().optional(),
+  clickNewTab: z.boolean().optional(),
   timing: z.object({
     delayMs: z.number().int(),
     durationMs: z.number().int(),
@@ -96,6 +107,9 @@ export const trackEventSchema = z.object({
   visitorId: z.string().trim().min(1).max(128).optional(),
   // A/B variant that produced the shown notification, for per-variant analytics.
   variantId: z.string().trim().max(40).optional(),
+  // Page path the impression happened on, for the analytics "top pages"
+  // breakdown (FR-ANL-02). Device/browser/country are derived server-side.
+  url: z.string().trim().max(2048).optional(),
 });
 
 // ---------- pixel auto-capture (POST /widget/v1/capture) ----------

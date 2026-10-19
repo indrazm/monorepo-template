@@ -1,4 +1,5 @@
 import type { WidgetNotification, WidgetSettings } from "@repo/contracts/widget";
+import { openClickTarget } from "./click";
 import { renderCard } from "./render/notification";
 import type { ShadowHost } from "./shadow";
 
@@ -79,6 +80,7 @@ export function startScheduler(options: {
       card.addEventListener("click", (domEvent) => {
         if (close && domEvent.target === close) return;
         onClick(notification.id, notification.variantId);
+        openClickTarget(notification);
       });
       close?.addEventListener("click", () => {
         snooze(siteKey, settings.closeForDays || 1);

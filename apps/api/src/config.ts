@@ -49,10 +49,19 @@ export const apiEnvSchema = z
     PASSWORD_RESET_EXPIRES_IN: optionalSecondsSchema(60 * 60),
     STRIPE_SECRET_KEY: optionalStringSchema,
     STRIPE_WEBHOOK_SECRET: optionalStringSchema,
-    // Stripe Price IDs from the Dashboard (one per paid plan).
+    // Stripe Price IDs from the Dashboard — monthly and (optional) annual, one
+    // per paid plan. Annual lets the dashboard offer a cheaper yearly option.
     STRIPE_PRICE_STARTER: optionalStringSchema,
     STRIPE_PRICE_GROWTH: optionalStringSchema,
     STRIPE_PRICE_AGENCY: optionalStringSchema,
+    STRIPE_PRICE_STARTER_ANNUAL: optionalStringSchema,
+    STRIPE_PRICE_GROWTH_ANNUAL: optionalStringSchema,
+    STRIPE_PRICE_AGENCY_ANNUAL: optionalStringSchema,
+    // Free-trial length (days) applied at checkout (feedback T11). Blank = none.
+    STRIPE_TRIAL_DAYS: z.preprocess(
+      (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+      z.coerce.number().int().min(0).max(365).default(0),
+    ),
     // Outbound email (invitations, password reset). Unset = links are logged.
     SMTP_HOST: optionalStringSchema,
     SMTP_PORT: optionalStringSchema,
@@ -68,6 +77,11 @@ export const apiEnvSchema = z
     // Encrypts integration credentials at rest (AES-256-GCM). Falls back to
     // BETTER_AUTH_SECRET so development needs no extra setup.
     CREDENTIALS_SECRET: optionalStringSchema,
+    // Review import + social/YouTube stat refresh (feedback T6/T7). Optional:
+    // without them the dashboard falls back to manual/CSV entry.
+    GOOGLE_PLACES_API_KEY: optionalStringSchema,
+    FACEBOOK_PAGE_TOKEN: optionalStringSchema,
+    YOUTUBE_API_KEY: optionalStringSchema,
     // Public, internet-reachable base URL of this API. Used to build the
     // webhook URLs Tacto registers with providers. Defaults to BETTER_AUTH_URL.
     // A bare host (e.g. an ngrok domain) is accepted and assumed to be https.
@@ -114,12 +128,23 @@ export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
       secretKey: env.STRIPE_SECRET_KEY ?? null,
       webhookSecret: env.STRIPE_WEBHOOK_SECRET ?? null,
       // Price IDs configured in the Stripe Dashboard (recommended over inline
-      // amounts so Checkout matches your products).
+      // amounts so Checkout matches your products). Monthly + optional annual.
       prices: {
-        starter: env.STRIPE_PRICE_STARTER ?? null,
-        growth: env.STRIPE_PRICE_GROWTH ?? null,
-        agency: env.STRIPE_PRICE_AGENCY ?? null,
+        starter: {
+          month: env.STRIPE_PRICE_STARTER ?? null,
+          year: env.STRIPE_PRICE_STARTER_ANNUAL ?? null,
+        },
+        growth: {
+          month: env.STRIPE_PRICE_GROWTH ?? null,
+          year: env.STRIPE_PRICE_GROWTH_ANNUAL ?? null,
+        },
+        agency: {
+          month: env.STRIPE_PRICE_AGENCY ?? null,
+          year: env.STRIPE_PRICE_AGENCY_ANNUAL ?? null,
+        },
       },
+      // Free-trial days applied to Checkout subscriptions (0 = none).
+      trialDays: env.STRIPE_TRIAL_DAYS,
     },
     smtp: {
       host: env.SMTP_HOST ?? null,
@@ -133,6 +158,15 @@ export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
     media: {
       // e.g. "https://maps.example.com/staticmap?center={lat},{lng}&key=..."
       staticMapTemplate: env.STATIC_MAP_URL_TEMPLATE ?? null,
+    },
+    // Review import + stat refresh providers (feedback T6/T7). Null = feature
+    // falls back to manual/CSV entry in the dashboard.
+    reviews: {
+      googlePlacesApiKey: env.GOOGLE_PLACES_API_KEY ?? null,
+      facebookPageToken: env.FACEBOOK_PAGE_TOKEN ?? null,
+    },
+    social: {
+      youtubeApiKey: env.YOUTUBE_API_KEY ?? null,
     },
     integrations: {
       hubspot:

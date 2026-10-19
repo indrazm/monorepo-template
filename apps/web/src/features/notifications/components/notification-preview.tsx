@@ -12,10 +12,31 @@ const TYPE_ICON: Record<string, string> = {
   popup: "🎉",
   bar: "📣",
   spin_to_win: "🎁",
+  review: "⭐",
+  social_counter: "👥",
+  youtube: "▶️",
 };
+
+function compact(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1).replace(/\.0$/, "")}K`;
+  return String(value);
+}
 
 // Sample values so the template reads realistically in the editor preview.
 function samplePreview(config: NotificationConfig, type: NotificationType): string {
+  if (type === "review")
+    return config.reviews?.[0]?.text || "Absolutely love this — highly recommend!";
+  if (type === "social_counter") {
+    const sc = config.socialCounter;
+    return sc ? `${compact(sc.count)} ${sc.label ?? "followers"}` : "12.3K followers";
+  }
+  if (type === "youtube") {
+    const yt = config.youtube;
+    return yt
+      ? `${compact(yt.count)} ${yt.label ?? (yt.metric === "views" ? "views" : "subscribers")}`
+      : "45K subscribers";
+  }
   return config.message.template
     .replace(/\{\{\s*first_name\s*\}\}/g, "Mike")
     .replace(/\{\{\s*city\s*\}\}/g, "London")

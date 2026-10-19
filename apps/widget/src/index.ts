@@ -1,5 +1,7 @@
 import { attachCapture } from "./capture";
 import { grantConsent, hasConsent, revokeConsent } from "./consent";
+import { debug } from "./debug";
+import { mountInline } from "./inline";
 import { loadPayload } from "./loader";
 import { forwardAnalytics } from "./passthrough";
 import { startScheduler } from "./scheduler";
@@ -33,6 +35,7 @@ function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string)
   // upgrade prompt for someone else's plan — but the owner gets a clear console
   // notice when they look at their own site.
   if (payload.settings.overQuota) {
+    debug.log("Over the monthly visitor quota — notifications paused.");
     console.warn(
       `[tacto] Monthly visitor quota reached — notifications are paused.${
         payload.settings.upgradeUrl ? ` Upgrade: ${payload.settings.upgradeUrl}` : ""
@@ -41,17 +44,17 @@ function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string)
     return;
   }
 
-  if (payload.notifications.length === 0) return;
-
-  const position = payload.notifications[0]?.style.position ?? "bottom-left";
-  const host = createShadowHost(position);
-
-  // Per-domain custom CSS, scoped to the widget's shadow root (FR-NGS-04).
-  if (payload.settings.customCss) {
-    const custom = document.createElement("style");
-    custom.textContent = payload.settings.customCss;
-    host.root.appendChild(custom);
+  if (payload.notifications.length === 0) {
+    debug.log(
+      "No notifications matched this page. Check targeting (URL/visitor/geo), that a notification is active, and that matching events exist.",
+    );
+    return;
   }
+  debug.log(
+    `Serving ${payload.notifications.length} notification(s):`,
+    payload.notifications.map((n) => ({ id: n.id, type: n.type })),
+  );
+
   // Custom JS, isolated in a cross-origin sandbox iframe (FR-NGS-04). It only
   // observes widget events and may send one custom analytics event back.
   const sandbox = payload.settings.customJs
@@ -62,21 +65,53 @@ function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string)
   const typeOf = (refId: string) =>
     payload.notifications.find((item) => item.id === refId)?.type ?? "";
 
+  // Shared event handlers, reused by the floating scheduler and inline mounts.
+  const emitView = (refId: string, variantId?: string) => {
+    debug.log("Shown:", refId, variantId ? `(variant ${variantId})` : "");
+    track(apiBase, { site: siteKey, refId, kind: "view", variantId });
+    forwardAnalytics(payload.settings, "view", refId);
+    sandbox?.emit({ event: "view", id: refId, type: typeOf(refId) });
+  };
+  const emitClick = (refId: string, variantId?: string) => {
+    debug.log("Clicked:", refId);
+    track(apiBase, { site: siteKey, refId, kind: "click", variantId });
+    forwardAnalytics(payload.settings, "click", refId);
+    sandbox?.emit({ event: "click", id: refId, type: typeOf(refId) });
+  };
+
+  // Inline social proof (feedback T8): notifications with a target selector are
+  // embedded in the page; the rest float and cycle through the scheduler.
+  const inlineNotifs = payload.notifications.filter((item) => item.inlineSelector);
+  const floating = payload.notifications.filter((item) => !item.inlineSelector);
+
+  if (inlineNotifs.length > 0) {
+    mountInline({
+      notifications: inlineNotifs,
+      showBadge: payload.settings.showBadge,
+      onView: emitView,
+      onClick: emitClick,
+    });
+  }
+
+  if (floating.length === 0) return;
+
+  const position = floating[0]?.style.position ?? "bottom-left";
+  const host = createShadowHost(position);
+
+  // Per-domain custom CSS, scoped to the widget's shadow root (FR-NGS-04).
+  if (payload.settings.customCss) {
+    const custom = document.createElement("style");
+    custom.textContent = payload.settings.customCss;
+    host.root.appendChild(custom);
+  }
+
   startScheduler({
     host,
     siteKey,
-    notifications: payload.notifications,
+    notifications: floating,
     settings: payload.settings,
-    onView: (refId, variantId) => {
-      track(apiBase, { site: siteKey, refId, kind: "view", variantId });
-      forwardAnalytics(payload.settings, "view", refId);
-      sandbox?.emit({ event: "view", id: refId, type: typeOf(refId) });
-    },
-    onClick: (refId, variantId) => {
-      track(apiBase, { site: siteKey, refId, kind: "click", variantId });
-      forwardAnalytics(payload.settings, "click", refId);
-      sandbox?.emit({ event: "click", id: refId, type: typeOf(refId) });
-    },
+    onView: emitView,
+    onClick: emitClick,
     onClaim: (refId, variantId) => {
       // A spin reward was won and handed to the visitor (F69): record the claim
       // as a first-class outcome so it shows up in analytics and goals.
@@ -95,8 +130,12 @@ async function boot(): Promise<void> {
   if (!siteKey) return;
   const apiBase = script?.getAttribute("data-api") ?? __TACTO_API_URL__;
 
+  debug.log("Fetching payload for", siteKey, "on", location.pathname);
   const payload = await loadPayload(apiBase, siteKey, location.pathname);
-  if (!payload) return;
+  if (!payload) {
+    debug.log("No payload returned (site not found, blocked origin, or network error).");
+    return;
+  }
 
   const begin = () => start(payload, apiBase, siteKey);
 

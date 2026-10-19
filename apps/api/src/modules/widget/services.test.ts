@@ -144,6 +144,55 @@ describe("widget payload service", () => {
     expect(row?.pixelVerifiedAt).toBeInstanceOf(Date);
   });
 
+  it("honors the per-notification data source: provider + payload filter (FR-NED-08)", async () => {
+    const created = await seedSite();
+    await notifications.create(ORG, {
+      siteId: created.id,
+      name: "Stripe Pro sales",
+      type: "recent_sales",
+      isActive: true,
+      config: config({
+        dataSource: {
+          eventTypes: ["purchase"],
+          source: "stripe",
+          filters: [{ field: "product", op: "contains", value: "Pro" }],
+        },
+      }),
+    });
+    // Non-matching: right product but wrong source.
+    await db.insert(event).values({
+      siteId: created.id,
+      type: "purchase",
+      source: "manual",
+      verified: true,
+      displayName: "ann",
+      city: "paris",
+      payload: { product: "Pro Plan" },
+      occurredAt: new Date(Date.now() - 1000),
+    });
+    // Matching: stripe + product contains "Pro".
+    await db.insert(event).values({
+      siteId: created.id,
+      type: "purchase",
+      source: "stripe",
+      verified: true,
+      displayName: "bob",
+      city: "berlin",
+      payload: { product: "Pro Plan" },
+      occurredAt: new Date(),
+    });
+
+    const result = await widget.getPayload({
+      siteKey: created.siteKey,
+      url: "/",
+      origin: "https://shop.example.com",
+    });
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    expect(result.payload.notifications).toHaveLength(1);
+    expect(result.payload.notifications[0]?.message).toContain("Bob");
+  });
+
   it("excludes notifications whose URL target does not match", async () => {
     const created = await seedSite();
     await notifications.create(ORG, {

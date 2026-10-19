@@ -15,9 +15,22 @@ export const apiErrorSchema = z.object({
     "integration_unconfigured",
     "integration_not_found",
   ]),
+  // Optional human-readable detail and per-field validation messages. The
+  // latter mirrors zod's `flatten().fieldErrors`, so the dashboard can render
+  // an error under the exact input that caused it instead of a generic toast.
+  message: z.string().optional(),
+  fields: z.record(z.string(), z.array(z.string())).optional(),
 });
 export type ApiErrorCode = z.output<typeof apiErrorSchema>["error"];
+export type ApiErrorBody = z.output<typeof apiErrorSchema>;
 
-export function apiError<Code extends ApiErrorCode>(error: Code) {
-  return { error };
+export function apiError<Code extends ApiErrorCode>(
+  error: Code,
+  detail?: { message?: string; fields?: Record<string, string[]> },
+): ApiErrorBody {
+  return {
+    error,
+    ...(detail?.message ? { message: detail.message } : {}),
+    ...(detail?.fields && Object.keys(detail.fields).length ? { fields: detail.fields } : {}),
+  };
 }

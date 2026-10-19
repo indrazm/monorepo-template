@@ -6,13 +6,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@repo/ui/components/card";
-import { useQuery } from "@tanstack/react-query";
+import { toast } from "@repo/ui/components/sonner";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CheckIcon, CircleIcon } from "lucide-react";
+import { CheckIcon, CircleIcon, SendIcon } from "lucide-react";
 import { activationQueryOptions } from "../../analytics/hooks/use-analytics";
 import { meQueryOptions } from "../../auth/hooks/use-auth";
 import { notificationsQueryOptions } from "../../notifications/hooks/use-notifications";
 import { sitesQueryOptions } from "../../sites/hooks/use-sites";
+import { sendTestEvent } from "../../sites/services";
 import { AppShell } from "../../app-shell/app-shell";
 
 function formatDuration(ms: number): string {
@@ -64,6 +66,17 @@ export function OverviewPage() {
   const completed = steps.filter((step) => step.done).length;
   const msToActivation = activation.data?.msToActivation ?? null;
 
+  // Lets the user trigger their first notification without a real transaction
+  // (feedback T5/T14): injects a demo event into the first site.
+  const testEvent = useMutation({
+    mutationFn: () => sendTestEvent(firstSiteId),
+    onSuccess: () =>
+      toast.success("Test event sent", {
+        description: "Open your site to see the notification appear.",
+      }),
+    onError: (error) => toast.error(error.message),
+  });
+
   return (
     <AppShell>
       <section className="grid gap-6">
@@ -114,6 +127,22 @@ export function OverviewPage() {
                   </span>
                 </Link>
               ))}
+              {hasSite && hasNotification && !shown ? (
+                <div className="mt-1 flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-3">
+                  <span className="text-sm text-muted-foreground">
+                    Want to see it right away? Send a demo event to your first site.
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={!firstSiteId || testEvent.isPending}
+                    onClick={() => testEvent.mutate()}
+                  >
+                    <SendIcon className="size-4" /> Send test event
+                  </Button>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         ) : (

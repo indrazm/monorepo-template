@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 import type { Database } from "@repo/db";
 import { domainSetting, event, site } from "@repo/db/schema";
 import type {
@@ -49,6 +49,8 @@ export function createSitesService(db: Pick<Database, "select" | "insert" | "upd
     upsertSettings,
     exportEvents,
     purgeEvents,
+    verify,
+    sendTestEvent,
   };
 
   async function ownsSite(organizationId: string, siteId: string): Promise<boolean> {
@@ -168,5 +170,53 @@ export function createSitesService(db: Pick<Database, "select" | "insert" | "upd
     if (!(await ownsSite(organizationId, siteId))) return null;
     const rows = await db.delete(event).where(eq(event.siteId, siteId)).returning({ id: event.id });
     return rows.length;
+  }
+
+  // Pixel verification check (F70 onboarding, feedback T5). The pixel sets
+  // `pixelVerifiedAt` the first time it loads a payload; this re-reads the row
+  // and reports a recent-activity window so the dashboard "Check now" button has
+  // a meaningful answer. Null for a foreign site.
+  async function verify(
+    organizationId: string,
+    siteId: string,
+  ): Promise<{
+    verified: boolean;
+    pixelVerifiedAt: string | null;
+    recentlyActive: boolean;
+  } | null> {
+    const [row] = await db
+      .select({ pixelVerifiedAt: site.pixelVerifiedAt })
+      .from(site)
+      .where(and(eq(site.id, siteId), eq(site.organizationId, organizationId)))
+      .limit(1);
+    if (!row) return null;
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60_000);
+    const [recent] = await db
+      .select({ id: event.id })
+      .from(event)
+      .where(and(eq(event.siteId, siteId), gte(event.occurredAt, tenMinutesAgo)))
+      .limit(1);
+    return {
+      verified: row.pixelVerifiedAt !== null,
+      pixelVerifiedAt: row.pixelVerifiedAt?.toISOString() ?? null,
+      recentlyActive: Boolean(recent),
+    };
+  }
+
+  // Inject a single demo event so the user can see a notification without a real
+  // transaction (feedback T5, used by onboarding T14). Null for a foreign site.
+  async function sendTestEvent(organizationId: string, siteId: string): Promise<boolean | null> {
+    if (!(await ownsSite(organizationId, siteId))) return null;
+    await db.insert(event).values({
+      siteId,
+      type: "purchase",
+      source: "manual",
+      verified: false,
+      displayName: "Alex",
+      city: "San Francisco",
+      payload: { product: "Test product", amount: "49", test: true },
+      occurredAt: new Date(),
+    });
+    return true;
   }
 }

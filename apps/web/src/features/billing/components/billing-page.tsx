@@ -14,13 +14,15 @@ import { toast } from "@repo/ui/components/sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryOptions } from "@tanstack/react-query";
 import { TriangleAlertIcon } from "lucide-react";
+import { useState } from "react";
 import { apiClient } from "../../../api";
 import { AppShell } from "../../app-shell/app-shell";
 
 type PaidPlan = "starter" | "growth" | "agency";
+type BillingInterval = "month" | "year";
 
-async function startCheckout(plan: PaidPlan): Promise<string> {
-  const response = await apiClient.api.v1.billing.checkout.$post({ json: { plan } });
+async function startCheckout(args: { plan: PaidPlan; interval: BillingInterval }): Promise<string> {
+  const response = await apiClient.api.v1.billing.checkout.$post({ json: args });
   if (response.status === 400) {
     throw new Error("Billing is not configured yet (missing Stripe keys).");
   }
@@ -45,15 +47,17 @@ const billingQueryOptions = queryOptions({
 
 // Prices come from the Stripe Price that Checkout charges — never hardcoded
 // here, so the page and the invoice cannot disagree (audit finding F).
-const plansQueryOptions = queryOptions({
-  queryKey: ["billing", "plans"],
-  queryFn: async () => {
-    const response = await apiClient.api.v1.billing.plans.$get();
-    if (!response.ok) throw new Error("Failed to load plans.");
-    return (await response.json()).plans;
-  },
-  staleTime: 5 * 60_000,
-});
+function plansQuery(interval: BillingInterval) {
+  return queryOptions({
+    queryKey: ["billing", "plans", interval],
+    queryFn: async () => {
+      const response = await apiClient.api.v1.billing.plans.$get({ query: { interval } });
+      if (!response.ok) throw new Error("Failed to load plans.");
+      return (await response.json()).plans;
+    },
+    staleTime: 5 * 60_000,
+  });
+}
 
 function formatPrice(offer: PlanOffer): string {
   if (offer.amount === null) return "custom pricing";
@@ -63,7 +67,7 @@ function formatPrice(offer: PlanOffer): string {
     currency: offer.currency,
     maximumFractionDigits: offer.amount % 100 === 0 ? 0 : 2,
   }).format(offer.amount / 100);
-  return `${value}/${offer.interval}`;
+  return `${value}/${offer.interval === "year" ? "yr" : "mo"}`;
 }
 
 function formatLimits(offer: PlanOffer): string {
@@ -72,9 +76,11 @@ function formatLimits(offer: PlanOffer): string {
 }
 
 export function BillingPage() {
+  const [interval, setInterval] = useState<BillingInterval>("month");
   const billing = useQuery(billingQueryOptions);
-  const plans = useQuery(plansQueryOptions);
+  const plans = useQuery(plansQuery(interval));
   const overview = billing.data;
+  const trialDays = plans.data?.find((offer) => offer.trialDays > 0)?.trialDays ?? 0;
   const usagePct = overview
     ? Math.min(100, (overview.usage / Math.max(1, overview.trafficQuota)) * 100)
     : 0;
@@ -180,9 +186,36 @@ export function BillingPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Upgrade</CardTitle>
+                <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+                  <span>Upgrade</span>
+                  <span className="inline-flex rounded-lg border p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setInterval("month")}
+                      className={`rounded-md px-2.5 py-1 font-semibold ${
+                        interval === "month"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      Monthly
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInterval("year")}
+                      className={`rounded-md px-2.5 py-1 font-semibold ${
+                        interval === "year"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      Annual
+                    </button>
+                  </span>
+                </CardTitle>
                 <CardDescription>
                   Unlock more traffic, extra sites, all notification types and remove the badge.
+                  {trialDays > 0 ? ` Start with a ${trialDays}-day free trial.` : ""}
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-2">
@@ -204,7 +237,7 @@ export function BillingPage() {
                           ? undefined
                           : "This plan has no Stripe Price configured yet."
                       }
-                      onClick={() => checkout.mutate(offer.plan as PaidPlan)}
+                      onClick={() => checkout.mutate({ plan: offer.plan as PaidPlan, interval })}
                     >
                       <span className="flex w-full items-center justify-between gap-3">
                         <span>Upgrade to {offer.label}</span>
@@ -222,7 +255,10 @@ export function BillingPage() {
                   </p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    Secure checkout via Stripe. You can cancel anytime.
+                    Secure checkout via Stripe.{" "}
+                    {trialDays > 0 ? `${trialDays}-day free trial, then ` : ""}
+                    {interval === "year" ? "billed annually. " : "billed monthly. "}
+                    Cancel anytime, with a 14-day money-back guarantee.
                   </p>
                 )}
               </CardContent>

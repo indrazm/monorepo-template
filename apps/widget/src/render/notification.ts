@@ -11,6 +11,9 @@ const ICONS: Record<string, string> = {
   popup: "🎉",
   bar: "📣",
   spin_to_win: "🎁",
+  review: "⭐",
+  social_counter: "👥",
+  youtube: "▶️",
 };
 
 type RenderResult = { card: HTMLElement; close: HTMLElement | null };
@@ -41,6 +44,14 @@ function formatRemaining(ms: number): string {
   const s = total % 60;
   const pad = (n: number) => String(n).padStart(2, "0");
   return (d > 0 ? `${d}d ` : "") + `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+
+// Applies the richer style knobs (feedback T9) to a card element.
+function decorateCard(card: HTMLElement, notification: WidgetNotification): void {
+  card.setAttribute("data-shape", notification.style.shape ?? "rounded");
+  card.setAttribute("data-size", notification.style.size ?? "md");
+  card.setAttribute("data-font", notification.style.font ?? "system");
+  if (notification.clickUrl) card.setAttribute("data-clickable", "1");
 }
 
 function buildClose(label = "Close notification"): HTMLElement {
@@ -80,16 +91,73 @@ export function renderCard(notification: WidgetNotification, options: RenderOpti
       return renderPopup(notification, options);
     case "spin_to_win":
       return renderSpin(notification, options);
+    case "review":
+      return renderReview(notification, options);
     default:
       return renderSocialCard(notification, options);
   }
+}
+
+// A review card (feedback T6): avatar, star rating, quote and author.
+function renderReview(notification: WidgetNotification, options: RenderOptions): RenderResult {
+  const card = document.createElement("div");
+  card.className = "tacto-card";
+  decorateCard(card, notification);
+  card.style.borderColor = "#e7e9f0";
+
+  const media = document.createElement("div");
+  media.className = "tacto-media";
+  if (notification.mediaUrl) {
+    const img = document.createElement("img");
+    img.src = notification.mediaUrl;
+    img.alt = "";
+    media.appendChild(img);
+  } else {
+    media.textContent = ICONS.review ?? "⭐";
+  }
+
+  const body = document.createElement("div");
+  body.className = "tacto-body";
+
+  if (typeof notification.rating === "number") {
+    const stars = document.createElement("div");
+    stars.className = "tacto-stars";
+    const rounded = Math.round(notification.rating);
+    stars.textContent = `${"★".repeat(rounded)}${"☆".repeat(Math.max(0, 5 - rounded))}`;
+    stars.style.color = notification.style.accent;
+    body.appendChild(stars);
+  }
+
+  const msg = document.createElement("div");
+  msg.className = "tacto-msg";
+  msg.textContent = notification.message;
+  body.appendChild(msg);
+
+  const who = [notification.author, notification.sourceLabel].filter(Boolean).join(" · ");
+  if (who) {
+    const sub = document.createElement("div");
+    sub.className = "tacto-sub";
+    sub.textContent = who;
+    body.appendChild(sub);
+  }
+  if (notification.verified) body.appendChild(buildVerified());
+  if (options.showBadge) body.appendChild(buildBadge());
+
+  card.append(media, body);
+  let close: HTMLElement | null = null;
+  if (options.showClose) {
+    close = buildClose();
+    card.appendChild(close);
+  }
+  media.style.boxShadow = `inset 0 0 0 1px ${notification.style.accent}22`;
+  return { card, close };
 }
 
 // The signature notification card (style-guide .livecard).
 function renderSocialCard(notification: WidgetNotification, options: RenderOptions): RenderResult {
   const card = document.createElement("div");
   card.className = "tacto-card";
-  card.setAttribute("data-shape", notification.style.shape ?? "rounded");
+  decorateCard(card, notification);
   card.style.borderColor = "#e7e9f0";
 
   const media = document.createElement("div");

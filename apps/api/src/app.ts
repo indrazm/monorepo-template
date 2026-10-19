@@ -65,7 +65,14 @@ export function createApp({
   db: Database;
   config: Pick<
     ReturnType<typeof createApiConfig>,
-    "clientOrigins" | "stripe" | "publicApiUrl" | "credentialsSecret" | "integrations" | "media"
+    | "clientOrigins"
+    | "stripe"
+    | "publicApiUrl"
+    | "credentialsSecret"
+    | "integrations"
+    | "media"
+    | "reviews"
+    | "social"
   >;
 } & AppAsyncDeps) {
   const loadSession = createSessionMiddleware(auth);
@@ -154,7 +161,13 @@ export function createApp({
       .route("/profile", createProfileRouter(createProfileService(db)))
       .route("/users", createUsersRouter(createUsersService(db)))
       .route("/api/v1/sites", createSitesRouter(createSitesService(db), billingService))
-      .route("/api/v1/notifications", createNotificationsRouter(createNotificationsService(db)))
+      .route(
+        "/api/v1/notifications",
+        createNotificationsRouter(createNotificationsService(db), {
+          googlePlacesApiKey: config.reviews.googlePlacesApiKey,
+          facebookPageToken: config.reviews.facebookPageToken,
+        }),
+      )
       .route("/api/v1/analytics", createAnalyticsRouter(createAnalyticsService(db)))
       .route("/api/v1/billing", createBillingRouter(billingService, config.stripe, dashboardOrigin))
       .route("/api/v1/integrations", createIntegrationsRouter(integrationsService))

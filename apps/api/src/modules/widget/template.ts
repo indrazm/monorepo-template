@@ -1,4 +1,4 @@
-import type { NotificationMessage } from "@repo/contracts/notifications";
+import type { NotificationMessage, TextTransform } from "@repo/contracts/notifications";
 
 export type TemplateVars = {
   first_name?: string | null;
@@ -22,7 +22,12 @@ export function renderMessage(
   const source = selectTranslation(message, locale);
   const hideAfter = message.hideTimeAgoAfterDays;
   const resolved = source.template.replace(VARIABLE, (_match, key: string) => {
-    const value = resolveVariable(key, vars, hideAfter);
+    const raw = resolveVariable(key, vars, hideAfter);
+    // Per-variable transform (feedback T9); first_name/city default to
+    // capitalize to preserve prior behavior, everything else to "none".
+    const transform =
+      message.transforms?.[key] ?? (key === "first_name" || key === "city" ? "capitalize" : "none");
+    const value = applyTransform(raw, transform);
     if (value && value.length > 0) return value;
     return source.fallbacks[key] ?? message.fallbacks[key] ?? "";
   });
@@ -56,9 +61,9 @@ function resolveVariable(
 ): string {
   switch (key) {
     case "first_name":
-      return capitalize(firstNameOnly(vars.first_name));
+      return firstNameOnly(vars.first_name);
     case "city":
-      return capitalize((vars.city ?? "").trim());
+      return (vars.city ?? "").trim();
     case "product":
       return (vars.product ?? "").trim();
     case "count":
@@ -77,6 +82,21 @@ function firstNameOnly(name: string | null | undefined): string {
 function capitalize(value: string): string {
   if (!value) return "";
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function applyTransform(value: string, transform: TextTransform): string {
+  switch (transform) {
+    case "trim":
+      return value.trim();
+    case "uppercase":
+      return value.toUpperCase();
+    case "lowercase":
+      return value.toLowerCase();
+    case "capitalize":
+      return capitalize(value);
+    default:
+      return value;
+  }
 }
 
 // Human "x minutes ago"; collapses to "recently" past the configured horizon.

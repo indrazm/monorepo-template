@@ -31,6 +31,65 @@ describe("analytics service", () => {
     await client.close();
   });
 
+  it("breaks down audience and excludes bots by default (FR-ANL-02)", async () => {
+    const site = await sites.create(ORG, { name: "Shop", domain: "shop.example.com" });
+    await db.insert(impression).values([
+      {
+        siteId: site.id,
+        refId: "n1",
+        kind: "view",
+        device: "Mobile",
+        browser: "Chrome",
+        country: "ID",
+        path: "/",
+        isBot: false,
+      },
+      {
+        siteId: site.id,
+        refId: "n1",
+        kind: "view",
+        device: "Mobile",
+        browser: "Safari",
+        country: "ID",
+        path: "/pricing",
+        isBot: false,
+      },
+      {
+        siteId: site.id,
+        refId: "n1",
+        kind: "view",
+        device: "Desktop",
+        browser: "Chrome",
+        country: "US",
+        path: "/",
+        isBot: false,
+      },
+      {
+        siteId: site.id,
+        refId: "n1",
+        kind: "view",
+        device: "Desktop",
+        browser: "Chrome",
+        country: "US",
+        path: "/",
+        isBot: true,
+      },
+    ]);
+
+    const summary = await analytics.summary(ORG, site.id, { days: 7 });
+    expect(summary?.views).toBe(3); // bot view excluded from totals
+    const devices = Object.fromEntries(
+      (summary?.audience.devices ?? []).map((d) => [d.key, d.count]),
+    );
+    expect(devices).toEqual({ Mobile: 2, Desktop: 1 });
+    expect(summary?.audience.botViews).toBe(1);
+    const topPage = summary?.audience.pages[0];
+    expect(topPage).toMatchObject({ key: "/", count: 2 });
+
+    const withBots = await analytics.summary(ORG, site.id, { days: 7, includeBots: true });
+    expect(withBots?.views).toBe(4);
+  });
+
   it("reports a per-variant breakdown for A/B tests (FR-ANL-04)", async () => {
     const site = await sites.create(ORG, { name: "Shop", domain: "shop.example.com" });
     await db.insert(impression).values([
@@ -41,7 +100,7 @@ describe("analytics service", () => {
       { siteId: site.id, refId: "n1", kind: "view" }, // non-variant impression
     ]);
 
-    const summary = await analytics.summary(ORG, site.id, 7);
+    const summary = await analytics.summary(ORG, site.id, { days: 7 });
     expect(summary).not.toBeNull();
     const byVariant = Object.fromEntries(
       (summary?.variants ?? []).map((variant) => [variant.variantId, variant]),

@@ -18,6 +18,7 @@ import { AppShell } from "../../app-shell/app-shell";
 import { meQueryOptions } from "../../auth/hooks/use-auth";
 import { useUpdateProfileMutation } from "../hooks/use-profile";
 import { updateProfileSchema } from "@repo/contracts/profile";
+import { SecuritySettings } from "./security-settings";
 
 export function ProfilePage() {
   const user = useQuery(meQueryOptions);
@@ -147,6 +148,12 @@ function ProfileEditor({ currentUser }: { currentUser: SessionUser }) {
             </CardContent>
           </Card>
         </div>
+
+        <SecuritySettings
+          twoFactorEnabled={Boolean(
+            (currentUser as { twoFactorEnabled?: boolean }).twoFactorEnabled,
+          )}
+        />
       </section>
     </AppShell>
   );

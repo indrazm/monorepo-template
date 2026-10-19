@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { notificationConfigSchema, notificationStyleSchema, urlMatchSchema } from "./notifications";
+import {
+  notificationConfigSchema,
+  notificationDataSourceSchema,
+  notificationStyleSchema,
+  urlMatchSchema,
+} from "./notifications";
 
 const validConfig = {
   message: { template: "{{first_name}} from {{city}} just bought {{product}}" },
@@ -21,6 +26,30 @@ describe("notificationConfigSchema", () => {
     expect(() =>
       notificationStyleSchema.parse({ position: "bottom-left", accent: "blue" }),
     ).toThrow();
+  });
+});
+
+describe("notificationDataSourceSchema", () => {
+  it("accepts an optional source and field filters (FR-NED-08)", () => {
+    const parsed = notificationDataSourceSchema.parse({
+      eventTypes: ["purchase"],
+      source: "stripe",
+      filters: [
+        { field: "product", op: "contains", value: "Pro" },
+        { field: "amount", op: "gte", value: "50" },
+      ],
+    });
+    expect(parsed.source).toBe("stripe");
+    expect(parsed.filters).toHaveLength(2);
+  });
+
+  it("defaults the operator and rejects an empty field", () => {
+    expect(
+      notificationDataSourceSchema.parse({ filters: [{ field: "x", value: "y" }] }).filters?.[0].op,
+    ).toBe("eq");
+    expect(
+      notificationDataSourceSchema.safeParse({ filters: [{ field: "", value: "y" }] }).success,
+    ).toBe(false);
   });
 });
 

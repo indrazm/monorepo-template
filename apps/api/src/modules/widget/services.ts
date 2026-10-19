@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@repo/db";
+import { eventDataSourceConditions } from "@repo/db/filters";
 import {
   domainSetting,
   event,
@@ -15,6 +16,7 @@ import { currentMonthKey, type RealtimeStore } from "@repo/queue";
 import { analyticsPassthroughSchema, domainPrivacySchema } from "@repo/contracts/sites";
 import type { DomainLoopSettings } from "@repo/contracts/sites";
 import { maskProfanity } from "./profanity";
+import { classifyUserAgent, pathOf } from "./ua";
 import type {
   EventType,
   NotificationConfig,
@@ -131,7 +133,7 @@ export function createWidgetService(
   // hot path and flushed to Postgres by the worker (F46/F47); fallback inserts.
   async function recordImpression(
     input: TrackEventInput,
-    meta: { visitorId?: string } = {},
+    meta: { visitorId?: string; userAgent?: string | null; country?: string | null } = {},
   ): Promise<boolean> {
     const [siteRow] = await db
       .select({ id: site.id })
@@ -139,6 +141,10 @@ export function createWidgetService(
       .where(eq(site.siteKey, input.site))
       .limit(1);
     if (!siteRow) return false;
+    // Audience dimensions for the analytics breakdown (FR-ANL-02).
+    const { device, browser, isBot } = classifyUserAgent(meta.userAgent);
+    const country = meta.country?.trim().slice(0, 2).toUpperCase() || null;
+    const path = pathOf(input.url);
     if (deps.store) {
       await deps.store.pushImpression({
         siteId: siteRow.id,
@@ -146,6 +152,11 @@ export function createWidgetService(
         kind: input.kind,
         variantId: input.variantId,
         createdAt: new Date().toISOString(),
+        device,
+        browser,
+        ...(country ? { country } : {}),
+        ...(path ? { path } : {}),
+        isBot,
       });
       // A view also marks the visitor present for the live-visitor window (F33).
       if (input.kind === "view" && meta.visitorId) {
@@ -157,6 +168,11 @@ export function createWidgetService(
         refId: input.refId,
         kind: input.kind,
         variant: input.variantId ?? null,
+        device,
+        browser,
+        country,
+        path,
+        isBot,
       });
     }
     return true;
@@ -363,6 +379,13 @@ export function createWidgetService(
       style: (variant?.style ?? config.style) as NotificationStyle,
       timing: config.timing as NotificationTiming,
       ...(variant ? { variantId: variant.id } : {}),
+      ...(config.inlineSelector ? { inlineSelector: config.inlineSelector } : {}),
+      ...(config.style.clickAction?.type === "url" && config.style.clickAction.url
+        ? {
+            clickUrl: config.style.clickAction.url,
+            clickNewTab: config.style.clickAction.newTab,
+          }
+        : {}),
     };
     const message = (variant?.message ?? config.message) as NotificationMessage;
     const render = (vars: Parameters<typeof renderMessage>[1] = {}) =>
@@ -374,6 +397,43 @@ export function createWidgetService(
       case "bar":
         // Conversion widgets (F69) render a static message/CTA.
         return { ...base, message: render() };
+      case "review": {
+        // Social proof from a customer review (feedback T6). Reviews are stored
+        // inline; rotate by the minute so a cached payload stays stable briefly.
+        const reviews = config.reviews ?? [];
+        if (reviews.length === 0) return null;
+        const review = reviews[Math.floor(Date.now() / 60_000) % reviews.length]!;
+        return {
+          ...base,
+          message: review.text,
+          author: review.author,
+          rating: review.rating,
+          ...(review.avatarUrl ? { mediaUrl: review.avatarUrl } : {}),
+          ...(review.source ? { sourceLabel: review.source } : {}),
+        };
+      }
+      case "social_counter": {
+        // A follower/like counter (feedback T7). Value is entered manually (or
+        // refreshed server-side when a platform key is configured).
+        const social = config.socialCounter;
+        if (!social) return null;
+        const label = social.label ?? "followers";
+        return {
+          ...base,
+          message: `${compactNumber(social.count)} ${label}`,
+          sourceLabel: social.platform,
+        };
+      }
+      case "youtube": {
+        const stat = config.youtube;
+        if (!stat) return null;
+        const label = stat.label ?? (stat.metric === "views" ? "views" : "subscribers");
+        return {
+          ...base,
+          message: `${compactNumber(stat.count)} ${label}`,
+          sourceLabel: "YouTube",
+        };
+      }
       case "spin_to_win": {
         // Spin-to-win hands out a real reward (F69): the prize pool travels to
         // the pixel, which draws a winner and reveals the code/URL on claim.
@@ -418,6 +478,7 @@ export function createWidgetService(
           siteId,
           eventTypesOf(config.dataSource),
           COUNTER_WINDOW_MS,
+          eventDataSourceConditions(config.dataSource),
         );
         if (count === 0) return null;
         return {
@@ -431,6 +492,7 @@ export function createWidgetService(
           siteId,
           eventTypesOf(config.dataSource),
           COMBO_WINDOW_MS,
+          eventDataSourceConditions(config.dataSource),
         );
         if (count === 0) return null;
         return {
@@ -450,7 +512,11 @@ export function createWidgetService(
       }
       default: {
         // recent_sales / others: latest matching event.
-        const latest = await latestEvent(siteId, eventTypesOf(config.dataSource));
+        const latest = await latestEvent(
+          siteId,
+          eventTypesOf(config.dataSource),
+          eventDataSourceConditions(config.dataSource),
+        );
         if (!latest) return null;
         const message = render({
           first_name: latest.displayName,
@@ -469,11 +535,15 @@ export function createWidgetService(
     }
   }
 
-  async function latestEvent(siteId: string, types: EventType[]): Promise<EventRow | null> {
+  async function latestEvent(
+    siteId: string,
+    types: EventType[],
+    extra: SQL[] = [],
+  ): Promise<EventRow | null> {
     const rows = await db
       .select()
       .from(event)
-      .where(and(eq(event.siteId, siteId), inArray(event.type, types)))
+      .where(and(eq(event.siteId, siteId), inArray(event.type, types), ...extra))
       .orderBy(desc(event.occurredAt))
       .limit(1);
     return rows[0] ?? null;
@@ -483,13 +553,19 @@ export function createWidgetService(
     siteId: string,
     types: EventType[],
     windowMs: number,
+    extra: SQL[] = [],
   ): Promise<number> {
     const since = new Date(Date.now() - windowMs);
     const [res] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(event)
       .where(
-        and(eq(event.siteId, siteId), inArray(event.type, types), gte(event.occurredAt, since)),
+        and(
+          eq(event.siteId, siteId),
+          inArray(event.type, types),
+          gte(event.occurredAt, since),
+          ...extra,
+        ),
       );
     return res?.count ?? 0;
   }
@@ -501,12 +577,13 @@ export function createWidgetService(
     siteId: string,
     types: EventType[],
     windowMs: number,
+    extra: SQL[] = [],
   ): Promise<number> {
     if (deps.store) {
       const cached = await deps.store.getCounter(notificationId);
       if (cached !== null) return cached;
     }
-    const count = await countEvents(siteId, types, windowMs);
+    const count = await countEvents(siteId, types, windowMs, extra);
     if (deps.store) await deps.store.setCounter(notificationId, count, 60);
     return count;
   }
@@ -523,6 +600,23 @@ export function createWidgetService(
 
 function eventTypesOf(dataSource: NotificationDataSource): EventType[] {
   return dataSource.eventTypes.length > 0 ? dataSource.eventTypes : ["purchase"];
+}
+
+// Compact number for social/YouTube counters: 1234 → "1.2K", 1_200_000 → "1.2M".
+function compactNumber(value: number): string {
+  if (value < 1000) return String(value);
+  const units = [
+    { n: 1_000_000_000, s: "B" },
+    { n: 1_000_000, s: "M" },
+    { n: 1000, s: "K" },
+  ];
+  for (const unit of units) {
+    if (value >= unit.n) {
+      const scaled = value / unit.n;
+      return `${scaled >= 100 ? Math.round(scaled) : scaled.toFixed(1).replace(/\.0$/, "")}${unit.s}`;
+    }
+  }
+  return String(value);
 }
 
 // Honors the per-domain manual order (FR-NGS-02): notifications listed in

@@ -28,8 +28,35 @@ export const user = pgTable(
     banned: boolean("banned"),
     banReason: text("banReason"),
     banExpires: timestamp("banExpires", { precision: 3 }),
+    // Better Auth two-factor plugin (feedback T12): set once the user enrolls.
+    twoFactorEnabled: boolean("twoFactorEnabled").default(false),
   },
   (table) => [uniqueIndex("User_email_key").on(table.email)],
+);
+
+// Better Auth two-factor plugin table (feedback T12). Column names match the
+// plugin's field names; the plugin resolves the model by the `twoFactor`
+// export key below.
+export const twoFactor = pgTable(
+  "TwoFactor",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backupCodes").notNull(),
+    userId: text("userId").notNull(),
+    verified: boolean("verified").default(true),
+    failedVerificationCount: integer("failedVerificationCount").default(0),
+    lockedUntil: timestamp("lockedUntil", { precision: 3 }),
+  },
+  (table) => [
+    foreignKey({
+      name: "TwoFactor_userId_fkey",
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
+  ],
 );
 
 export const session = pgTable(
@@ -190,6 +217,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "combo",
   "social_counter",
   "youtube",
+  "review",
   "low_stock",
   "countdown",
   "popup",
@@ -441,6 +469,15 @@ export const impression = pgTable(
     kind: text("kind").notNull(),
     // A/B variant id, when the notification is running a variant test (FR-ANL-04).
     variant: text("variant"),
+    // Audience dimensions for the analytics breakdown (FR-ANL-02), derived at
+    // record time from the request (UA → device/browser, edge header → country,
+    // beacon → page path). Nullable: older rows and server-to-server paths omit
+    // them. `isBot` lets the dashboard exclude crawler traffic by default.
+    device: text("device"),
+    browser: text("browser"),
+    country: text("country"),
+    path: text("path"),
+    isBot: boolean("is_bot").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("impression_site_created_idx").on(t.siteId, t.createdAt)],

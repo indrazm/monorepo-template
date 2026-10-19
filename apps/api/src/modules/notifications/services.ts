@@ -19,6 +19,10 @@ function toNotification(row: NotificationRow): Notification {
     spin?: unknown;
     media?: unknown;
     variants?: unknown;
+    reviews?: unknown;
+    socialCounter?: unknown;
+    youtube?: unknown;
+    inlineSelector?: unknown;
   };
   return {
     id: row.id,
@@ -39,6 +43,10 @@ function toNotification(row: NotificationRow): Notification {
       ...(extra.spin ? { spin: extra.spin } : {}),
       ...(extra.media ? { media: extra.media } : {}),
       ...(extra.variants ? { variants: extra.variants } : {}),
+      ...(extra.reviews ? { reviews: extra.reviews } : {}),
+      ...(extra.socialCounter ? { socialCounter: extra.socialCounter } : {}),
+      ...(extra.youtube ? { youtube: extra.youtube } : {}),
+      ...(extra.inlineSelector ? { inlineSelector: extra.inlineSelector } : {}),
     } as NotificationConfig,
   };
 }
@@ -51,6 +59,10 @@ function toExtra(config: NotificationConfig): Record<string, unknown> | null {
   if (config.spin) extra.spin = config.spin;
   if (config.media) extra.media = config.media;
   if (config.variants) extra.variants = config.variants;
+  if (config.reviews) extra.reviews = config.reviews;
+  if (config.socialCounter) extra.socialCounter = config.socialCounter;
+  if (config.youtube) extra.youtube = config.youtube;
+  if (config.inlineSelector) extra.inlineSelector = config.inlineSelector;
   return Object.keys(extra).length > 0 ? extra : null;
 }
 
@@ -111,6 +123,7 @@ export function createNotificationsService(
         name: input.name,
         type: input.type,
         isActive: input.isActive,
+        verified: input.verified ?? false,
         message: input.config.message,
         style: input.config.style,
         display: input.config.display,
@@ -135,6 +148,7 @@ export function createNotificationsService(
     if (input.name !== undefined) values.name = input.name;
     if (input.type !== undefined) values.type = input.type;
     if (input.isActive !== undefined) values.isActive = input.isActive;
+    if (input.verified !== undefined) values.verified = input.verified;
     if (input.config?.message !== undefined) values.message = input.config.message;
     if (input.config?.style !== undefined) values.style = input.config.style;
     if (input.config?.display !== undefined) values.display = input.config.display;

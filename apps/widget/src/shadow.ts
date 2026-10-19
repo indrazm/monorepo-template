@@ -86,6 +86,19 @@ const BASE_CSS = `
   display: inline-block; margin-left: 8px; padding: 7px 14px; border-radius: 8px;
   background: #17181c; color: #fff; font-weight: 800; font-size: 13px; text-decoration: none;
 }
+.tacto-card[data-size="sm"] { padding: 10px 12px; gap: 10px; max-width: 300px; }
+.tacto-card[data-size="sm"] .tacto-media { width: 38px; height: 38px; font-size: 17px; }
+.tacto-card[data-size="sm"] .tacto-msg { font-size: 13px; }
+.tacto-card[data-size="lg"] { padding: 18px 20px; gap: 16px; max-width: 420px; }
+.tacto-card[data-size="lg"] .tacto-media { width: 56px; height: 56px; font-size: 25px; }
+.tacto-card[data-size="lg"] .tacto-msg { font-size: 16px; }
+.tacto-card[data-font="rounded"] { font-family: ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", "Quicksand", system-ui, sans-serif; }
+.tacto-card[data-font="serif"] { font-family: "Iowan Old Style", Georgia, Cambria, "Times New Roman", serif; }
+.tacto-card[data-font="mono"] { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.tacto-card[data-clickable="1"] { cursor: pointer; }
+.tacto-inline { position: static; display: flex; justify-content: center; width: 100%; }
+.tacto-inline .tacto-card { max-width: 100%; width: 100%; opacity: 1; transform: none; box-shadow: 0 8px 24px -16px rgba(23,30,60,.28); }
+.tacto-stars { font-size: 15px; letter-spacing: 1px; line-height: 1; }
 @media (prefers-reduced-motion: reduce) { .tacto-card, .tacto-bar, .tacto-overlay, .tacto-modal, .tacto-wheel { transition: none; } }
 `;
 
@@ -102,5 +115,21 @@ export function createShadowHost(position: string): ShadowHost {
   stack.setAttribute("data-pos", position);
   root.append(style, stack);
   document.body.appendChild(host);
+  return { root, stack, destroy: () => host.remove() };
+}
+
+// Inline host (feedback T8): a shadow host appended INTO a target element, so an
+// embedded proof block flows with the page instead of floating over it. Styles
+// stay isolated in the shadow root exactly like the floating host.
+export function createInlineHost(target: Element): ShadowHost {
+  const host = document.createElement("div");
+  host.setAttribute("data-tacto-inline", "");
+  const root = host.attachShadow({ mode: "open" });
+  const style = document.createElement("style");
+  style.textContent = BASE_CSS;
+  const stack = document.createElement("div");
+  stack.className = "tacto-inline";
+  root.append(style, stack);
+  target.appendChild(host);
   return { root, stack, destroy: () => host.remove() };
 }

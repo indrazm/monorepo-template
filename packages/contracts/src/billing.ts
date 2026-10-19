@@ -25,7 +25,9 @@ export const planLimits: Record<Plan, PlanLimits> = {
   },
   starter: {
     trafficQuota: 10_000,
-    maxSites: 1,
+    // Feedback T11: Starter now includes 2 sites so it is clearly above Free
+    // (which is 1). Adjust to the final business decision.
+    maxSites: 2,
     removeBadge: true,
     notificationTypes: "all",
     customCode: false,
@@ -58,7 +60,14 @@ export const planPricesUsdCents: Record<Plan, number> = {
 
 // Paid plans only — the targets of a Stripe checkout.
 export const paidPlanSchema = z.enum(["starter", "growth", "agency"]);
-export const createCheckoutSchema = z.object({ plan: paidPlanSchema });
+export const billingIntervals = ["month", "year"] as const;
+export const billingIntervalSchema = z.enum(billingIntervals);
+export type BillingInterval = z.output<typeof billingIntervalSchema>;
+export const createCheckoutSchema = z.object({
+  plan: paidPlanSchema,
+  // Monthly (default) or annual billing (feedback T11).
+  interval: billingIntervalSchema.default("month"),
+});
 export type CreateCheckoutInput = z.output<typeof createCheckoutSchema>;
 
 export function planAllowsNotificationType(
@@ -98,6 +107,8 @@ export const planOfferSchema = z.object({
   // for this plan, so the indicative price is shown and checkout is disabled.
   source: z.enum(["stripe", "fallback"]),
   purchasable: z.boolean(),
+  // Free-trial days offered at checkout (0 = none) — feedback T11.
+  trialDays: z.number().int().min(0).default(0),
 });
 export const planOffersResponseSchema = z.object({ plans: z.array(planOfferSchema) });
 export type PlanOffer = z.output<typeof planOfferSchema>;

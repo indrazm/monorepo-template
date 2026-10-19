@@ -1,8 +1,10 @@
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ResendVerification } from "../features/auth/components/resend-verification";
+import { meQueryOptions } from "../features/auth/hooks/use-auth";
 
 export const Route = createFileRoute("/verify-email")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -25,7 +27,15 @@ const errorMessages: Record<string, string> = {
 function VerifyEmailPage() {
   const { verified, error, email } = Route.useSearch();
   const navigate = useNavigate();
-  const success = verified && !error;
+  // The activation link redirects here with `?verified=1`. A mail client or the
+  // ngrok interstitial can strip that query on the cross-site hop, so we also
+  // treat a verified session as success: `autoSignInAfterVerification` already
+  // set the session cookie before the redirect.
+  const me = useQuery(meQueryOptions);
+  const sessionVerified = me.data?.emailVerified === true;
+  const success = (verified || sessionVerified) && !error;
+  // Still deciding: no query signal yet and the session hasn't resolved.
+  const checking = !verified && !error && me.isPending;
 
   // autoSignInAfterVerification already set the session cookie; drop the user
   // straight into the dashboard.
@@ -50,7 +60,9 @@ function VerifyEmailPage() {
             <CardTitle>Email verification</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 text-sm">
-            {success ? (
+            {checking ? (
+              <p className="text-muted-foreground">Checking your activation link…</p>
+            ) : success ? (
               <div className="grid gap-3">
                 <p className="text-muted-foreground">
                   Your email is verified. Taking you to the dashboard…

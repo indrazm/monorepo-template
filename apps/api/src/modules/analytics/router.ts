@@ -19,8 +19,14 @@ export function createAnalyticsRouter(service: ReturnType<typeof createAnalytics
       async (c) => {
         const organizationId = requireOrg(c);
         if (!organizationId) return c.json(apiError("unauthorized"), 401);
-        const { siteId, days } = c.req.valid("query");
-        const summary = await service.summary(organizationId, siteId, days);
+        const { siteId, days, from, to, compare, includeBots } = c.req.valid("query");
+        const summary = await service.summary(organizationId, siteId, {
+          days,
+          from,
+          to,
+          compare,
+          includeBots,
+        });
         if (!summary) return c.json(apiError("site_not_found"), 404);
         return c.json({ summary }, 200);
       },

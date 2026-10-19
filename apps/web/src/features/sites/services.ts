@@ -1,5 +1,5 @@
 import type { CreateSiteInput, DomainSetting, Site, UpdateSiteInput } from "@repo/contracts/sites";
-import { apiClient, env } from "../../api";
+import { apiClient, apiErrorFrom, env } from "../../api";
 
 const sites = apiClient.api.v1.sites;
 
@@ -12,14 +12,14 @@ export async function listSites(): Promise<Site[]> {
 
 export async function createSite(input: CreateSiteInput): Promise<Site> {
   const response = await sites.$post({ json: input });
-  if (!response.ok) throw new Error("Failed to create site.");
+  if (!response.ok) throw await apiErrorFrom(response, "Failed to create site.");
   const data = await response.json();
   return data.site;
 }
 
 export async function updateSite(id: string, input: UpdateSiteInput): Promise<Site> {
   const response = await sites[":id"].$patch({ param: { id }, json: input });
-  if (!response.ok) throw new Error("Failed to update site.");
+  if (!response.ok) throw await apiErrorFrom(response, "Failed to update site.");
   const data = await response.json();
   return data.site;
 }
@@ -62,4 +62,23 @@ export async function deleteSiteEvents(id: string): Promise<number> {
   const response = await sites[":id"].events.$delete({ param: { id } });
   if (!response.ok) throw new Error("Failed to delete events.");
   return (await response.json()).removed;
+}
+
+export type SiteVerification = {
+  verified: boolean;
+  pixelVerifiedAt: string | null;
+  recentlyActive: boolean;
+};
+
+// Re-check whether the pixel has loaded (feedback T5).
+export async function verifySite(id: string): Promise<SiteVerification> {
+  const response = await sites[":id"].verify.$post({ param: { id } });
+  if (!response.ok) throw await apiErrorFrom(response, "Failed to verify pixel.");
+  return (await response.json()) as SiteVerification;
+}
+
+// Inject a demo event so the user can preview a notification (feedback T5).
+export async function sendTestEvent(id: string): Promise<void> {
+  const response = await sites[":id"]["test-event"].$post({ param: { id } });
+  if (!response.ok) throw await apiErrorFrom(response, "Failed to send test event.");
 }

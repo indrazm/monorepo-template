@@ -30,12 +30,27 @@ export async function getCurrentUser() {
 }
 
 export async function login(input: LoginInput) {
-  const { error } = await authClient.signIn.email(input);
+  const { data, error } = await authClient.signIn.email(input);
 
   if (error) {
     throw toAuthError(error, "Authentication failed.");
   }
+  // When the account has 2FA enabled, Better Auth does not start a session yet
+  // and signals a challenge instead (feedback T12). The login page catches this
+  // code and prompts for the TOTP code.
+  if (data && (data as { twoFactorRedirect?: boolean }).twoFactorRedirect) {
+    throw new AuthError("Two-factor authentication required.", "TWO_FACTOR_REQUIRED");
+  }
 
+  return getCurrentUser();
+}
+
+// Completes a 2FA sign-in challenge with a TOTP code (feedback T12).
+export async function verifyTwoFactor(code: string, trustDevice: boolean) {
+  const { error } = await authClient.twoFactor.verifyTotp({ code, trustDevice });
+  if (error) {
+    throw toAuthError(error, "That code did not match. Try again.");
+  }
   return getCurrentUser();
 }
 

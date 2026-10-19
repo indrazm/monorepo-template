@@ -8,6 +8,8 @@ export const notificationTypes = [
   "combo",
   "social_counter",
   "youtube",
+  // Social proof from customer reviews (PRD "Should"): a star rating + quote.
+  "review",
   "low_stock",
   "countdown",
   // Conversion widgets (F69, "Boost"): popup modal, notification bar, spin-to-win.
@@ -29,10 +31,18 @@ export const notificationTranslationSchema = z.object({
   fallbacks: z.record(z.string(), z.string()).default({}),
 });
 
+// Per-variable text transform applied to substituted values (feedback T9):
+// tidy raw data ("  jane " → "Jane", "NYC" → "nyc"/"NYC") before display.
+export const textTransforms = ["none", "trim", "capitalize", "uppercase", "lowercase"] as const;
+export const textTransformSchema = z.enum(textTransforms);
+export type TextTransform = z.output<typeof textTransformSchema>;
+
 export const notificationMessageSchema = z.object({
   // e.g. "{{first_name}} from {{city}} just bought {{product}}"
   template: z.string().trim().min(1).max(280),
   fallbacks: z.record(z.string(), z.string()).default({}),
+  // Optional per-variable transforms, keyed by variable name (e.g. first_name).
+  transforms: z.record(z.string(), textTransformSchema).optional(),
   hideTimeAgoAfterDays: z.number().int().positive().max(365).optional(),
   translations: z
     .record(z.string().trim().min(2).max(12), notificationTranslationSchema)
@@ -51,12 +61,28 @@ export const notificationPositions = [
 ] as const;
 export const notificationPositionSchema = z.enum(notificationPositions);
 
+// Richer styling (feedback T9): an added "lg" size, "scale"/"none" animations,
+// a font family, and an optional click action (open a URL on click).
+export const notificationFonts = ["system", "rounded", "serif", "mono"] as const;
+export const notificationFontSchema = z.enum(notificationFonts);
+export const clickActionSchema = z
+  .object({
+    type: z.enum(["none", "url"]).default("none"),
+    url: z.string().trim().url().max(2048).optional(),
+    newTab: z.boolean().default(true),
+  })
+  .refine((action) => action.type !== "url" || Boolean(action.url), {
+    message: "A URL is required when the click action opens a link.",
+    path: ["url"],
+  });
 export const notificationStyleSchema = z.object({
   position: notificationPositionSchema,
   accent: hexColorSchema,
   shape: z.enum(["rounded", "square"]).default("rounded"),
-  size: z.enum(["sm", "md"]).default("md"),
-  animation: z.enum(["slide", "fade"]).default("slide"),
+  size: z.enum(["sm", "md", "lg"]).default("md"),
+  animation: z.enum(["slide", "fade", "scale", "none"]).default("slide"),
+  font: notificationFontSchema.optional(),
+  clickAction: clickActionSchema.optional(),
 });
 
 export const urlMatchModes = ["all", "simple", "contains", "regex"] as const;
@@ -101,10 +127,28 @@ export const notificationDisplaySchema = z.object({
   visitor: visitorSegmentSchema.optional(),
 });
 
+// Per-notification data source (FR-NED-08): which events feed this
+// notification. Beyond the event type(s), an optional provider `source` and a
+// small set of payload `filters` let two notifications on the same site react
+// to different slices of the same stream (e.g. only Stripe purchases over $50).
+export const dataSourceFilterOps = ["eq", "contains", "gte", "lte"] as const;
+export const dataSourceFilterSchema = z.object({
+  // A payload key (e.g. "product", "amount") or a known field: "city",
+  // "name"/"first_name" (maps to the event's display name).
+  field: z.string().trim().min(1).max(60),
+  op: z.enum(dataSourceFilterOps).default("eq"),
+  value: z.string().trim().min(1).max(200),
+});
 export const notificationDataSourceSchema = z.object({
   eventTypes: z.array(eventTypeSchema).default([]),
+  // Restrict to events from one integration source (e.g. "stripe", "shopify").
+  source: z.string().trim().min(1).max(60).optional(),
+  // Up to 10 simple field filters, all of which must match (AND).
+  filters: z.array(dataSourceFilterSchema).max(10).optional(),
+  // Deprecated free-form filter, kept so older rows stay valid.
   filter: z.record(z.string(), z.unknown()).optional(),
 });
+export type DataSourceFilter = z.output<typeof dataSourceFilterSchema>;
 
 export const notificationTimingSchema = z.object({
   delayMs: z.number().int().min(0).max(60_000).default(0),
@@ -150,6 +194,37 @@ export const spinConfigSchema = z.object({
   validForDays: z.number().int().min(1).max(365).default(7),
 });
 
+// Reviews feeding a "review" notification. Entered manually, imported from CSV,
+// or (when credentials are configured) pulled from Google/Facebook. Stored
+// inline on the notification so no extra event stream is needed.
+export const reviewSchema = z.object({
+  author: z.string().trim().min(1).max(80),
+  rating: z.number().min(0).max(5).default(5),
+  text: z.string().trim().min(1).max(500),
+  avatarUrl: z.string().trim().url().max(2048).optional(),
+  // Where the review came from, shown as a small source label ("Google", etc.).
+  source: z.string().trim().max(40).optional(),
+});
+export type Review = z.output<typeof reviewSchema>;
+
+// Social counter (followers/likes) and YouTube stats. `count` is the number to
+// show; when a platform API key is configured it can be refreshed server-side,
+// otherwise the manually entered value is used.
+export const socialCounterSchema = z.object({
+  platform: z.string().trim().min(1).max(40),
+  count: z.number().int().min(0).max(1_000_000_000),
+  label: z.string().trim().max(40).optional(),
+  handle: z.string().trim().max(120).optional(),
+});
+export type SocialCounter = z.output<typeof socialCounterSchema>;
+export const youtubeStatSchema = z.object({
+  metric: z.enum(["subscribers", "views"]).default("subscribers"),
+  count: z.number().int().min(0).max(100_000_000_000),
+  channelUrl: z.string().trim().url().max(2048).optional(),
+  label: z.string().trim().max(40).optional(),
+});
+export type YoutubeStat = z.output<typeof youtubeStatSchema>;
+
 // A/B testing (FR-ANL-04): each variant is an alternative message (and
 // optionally style). Variants are shown deterministically per visitor by weight.
 export const notificationVariantSchema = z.object({
@@ -169,6 +244,15 @@ export const notificationConfigSchema = z.object({
   countdown: countdownConfigSchema.optional(),
   fomo: fomoConfigSchema.optional(),
   spin: spinConfigSchema.optional(),
+  // Inline social proof (feedback T8): when set, the pixel renders this
+  // notification inside the first element matching this CSS selector on the
+  // page (e.g. "#reviews"), instead of as a floating overlay.
+  inlineSelector: z.string().trim().max(200).optional(),
+  // Inline reviews for a "review" notification (rotated by the pixel).
+  reviews: z.array(reviewSchema).max(50).optional(),
+  // Social counter / YouTube stats (type-specific).
+  socialCounter: socialCounterSchema.optional(),
+  youtube: youtubeStatSchema.optional(),
   variants: z.array(notificationVariantSchema).min(2).max(6).optional(),
 });
 
@@ -178,6 +262,9 @@ export const createNotificationSchema = z.object({
   type: notificationTypeSchema,
   config: notificationConfigSchema,
   isActive: z.boolean().default(true),
+  // The owner's assertion that this proof is genuine/ethical (feedback T9 moat).
+  // Controls the "✓ Verified by Tacto" badge on the widget.
+  verified: z.boolean().optional(),
 });
 export const updateNotificationSchema = createNotificationSchema.partial().omit({ siteId: true });
 

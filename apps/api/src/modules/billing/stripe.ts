@@ -4,8 +4,10 @@ import type { Plan } from "@repo/contracts/billing";
 export type StripeConfig = {
   secretKey: string | null;
   webhookSecret: string | null;
-  // Stripe Price IDs per paid plan (from the Dashboard).
-  prices?: Record<Exclude<Plan, "free">, string | null>;
+  // Stripe Price IDs per paid plan (from the Dashboard), monthly + annual.
+  prices?: Record<Exclude<Plan, "free">, { month: string | null; year: string | null }>;
+  // Free-trial days applied at checkout (0 = none).
+  trialDays?: number;
 };
 
 // Verifies a Stripe webhook signature: header `t=<ts>,v1=<hex hmac of ts.body>`.
@@ -128,6 +130,8 @@ export async function createCheckoutSession(options: {
   organizationId: string;
   successUrl: string;
   cancelUrl: string;
+  // Free-trial days (feedback T11); omitted/0 means charge immediately.
+  trialDays?: number;
 }): Promise<string> {
   const form = new URLSearchParams();
   // Parameters configured in Checkout Studio (fixed_by_ui).
@@ -152,6 +156,9 @@ export async function createCheckoutSession(options: {
   form.set("metadata[plan]", options.plan);
   form.set("subscription_data[metadata][organizationId]", options.organizationId);
   form.set("subscription_data[metadata][plan]", options.plan);
+  if (options.trialDays && options.trialDays > 0) {
+    form.set("subscription_data[trial_period_days]", String(options.trialDays));
+  }
 
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",

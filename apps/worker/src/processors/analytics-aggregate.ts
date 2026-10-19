@@ -20,6 +20,11 @@ export function createAnalyticsProcessor(
           refId: entry.refId,
           kind: entry.kind,
           variant: entry.variantId ?? null,
+          device: entry.device ?? null,
+          browser: entry.browser ?? null,
+          country: entry.country ?? null,
+          path: entry.path ?? null,
+          isBot: entry.isBot ?? false,
           createdAt: new Date(entry.createdAt),
         });
       } catch {

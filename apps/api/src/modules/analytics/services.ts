@@ -1,4 +1,5 @@
-import { and, desc, eq, gte, ilike, isNotNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, isNotNull, lt, or, sql, type SQL } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { Database } from "@repo/db";
 import { event, impression, notification, site } from "@repo/db/schema";
 import type { Activation, AnalyticsSummary } from "@repo/contracts/analytics";
@@ -34,10 +35,25 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
   async function summary(
     organizationId: string,
     siteId: string,
-    days: number,
+    query: { days: number; from?: string; to?: string; compare?: boolean; includeBots?: boolean },
   ): Promise<AnalyticsSummary | null> {
     if (!(await siteInOrg(organizationId, siteId))) return null;
-    const since = new Date(Date.now() - days * 86_400_000);
+    // Resolve the window: an explicit from/to wins, otherwise the last `days`.
+    const now = new Date();
+    const until = query.to ? new Date(query.to) : now;
+    const since = query.from
+      ? new Date(query.from)
+      : new Date(until.getTime() - query.days * 86_400_000);
+    const windowMs = Math.max(1, until.getTime() - since.getTime());
+    const days = Math.max(1, Math.round(windowMs / 86_400_000));
+    // Window conditions. The lower bound always applies; an upper bound is added
+    // only for an explicit custom `to` (the live presets run open-ended to now,
+    // which also avoids a timestamp-vs-Date boundary skew on just-stamped rows).
+    const timeConds: SQL[] = [gte(impression.createdAt, since)];
+    if (query.to) timeConds.push(lt(impression.createdAt, until));
+    // Bot traffic is excluded from totals/breakdown by default (FR-ANL-02).
+    const windowConds: SQL[] = [...timeConds];
+    if (!query.includeBots) windowConds.push(eq(impression.isBot, false));
 
     const rows = await db
       .select({
@@ -46,7 +62,7 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
         count: sql<number>`count(*)::int`,
       })
       .from(impression)
-      .where(and(eq(impression.siteId, siteId), gte(impression.createdAt, since)))
+      .where(and(eq(impression.siteId, siteId), ...windowConds))
       .groupBy(sql`date_trunc('day', ${impression.createdAt})`, impression.kind);
 
     const byDay = new Map<string, { views: number; clicks: number; claims: number }>();
@@ -88,7 +104,7 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
         count: sql<number>`count(*)::int`,
       })
       .from(impression)
-      .where(and(eq(impression.siteId, siteId), gte(impression.createdAt, since)))
+      .where(and(eq(impression.siteId, siteId), ...windowConds))
       .groupBy(impression.refId, impression.kind);
     const notifMeta = await db
       .select({
@@ -135,13 +151,7 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
         count: sql<number>`count(*)::int`,
       })
       .from(impression)
-      .where(
-        and(
-          eq(impression.siteId, siteId),
-          gte(impression.createdAt, since),
-          isNotNull(impression.variant),
-        ),
-      )
+      .where(and(eq(impression.siteId, siteId), ...windowConds, isNotNull(impression.variant)))
       .groupBy(impression.refId, impression.variant, impression.kind);
 
     const variantMap = new Map<
@@ -204,6 +214,36 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
       });
     }
 
+    // Comparison with the preceding window of equal length (FR-ANL-02), so the
+    // dashboard can show a delta next to each total.
+    let previous: AnalyticsSummary["previous"] = null;
+    if (query.compare) {
+      const prevSince = new Date(since.getTime() - windowMs);
+      const [row] = await db
+        .select({
+          views: sql<number>`(count(*) filter (where ${impression.kind} = 'view'))::int`,
+          clicks: sql<number>`(count(*) filter (where ${impression.kind} = 'click'))::int`,
+          claims: sql<number>`(count(*) filter (where ${impression.kind} = 'claim'))::int`,
+        })
+        .from(impression)
+        .where(
+          and(
+            eq(impression.siteId, siteId),
+            gte(impression.createdAt, prevSince),
+            lt(impression.createdAt, since),
+          ),
+        );
+      const pv = row ?? { views: 0, clicks: 0, claims: 0 };
+      previous = {
+        views: pv.views,
+        clicks: pv.clicks,
+        claims: pv.claims,
+        ctr: pv.views > 0 ? pv.clicks / pv.views : 0,
+      };
+    }
+
+    const audience = await audienceBreakdown(siteId, timeConds, query.includeBots ?? false);
+
     return {
       views,
       clicks,
@@ -214,7 +254,48 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
       notifications,
       variants,
       abTests,
+      rangeStart: since.toISOString(),
+      rangeEnd: until.toISOString(),
+      previous,
+      audience,
     };
+  }
+
+  // Audience breakdown over the window (FR-ANL-02): the top device/country/
+  // browser/page values by impression view, plus the count of bot views so the
+  // dashboard can show what the default filter hides.
+  async function audienceBreakdown(
+    siteId: string,
+    timeConds: SQL[],
+    includeBots: boolean,
+  ): Promise<AnalyticsSummary["audience"]> {
+    const base = [eq(impression.siteId, siteId), eq(impression.kind, "view"), ...timeConds];
+    const botFilter = includeBots ? [] : [eq(impression.isBot, false)];
+
+    async function topBy(column: AnyPgColumn): Promise<{ key: string; count: number }[]> {
+      const rows = await db
+        .select({ key: column, count: sql<number>`count(*)::int` })
+        .from(impression)
+        .where(and(...base, ...botFilter, isNotNull(column)))
+        .groupBy(column)
+        .orderBy(desc(sql`count(*)`))
+        .limit(8);
+      return rows
+        .filter((row) => row.key != null && String(row.key) !== "")
+        .map((row) => ({ key: String(row.key), count: row.count }));
+    }
+
+    const [devices, browsers, countries, pages, botRow] = await Promise.all([
+      topBy(impression.device),
+      topBy(impression.browser),
+      topBy(impression.country),
+      topBy(impression.path),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(impression)
+        .where(and(...base, eq(impression.isBot, true))),
+    ]);
+    return { devices, countries, browsers, pages, botViews: botRow[0]?.count ?? 0 };
   }
 
   // Keyset-paginated events feed (newest first), cursor = last event id, with

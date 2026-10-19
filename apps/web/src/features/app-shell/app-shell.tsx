@@ -26,6 +26,7 @@ import {
   CreditCardIcon,
   Globe2Icon,
   LayoutDashboardIcon,
+  LifeBuoyIcon,
   LogOutIcon,
   PlugIcon,
   TargetIcon,
@@ -35,6 +36,8 @@ import {
 import type { ReactNode } from "react";
 import { meQueryOptions, useLogoutMutation } from "../auth/hooks/use-auth";
 import { ThemeSelector } from "@repo/ui/components/theme-selector";
+import { ChatWidget } from "../support/chat-widget";
+import { SupportDialog } from "../support/support-dialog";
 import { TactoLogo } from "./tacto-logo";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -131,6 +134,16 @@ export function AppShell({ children }: { children: ReactNode }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
+          <SupportDialog>
+            <Button
+              className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+              type="button"
+              variant="ghost"
+            >
+              <LifeBuoyIcon className="size-4 shrink-0" />
+              <span className="group-data-[collapsible=icon]:hidden">Help &amp; support</span>
+            </Button>
+          </SupportDialog>
           <Button
             className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
             type="button"
@@ -158,6 +171,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {children}
         </div>
       </SidebarInset>
+      <ChatWidget />
     </SidebarProvider>
   );
 }

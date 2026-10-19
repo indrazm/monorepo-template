@@ -1,10 +1,16 @@
 import { queryOptions, useInfiniteQuery } from "@tanstack/react-query";
-import { type EventsFeedFilters, getActivation, getEventsFeed, getSummary } from "../services";
+import {
+  type EventsFeedFilters,
+  type SummaryParams,
+  getActivation,
+  getEventsFeed,
+  getSummary,
+} from "../services";
 
-export function summaryQueryOptions(siteId: string, days = 7) {
+export function summaryQueryOptions(siteId: string, params: SummaryParams = {}) {
   return queryOptions({
-    queryKey: ["analytics", "summary", siteId, days],
-    queryFn: () => getSummary(siteId, days),
+    queryKey: ["analytics", "summary", siteId, params],
+    queryFn: () => getSummary(siteId, params),
     enabled: siteId.length > 0,
   });
 }

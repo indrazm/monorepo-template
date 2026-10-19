@@ -35,6 +35,15 @@ describe("sites service (tenant isolation)", () => {
     expect(created.pixelVerifiedAt).toBeNull();
   });
 
+  it("sends a test event and reports it as recent activity (feedback T5)", async () => {
+    const created = await service.create(ORG_A, { name: "Shop", domain: "shop.example.com" });
+    expect(await service.sendTestEvent(ORG_B, created.id)).toBeNull(); // foreign org
+    expect(await service.sendTestEvent(ORG_A, created.id)).toBe(true);
+    const result = await service.verify(ORG_A, created.id);
+    expect(result).toMatchObject({ verified: false, recentlyActive: true });
+    expect(await service.verify(ORG_B, created.id)).toBeNull();
+  });
+
   it("lists only sites belonging to the organization", async () => {
     await service.create(ORG_A, { name: "A1", domain: "a1.example.com" });
     await service.create(ORG_A, { name: "A2", domain: "a2.example.com" });

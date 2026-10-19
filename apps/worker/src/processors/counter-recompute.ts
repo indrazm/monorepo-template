@@ -3,6 +3,7 @@ import { counterJobSchema } from "@repo/contracts/jobs";
 import type { EventType } from "@repo/contracts/notifications";
 import type { Database } from "@repo/db";
 import { event, notification } from "@repo/db/schema";
+import { eventDataSourceConditions } from "@repo/db/filters";
 import type { RealtimeStore } from "@repo/queue";
 
 const COUNTER_WINDOW_MS = 7 * 86_400_000;
@@ -30,7 +31,11 @@ export function createCounterProcessor(
         and(eq(notification.siteId, siteId), inArray(notification.type, ["counter", "combo"])),
       );
     for (const row of rows) {
-      const dataSource = row.dataSource as { eventTypes?: EventType[] } | null;
+      const dataSource = row.dataSource as {
+        eventTypes?: EventType[];
+        source?: string | null;
+        filters?: Array<{ field: string; op: string; value: string }> | null;
+      } | null;
       const types: EventType[] =
         dataSource?.eventTypes && dataSource.eventTypes.length > 0
           ? dataSource.eventTypes
@@ -41,7 +46,12 @@ export function createCounterProcessor(
         .select({ count: sql<number>`count(*)::int` })
         .from(event)
         .where(
-          and(eq(event.siteId, siteId), inArray(event.type, types), gte(event.occurredAt, since)),
+          and(
+            eq(event.siteId, siteId),
+            inArray(event.type, types),
+            gte(event.occurredAt, since),
+            ...eventDataSourceConditions(dataSource),
+          ),
         );
       await store.setCounter(row.id, res?.count ?? 0, CACHE_TTL_SECONDS);
     }

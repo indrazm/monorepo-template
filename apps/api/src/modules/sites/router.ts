@@ -1,6 +1,7 @@
 import { apiError } from "@repo/contracts/errors";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import { z } from "zod";
 import { createSiteSchema, domainSettingSchema, updateSiteSchema } from "@repo/contracts/sites";
 import { MANAGER_ROLES, type AuthVariables, requireOrg, requireRole } from "../auth/middleware";
 import type { createBillingService } from "../billing/services";
@@ -20,7 +21,12 @@ export function createSitesRouter(
       .post(
         "/",
         zValidator("json", createSiteSchema, (result, c) => {
-          if (!result.success) return c.json(apiError("validation_error"), 400);
+          if (!result.success) {
+            return c.json(
+              apiError("validation_error", { fields: z.flattenError(result.error).fieldErrors }),
+              400,
+            );
+          }
         }),
         async (c) => {
           // Only owners/admins manage sites (FR-AUTH-05).
@@ -44,7 +50,12 @@ export function createSitesRouter(
       .patch(
         "/:id",
         zValidator("json", updateSiteSchema, (result, c) => {
-          if (!result.success) return c.json(apiError("validation_error"), 400);
+          if (!result.success) {
+            return c.json(
+              apiError("validation_error", { fields: z.flattenError(result.error).fieldErrors }),
+              400,
+            );
+          }
         }),
         async (c) => {
           const allowed = requireRole(c, ...MANAGER_ROLES);
@@ -88,6 +99,22 @@ export function createSitesRouter(
           return c.json({ settings }, 200);
         },
       )
+      // Pixel verification check (feedback T5). Any org member can ask.
+      .post("/:id/verify", async (c) => {
+        const organizationId = requireOrg(c);
+        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        const result = await service.verify(organizationId, c.req.param("id"));
+        if (!result) return c.json(apiError("site_not_found"), 404);
+        return c.json(result, 200);
+      })
+      // Inject a demo event so the user can preview a notification (feedback T5).
+      .post("/:id/test-event", async (c) => {
+        const organizationId = requireOrg(c);
+        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        const ok = await service.sendTestEvent(organizationId, c.req.param("id"));
+        if (ok === null) return c.json(apiError("site_not_found"), 404);
+        return c.json({ ok: true }, 201);
+      })
       // Data portability (NFR-PRIV-03): export the site's stored events as JSON
       // (default) or CSV (`?format=csv`). Owner/admin only (contains PII).
       .get("/:id/events/export", async (c) => {

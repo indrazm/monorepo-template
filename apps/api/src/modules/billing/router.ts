@@ -2,11 +2,13 @@ import { apiError } from "@repo/contracts/errors";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import {
+  billingIntervalSchema,
   createCheckoutSchema,
   paidPlanSchema,
   planLabels,
   planLimits,
   planPricesUsdCents,
+  type BillingInterval,
   type Plan,
   type PlanOffer,
 } from "@repo/contracts/billing";
@@ -30,31 +32,38 @@ export function createBillingRouter(
   stripe: StripeConfig,
   appUrl: string,
 ) {
-  let cache: { at: number; plans: PlanOffer[] } | null = null;
+  const cache = new Map<BillingInterval, { at: number; plans: PlanOffer[] }>();
+  const trialDays = stripe.trialDays ?? 0;
 
   // Single source of truth for pricing (audit finding F): the amount shown in
   // the dashboard is the amount on the Stripe Price that Checkout uses. When a
   // plan has no Price configured we return the indicative price, mark it as a
   // fallback and make it non-purchasable instead of lying about the amount.
-  async function listPlans(): Promise<PlanOffer[]> {
-    if (cache && Date.now() - cache.at < PRICE_CACHE_MS) return cache.plans;
+  async function listPlans(interval: BillingInterval): Promise<PlanOffer[]> {
+    const cached = cache.get(interval);
+    if (cached && Date.now() - cached.at < PRICE_CACHE_MS) return cached.plans;
     const plans: PlanOffer[] = [];
     for (const plan of paidPlanSchema.options) {
       const limits = planLimits[plan];
-      const priceId = stripe.prices?.[plan] ?? null;
+      const priceId = stripe.prices?.[plan]?.[interval] ?? null;
       const price =
         stripe.secretKey && priceId ? await fetchStripePrice(stripe.secretKey, priceId) : null;
+      // Indicative annual fallback = 10× monthly (2 months free) so the UI has
+      // a sensible number before real annual Prices are configured.
+      const fallbackAmount =
+        interval === "year" ? planPricesUsdCents[plan] * 10 : planPricesUsdCents[plan];
       plans.push({
         plan,
         label: planLabels[plan],
-        amount: price ? price.amount : planPricesUsdCents[plan],
+        amount: price ? price.amount : fallbackAmount,
         currency: price?.currency ?? "USD",
-        interval: price?.interval ?? "month",
+        interval: price?.interval ?? interval,
         trafficQuota: limits.trafficQuota,
         maxSites: limits.maxSites,
         removeBadge: limits.removeBadge,
         source: price ? "stripe" : "fallback",
         purchasable: Boolean(price),
+        trialDays,
       });
     }
     const free: Plan = "free";
@@ -63,14 +72,15 @@ export function createBillingRouter(
       label: planLabels[free],
       amount: 0,
       currency: plans[0]?.currency ?? "USD",
-      interval: "month",
+      interval,
       trafficQuota: planLimits[free].trafficQuota,
       maxSites: planLimits[free].maxSites,
       removeBadge: planLimits[free].removeBadge,
       source: "stripe",
       purchasable: false,
+      trialDays: 0,
     });
-    cache = { at: Date.now(), plans };
+    cache.set(interval, { at: Date.now(), plans });
     return plans;
   }
 
@@ -81,9 +91,12 @@ export function createBillingRouter(
         if (!organizationId) return c.json(apiError("unauthorized"), 401);
         return c.json({ overview: await service.getOverview(organizationId) }, 200);
       })
-      // Plans + live prices from Stripe (FR-BIL-01/02).
+      // Plans + live prices from Stripe (FR-BIL-01/02). `?interval=year` returns
+      // annual pricing (feedback T11).
       .get("/plans", async (c) => {
-        return c.json({ plans: await listPlans() }, 200);
+        const parsed = billingIntervalSchema.safeParse(c.req.query("interval"));
+        const interval: BillingInterval = parsed.success ? parsed.data : "month";
+        return c.json({ plans: await listPlans(interval) }, 200);
       })
       // Authenticated: start a Stripe Checkout for a paid plan (FR-BIL-02).
       .post(
@@ -99,8 +112,8 @@ export function createBillingRouter(
           }
           const { organizationId } = allowed;
           if (!stripe.secretKey) return c.json(apiError("integration_unconfigured"), 400);
-          const plan = c.req.valid("json").plan;
-          const priceId = stripe.prices?.[plan] ?? null;
+          const { plan, interval } = c.req.valid("json");
+          const priceId = stripe.prices?.[plan]?.[interval] ?? null;
           if (!priceId) return c.json(apiError("integration_unconfigured"), 400);
           try {
             const url = await createCheckoutSession({
@@ -110,6 +123,7 @@ export function createBillingRouter(
               organizationId,
               successUrl: `${appUrl}/billing?checkout=success`,
               cancelUrl: `${appUrl}/billing?checkout=cancel`,
+              trialDays,
             });
             return c.json({ url }, 200);
           } catch (error) {

@@ -1,12 +1,31 @@
 import { z } from "zod";
 
-// A registered domain, e.g. "shop.example.com" (no scheme, no path).
+// A registered domain, e.g. "tokoanda.com" (no scheme, no path). Input is
+// normalized first so a pasted "https://tokoanda.com/", " tokoanda.com " or a
+// trailing-dot FQDN all resolve to the same bare host before validation —
+// users should not get a silent 400 for a harmless paste (feedback U1).
+export function normalizeDomain(value: string): string {
+  return value
+    .trim()
+    .replace(/^https?:\/\//i, "") // strip scheme
+    .replace(/\/.*$/, "") // strip path / query / fragment (first "/" onward)
+    .replace(/\s+/g, "") // strip stray spaces
+    .replace(/\.+$/, "") // strip a trailing dot (FQDN form)
+    .toLowerCase();
+}
 const domainSchema = z
   .string()
-  .trim()
-  .min(3)
-  .max(253)
-  .regex(/^[a-z0-9.-]+$/i, "Enter a bare domain like shop.example.com (no http, no path).");
+  .transform(normalizeDomain)
+  .pipe(
+    z
+      .string()
+      .min(3, "Enter a domain like tokoanda.com.")
+      .max(253)
+      .regex(
+        /^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/,
+        "Enter a bare domain like tokoanda.com — no http://, no /path.",
+      ),
+  );
 
 export const createSiteSchema = z.object({
   name: z.string().trim().min(1).max(120),
