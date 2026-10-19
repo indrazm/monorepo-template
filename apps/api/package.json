@@ -12,6 +12,7 @@
     "with-env": "dotenv -e ../../.env --",
     "dev": "pnpm with-env tsx watch src/main.ts",
     "createsuperuser": "pnpm with-env tsx scripts/createsuperuser.ts",
+    "encrypt-integration-secrets": "pnpm with-env tsx scripts/encrypt-integration-secrets.ts",
     "start": "pnpm with-env tsx src/main.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"

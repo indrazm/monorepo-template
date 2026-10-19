@@ -96,6 +96,19 @@ export const apiEnvSchema = z
     // Optional keyed static-map provider for the notification media fallback
     // (FR-NED-03). Unset = no map fallback (we do not call an unkeyed service).
     STATIC_MAP_URL_TEMPLATE: optionalStringSchema,
+    // Comma-separated proxy CIDRs. When set, Better Auth resolves the real
+    // client IP from X-Forwarded-For only through these trusted hops.
+    TRUSTED_PROXIES: z
+      .string()
+      .optional()
+      .transform((value) =>
+        (value ?? "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      ),
+    // Protects /metrics in production. Unset = metrics disabled in production.
+    METRICS_TOKEN: optionalStringSchema,
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== "production") return;
@@ -199,10 +212,12 @@ export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
           ? { apiKey: env.SHOPIFY_API_KEY, apiSecret: env.SHOPIFY_API_SECRET }
           : null,
     },
+    metricsToken: env.METRICS_TOKEN ?? null,
     auth: {
       secret: env.BETTER_AUTH_SECRET,
       trustedOrigins: env.CLIENT_ORIGINS,
       url: env.BETTER_AUTH_URL,
+      trustedProxies: env.TRUSTED_PROXIES,
       // Token lifetimes for the email-verification and password-reset links.
       verificationTokenTtl: env.EMAIL_VERIFICATION_EXPIRES_IN,
       passwordResetTokenTtl: env.PASSWORD_RESET_EXPIRES_IN,

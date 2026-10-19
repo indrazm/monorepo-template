@@ -922,3 +922,59 @@ STRIPE_PRICE_*="..."
 8. **Retensi data:** berapa lama events/impressions/webhook idempotency disimpan?
 
 Catat keputusan yang memengaruhi arsitektur di `docs/decision/` sesuai template.
+
+---
+
+## 8. Log eksekusi (19 Oktober 2026)
+
+### Selesai
+
+- **R5.1** Secret integrasi dienkripsi dengan `CredentialCipher`; list response hanya `secretSet`; reveal/rotate manager-only; script `encrypt-integration-secrets.ts` untuk data lama.
+- **R5.2 (sebagian)** UI menerima inbound signing secret untuk provider non-generated; Shopify/HubSpot memakai app secret server sebagai fallback. Connector WooCommerce/Calendly/Mailchimp/ActiveCampaign tetap membutuhkan secret yang dipaste.
+- **R5.3** `parsePairs` tidak lagi memotong padding base64; HubSpot v1 memakai SHA-256 (bukan HMAC); Stripe/Calendly/Paddle menolak timestamp >5 menit; Wix dipindahkan ke mode forwarded (Zapier/Make) sampai verifikasi JWT diimplementasikan.
+- **R5.4 (Stripe)** Tabel `webhook_event` + `claimWebhookEvent` membuat event Stripe idempotent. Integration event tetap memakai dedupeKey per site.
+- **R5.5** Resolusi integrasi memakai `siteKey`; tidak lagi fallback ke integrasi tertua untuk site lain.
+- **R5.6** Signature invalid tidak mengubah status/lastError integrasi.
+- **R5.7** Verify: secret-only → pending; subscribe gagal → error; `connected` hanya setelah delivery valid.
+- **R5.8** SSRF guard (HTTPS, private IP/DNS, redirect manual, Shopify host ketat).
+- **R5.9** Analytics flush memakai processing list + ack/requeue + bulk insert + hanya drop FK violation + dedupe id.
+- **R5.10** Worker `error` listener; job retry/backoff/retention sudah aktif.
+- **R5.11** Body limit widget/ingest/api, Caddy `request_body`, rate limit per IP sebelum lookup, Redis limiter atomik, in-memory limiter prune.
+- **R5.12** `eventSources` mencakup seluruh katalog integrasi.
+- **R6.1 (sebagian)** Team/profile memakai active organization; organization switcher ditambahkan di sidebar.
+- **R6.2** Redirect internal setelah login/verifikasi; invitation kembali ke halaman accept.
+- **R6.3** `/test-event` manager-only; event `payload.test` dikecualikan dari payload publik, counter, dan events feed.
+- **R6.4** Hook `beforeDelete` menghapus workspace milik sole owner beserta site/integrasi/subscription (pembatalan Stripe belum, karena subscription id tidak disimpan).
+- **R6.5** Dialog edit site (nama/domain).
+- **R6.6 (sebagian)** Ganti email dengan konfirmasi ke email lama; purge events mendukung `includeAnalytics=true`. Export akun-level belum.
+- **R6.7** Pixel verification hanya dari Origin/Referer nyata; UI memakai `recentlyActive`.
+- **R6.8** Onboarding memakai semua site, bukan hanya site pertama.
+- **R6.9 (sebagian)** Host per posisi, animasi/ukuran/font, pinned media semua tipe, validasi tipe saat create, variant click action, translation key belum diperbaiki.
+- **R6.10** Bonferroni + minimum clicks untuk signifikansi A/B.
+- **R6.11** Cache key memuat semua param + full referrer.
+- **R6.12** CSRF/Origin middleware untuk API custom (Stripe webhook & Better Auth dikecualikan; test env bypass).
+- **R6.14 (sebagian)** `/metrics` token/disabled production, `TRUSTED_PROXIES`, Compose `env_file`.
+- **R6.15** Index Member/Session/Account/TwoFactor/Verification/integration/notification/impression/event.
+- Migration baru: `0019_perfect_shooting_star.sql` (`webhook_event`), `0020_luxuriant_black_bird.sql` (index).
+
+### Belum selesai / keputusan produk
+
+- **R5.2 penuh:** mapping signature asli Mailchimp/ActiveCampaign; Wix JWT verification.
+- **R5.4 integration-level:** idempotency berbasis event id provider di luar dedupeKey.
+- **R6.1:** organization switcher sudah ada; audit multi-org end-to-end belum ditest.
+- **R6.4:** pembatalan Stripe saat workspace dihapus belum (perlu menyimpan subscription id).
+- **R6.6:** account-level export JSON/CSV belum.
+- **R6.9:** preview fidelity (variant/translation/countdown/media), live social/YouTube refresh, perbaikan fokus input translation.
+- **R6.13:** gating A/B/inline/integrations/custom CSS menunggu keputusan produk.
+- **R6.16:** widget test runner, route-level ingest tests, analytics flush concurrency tests.
+- **R5.13:** test signature Calendly/HubSpot/Wix/Replay/BodyLimit belum lengkap.
+
+### Verifikasi
+
+- `pnpm typecheck` ✅
+- `pnpm check` (boundaries/env/lint/format) ✅
+- API **147 tests** ✅
+- Worker **7 tests** ✅
+- Contracts **16 tests** ✅
+- Widget build **9.93 kB gzip** ✅
+- Web build ✅

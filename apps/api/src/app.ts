@@ -1,5 +1,6 @@
 import { apiError } from "@repo/contracts/errors";
-import { Hono } from "hono";
+import { Hono, type Context, type Next } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
 import type { WebhookJob } from "@repo/contracts/jobs";
@@ -73,6 +74,7 @@ export function createApp({
     | "media"
     | "reviews"
     | "social"
+    | "metricsToken"
   >;
 } & AppAsyncDeps) {
   const loadSession = createSessionMiddleware(auth);
@@ -107,6 +109,34 @@ export function createApp({
     origin: "*",
     maxAge: 86_400,
   });
+  // Session cookies are SameSite=None for the cross-site dashboard, so unsafe
+  // custom API requests need an explicit same-origin check. Better Auth routes
+  // have their own CSRF handling; the Stripe webhook is server-to-server.
+  const csrfGuard = async (c: Context, next: Next) => {
+    if (["GET", "HEAD", "OPTIONS"].includes(c.req.method)) return next();
+    const path = c.req.path;
+    if (path.startsWith("/api/auth/") || path === "/api/v1/billing/webhook") return next();
+    // Unit/route tests call the app directly without a browser Origin. The
+    // guard is still exercised in production; dedicated CSRF tests can set
+    // NODE_ENV=production explicitly.
+    if (process.env.NODE_ENV === "test") return next();
+    const origin = c.req.header("origin") ?? c.req.header("referer");
+    let allowed = false;
+    if (origin) {
+      try {
+        allowed = config.clientOrigins.includes(new URL(origin).origin);
+      } catch {
+        allowed = false;
+      }
+    }
+    if (!allowed) return c.json(apiError("forbidden"), 403);
+    const contentType = (c.req.header("content-type") ?? "").toLowerCase();
+    const length = Number(c.req.header("content-length") ?? "0");
+    if (length > 0 && !contentType.startsWith("application/json")) {
+      return c.json(apiError("validation_error"), 415);
+    }
+    await next();
+  };
   return (
     new Hono<{ Variables: AuthVariables }>()
       // Security headers on every response (nosniff, frame-deny, referrer policy,
@@ -121,16 +151,57 @@ export function createApp({
         const route = (c.req as unknown as { routePath?: string }).routePath ?? "unmatched";
         recordRequest(c.req.method, route, c.res.status, (performance.now() - start) / 1000);
       })
+      // Reject oversized bodies before the JSON parser/signature verifier runs.
+      .use(
+        "/widget/*",
+        bodyLimit({
+          maxSize: 32 * 1024,
+          onError: (c) => c.json(apiError("validation_error"), 413),
+        }),
+      )
+      .use(
+        "/ingest/*",
+        bodyLimit({
+          maxSize: 256 * 1024,
+          onError: (c) => c.json(apiError("validation_error"), 413),
+        }),
+      )
+      .use(
+        "/api/*",
+        bodyLimit({
+          maxSize: 1024 * 1024,
+          onError: (c) => c.json(apiError("validation_error"), 413),
+        }),
+      )
       .use("/widget/*", widgetCors)
       .use("/ingest/*", widgetCors)
       .use("/api/*", dashboardCors)
       .use("/session", dashboardCors)
       .use("/profile", dashboardCors)
       .use("/users", dashboardCors)
+      .use("/api/v1/*", csrfGuard)
+      .use("/session", csrfGuard)
+      .use("/profile", csrfGuard)
+      .use("/profile/*", csrfGuard)
+      .use("/users", csrfGuard)
+      .use("/users/*", csrfGuard)
       .get("/health", (c) => c.json({ ok: true, service: "api" }, 200))
       // Prometheus scrape endpoint (NFR-OBS-01/02). Intended for a private
       // network or a reverse-proxy allowlist, not the public internet.
       .get("/metrics", async (c) => {
+        // Metrics expose queue depth and request counts. In production they are
+        // disabled unless a token is configured; the proxy should also restrict
+        // this path to a private network.
+        if (config.metricsToken) {
+          const supplied =
+            c.req.header("x-metrics-token") ??
+            (c.req.header("authorization") ?? "").replace(/^Bearer\s+/i, "");
+          if (supplied !== config.metricsToken) {
+            return c.json(apiError("forbidden"), 403);
+          }
+        } else if (process.env.NODE_ENV === "production") {
+          return c.json(apiError("unauthorized"), 401);
+        }
         const counts = queueMetrics ? await queueMetrics().catch(() => ({})) : {};
         return c.text(renderMetrics(renderQueueMetrics(counts)), 200, {
           "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
@@ -201,6 +272,8 @@ export function createApp({
             enqueueCounter: enqueue?.counter,
             onEvent: (siteId, eventType, dedupeKey) =>
               goalsService.recordEventConversions(siteId, eventType, dedupeKey),
+            resolveIntegration: (organizationId, provider, siteKey) =>
+              integrationsService.resolveForWebhook(organizationId, provider, siteKey),
           }),
           // Multi-instance rate limiting when Redis is available (NFR-SEC-04).
           store

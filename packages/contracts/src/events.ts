@@ -1,15 +1,11 @@
 import { z } from "zod";
+import { integrationProviders } from "./integrations";
 import { eventTypeSchema } from "./notifications";
 
-export const eventSources = [
-  "pixel",
-  "webhook",
-  "zapier",
-  "stripe",
-  "shopify",
-  "woocommerce",
-  "manual",
-] as const;
+// Webhook events store the provider verbatim (Paddle, Typeform, BigCommerce…),
+// so the source enum must cover the whole integration catalog, not just the
+// original seven values.
+export const eventSources = ["pixel", "manual", ...integrationProviders] as const;
 export const eventSourceSchema = z.enum(eventSources);
 
 // Public ingest (POST /ingest/v1/event). Only first name + city are stored for

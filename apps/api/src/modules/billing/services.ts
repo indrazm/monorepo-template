@@ -1,6 +1,6 @@
 import { and, count, eq, gte, inArray } from "drizzle-orm";
 import type { Database } from "@repo/db";
-import { event, site, subscription } from "@repo/db/schema";
+import { event, site, subscription, webhookEvent } from "@repo/db/schema";
 import { effectivePlanFor, hasPaidAccess, planLimits, type Plan } from "@repo/contracts/billing";
 import { currentMonthKey, type RealtimeStore } from "@repo/queue";
 
@@ -32,7 +32,26 @@ export function createBillingService(
   db: Pick<Database, "select" | "update" | "insert">,
   deps: BillingServiceDeps = {},
 ) {
-  return { getPlan, getOverview, canCreateSite, updatePlan, getCustomerId };
+  return {
+    getPlan,
+    getOverview,
+    canCreateSite,
+    updatePlan,
+    getCustomerId,
+    claimWebhookEvent,
+  };
+
+  // Returns false when this provider event id was already applied. The row is
+  // inserted before the state change, so a concurrent/replayed delivery is a
+  // no-op.
+  async function claimWebhookEvent(provider: string, eventId: string): Promise<boolean> {
+    const [row] = await db
+      .insert(webhookEvent)
+      .values({ provider, eventId })
+      .onConflictDoNothing()
+      .returning({ id: webhookEvent.id });
+    return Boolean(row);
+  }
 
   // Applies a subscription change from Stripe (SRS FR-BIL-05). Upserts onto the
   // org's subscription row so an organization created after sign-up still gets

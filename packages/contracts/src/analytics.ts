@@ -121,6 +121,8 @@ export const eventsFeedQuerySchema = z.object({
 // Hot-path impression buffered in Redis and flushed to Postgres by the worker
 // (SRS FR-ANL-01/05). Shared by the API producer and the worker consumer.
 export const bufferedImpressionSchema = z.object({
+  // Stable idempotency key assigned when the API buffers the impression.
+  id: z.string().trim().min(1).optional(),
   siteId: z.string().trim().min(1),
   refId: z.string().trim().min(1),
   kind: z.enum(["view", "click", "claim"]),

@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from "@repo/ui/components/card";
 import { toast } from "@repo/ui/components/sonner";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { CheckIcon, CircleIcon, SendIcon } from "lucide-react";
 import { activationQueryOptions } from "../../analytics/hooks/use-analytics";
@@ -29,13 +29,24 @@ export function OverviewPage() {
   const user = useQuery(meQueryOptions);
   const sites = useQuery(sitesQueryOptions);
   const firstSiteId = sites.data?.[0]?.id ?? "";
-  const notifications = useQuery(notificationsQueryOptions(firstSiteId));
-  const activation = useQuery(activationQueryOptions(firstSiteId));
+  // Onboarding is organization-wide: a notification on the second site still
+  // counts as "first notification created/shown".
+  const siteIds = (sites.data ?? []).map((site) => site.id);
+  const notifications = useQueries({
+    queries: siteIds.map((siteId) => notificationsQueryOptions(siteId)),
+  });
+  const activation = useQueries({
+    queries: siteIds.map((siteId) => activationQueryOptions(siteId)),
+  });
 
-  const hasSite = (sites.data?.length ?? 0) > 0;
+  const hasSite = siteIds.length > 0;
   const pixelVerified = sites.data?.some((site) => site.pixelVerifiedAt) ?? false;
-  const hasNotification = (notifications.data?.length ?? 0) > 0;
-  const shown = activation.data?.activated ?? false;
+  const notificationCount = notifications.reduce(
+    (total, query) => total + (query.data?.length ?? 0),
+    0,
+  );
+  const hasNotification = notificationCount > 0;
+  const shown = activation.some((query) => query.data?.activated);
 
   const steps = [
     {
@@ -64,7 +75,8 @@ export function OverviewPage() {
     },
   ];
   const completed = steps.filter((step) => step.done).length;
-  const msToActivation = activation.data?.msToActivation ?? null;
+  const msToActivation =
+    activation.find((query) => query.data?.msToActivation != null)?.data?.msToActivation ?? null;
 
   // Lets the user trigger their first notification without a real transaction
   // (feedback T5/T14): injects a demo event into the first site.
@@ -166,11 +178,7 @@ export function OverviewPage() {
 
         <div className="grid gap-4 sm:grid-cols-3">
           <QuickStat label="Sites" value={sites.data?.length ?? 0} to="/sites" />
-          <QuickStat
-            label="Notifications"
-            value={notifications.data?.length ?? 0}
-            to="/notifications"
-          />
+          <QuickStat label="Notifications" value={notificationCount} to="/notifications" />
           <QuickStat label="Pixel" value={pixelVerified ? "Verified" : "Pending"} to="/sites" />
         </div>
       </section>

@@ -10,6 +10,7 @@ const app = createApp({
   auth: { getSession: mocks.getSession, handler: mocks.authHandler },
   db: database.db,
   config: {
+    metricsToken: null,
     clientOrigins: ["http://localhost:3000"],
     stripe: {
       secretKey: null,

@@ -93,6 +93,37 @@ export function passwordResetEmailContent({
   };
 }
 
+export function changeEmailEmailContent({
+  name,
+  newEmail,
+  url,
+  appUrl,
+}: {
+  name?: string | null;
+  newEmail: string;
+  url: string;
+  appUrl: string;
+}): EmailContent {
+  return {
+    subject: "Confirm your new Tacto email",
+    ...renderActionEmail({
+      appUrl,
+      name,
+      preheader: `Confirm ${newEmail} as the new email for your Tacto account.`,
+      eyebrow: "Email change",
+      title: "Confirm your new email",
+      paragraphs: [
+        `You asked to change the email on your Tacto account to ${newEmail}. Confirm it below.`,
+        "Your current email stays active until this change is confirmed.",
+      ],
+      actionLabel: "Confirm new email",
+      actionUrl: url,
+      note: "This link expires in 1 hour.",
+      footerNote: "If you didn't request this change, you can safely ignore this email.",
+    }),
+  };
+}
+
 export function invitationEmailContent({
   organizationName,
   inviterName,

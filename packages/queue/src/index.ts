@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Queue, QueueEvents, type ConnectionOptions } from "bullmq";
 import { Redis } from "ioredis";
 import { bufferedImpressionSchema, type BufferedImpression } from "@repo/contracts/analytics";
@@ -96,6 +97,7 @@ export function createCounterQueue(connection: ConnectionOptions) {
 // ---------------------------------------------------------------------------
 
 export const analyticsImpressionsKey = "tacto:analytics:impressions";
+export const analyticsProcessingKey = "tacto:analytics:impressions:processing";
 export const liveVisitorWindowMs = 5 * 60_000;
 
 export function liveVisitorsKey(siteId: string): string {
@@ -122,8 +124,12 @@ export function currentMonthKey(now: Date = new Date()): string {
 export type RealtimeStore = {
   // Append an impression to the flush buffer (RPUSH).
   pushImpression: (entry: BufferedImpression) => Promise<void>;
-  // Atomically take up to `limit` buffered impressions (LRANGE + LTRIM).
+  // Atomically move up to `limit` buffered impressions into a processing list.
   drainImpressions: (limit?: number) => Promise<BufferedImpression[]>;
+  // Acknowledge the processing batch after the DB commit.
+  ackImpressions: () => Promise<void>;
+  // Put unprocessed entries back after a failed flush.
+  requeueImpressions: () => Promise<void>;
   // Mark a visitor as present now within the sliding window (ZADD).
   recordVisit: (siteId: string, visitorId: string) => Promise<void>;
   // Count distinct visitors seen within the window (ZCOUNT).
@@ -152,18 +158,48 @@ export function createRedisClient(url: string): Redis {
 export function createRealtimeStore(redis: Redis): RealtimeStore {
   return {
     async pushImpression(entry) {
-      await redis.rpush(analyticsImpressionsKey, JSON.stringify(entry));
+      const id = entry.id ?? randomUUID();
+      await redis.rpush(analyticsImpressionsKey, JSON.stringify({ ...entry, id }));
     },
     async drainImpressions(limit = 1000) {
-      const raw = await redis.lrange(analyticsImpressionsKey, 0, limit - 1);
-      if (raw.length === 0) return [];
-      await redis.ltrim(analyticsImpressionsKey, raw.length, -1);
+      // Move into a processing list first. If the worker dies before the DB
+      // commit, requeueImpressions puts the batch back instead of losing it.
+      const raw = (await redis.eval(
+        `local items = redis.call('LRANGE', KEYS[1], 0, tonumber(ARGV[1]) - 1)
+         if #items == 0 then return {} end
+         for _, item in ipairs(items) do redis.call('RPUSH', KEYS[2], item) end
+         redis.call('LTRIM', KEYS[1], #items, -1)
+         return items`,
+        2,
+        analyticsImpressionsKey,
+        analyticsProcessingKey,
+        String(limit),
+      )) as string[];
       const entries: BufferedImpression[] = [];
       for (const item of raw) {
-        const parsed = bufferedImpressionSchema.safeParse(JSON.parse(item));
-        if (parsed.success) entries.push(parsed.data);
+        try {
+          const parsed = bufferedImpressionSchema.safeParse(JSON.parse(item));
+          if (parsed.success) entries.push(parsed.data);
+        } catch {
+          // Corrupt buffered row: acknowledge/drop it below.
+        }
       }
       return entries;
+    },
+    async ackImpressions() {
+      await redis.del(analyticsProcessingKey);
+    },
+    async requeueImpressions() {
+      await redis.eval(
+        `local items = redis.call('LRANGE', KEYS[2], 0, -1)
+         if #items > 0 then
+           for _, item in ipairs(items) do redis.call('RPUSH', KEYS[1], item) end
+         end
+         redis.call('DEL', KEYS[2])`,
+        2,
+        analyticsImpressionsKey,
+        analyticsProcessingKey,
+      );
     },
     async recordVisit(siteId, visitorId) {
       const key = liveVisitorsKey(siteId);
@@ -192,8 +228,18 @@ export function createRealtimeStore(redis: Redis): RealtimeStore {
     },
     async hitRateLimit(key, limit, windowMs) {
       const redisKey = `tacto:ratelimit:${key}`;
-      const count = await redis.incr(redisKey);
-      if (count === 1) await redis.pexpire(redisKey, windowMs);
+      // INCR + PEXPIRE atomically: a crash between two commands must not leave
+      // a key without TTL (which would rate-limit it forever).
+      const count = Number(
+        await redis.eval(
+          `local c = redis.call('INCR', KEYS[1])
+           if c == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
+           return c`,
+          1,
+          redisKey,
+          windowMs,
+        ),
+      );
       return count <= limit;
     },
     async cacheGet(key) {

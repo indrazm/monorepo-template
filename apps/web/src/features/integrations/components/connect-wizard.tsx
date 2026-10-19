@@ -9,6 +9,8 @@ import {
 } from "@repo/contracts/integrations";
 import type { Site } from "@repo/contracts/sites";
 import { Badge } from "@repo/ui/components/badge";
+import { useQuery } from "@tanstack/react-query";
+import { revealIntegrationSecret } from "../services";
 import { Button } from "@repo/ui/components/button";
 import {
   Dialog,
@@ -273,13 +275,7 @@ function StepBody({
         </div>
       );
     case "copy_secret":
-      return integration.config.secret ? (
-        <Secret label="Signing secret" value={integration.config.secret} />
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          No secret yet — finish the credentials step first.
-        </p>
-      );
+      return <SecretStep integration={integration} />;
     case "credentials":
       return <CredentialsStep integration={integration} onSave={onSave} />;
     case "verify":
@@ -336,6 +332,30 @@ function SitePicker({
   );
 }
 
+// Generated secrets are revealed on demand to a manager, never included in the
+// integration list response.
+function SecretStep({ integration }: { integration: Integration }) {
+  const secret = useQuery({
+    queryKey: ["integrations", integration.id, "secret"],
+    queryFn: () => revealIntegrationSecret(integration.id),
+    enabled: integration.secretSet,
+    retry: false,
+  });
+
+  if (!integration.secretSet) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No secret yet — finish the credentials step first.
+      </p>
+    );
+  }
+  if (secret.isPending) return <p className="text-sm text-muted-foreground">Loading secret…</p>;
+  if (secret.isError || !secret.data) {
+    return <p className="text-sm text-destructive">Could not reveal the signing secret.</p>;
+  }
+  return <Secret label="Signing secret" value={secret.data} />;
+}
+
 // Provider credentials + the inbound signing secret. Values of secret fields
 // are write-only: the API returns which keys are set, never the values.
 function CredentialsStep({
@@ -348,7 +368,10 @@ function CredentialsStep({
   const meta = integrationMeta[integration.provider];
   const [values, setValues] = useState<Record<string, string>>({});
   const [secret, setSecret] = useState("");
-  const needsPastedSecret = meta.auth === "webhook_secret";
+  // API-key/OAuth providers still need an inbound signing secret for us to
+  // verify their deliveries. Show the field for every provider that does not
+  // get a Tacto-generated secret.
+  const needsPastedSecret = meta.auth !== "generated_secret";
   const fields = meta.credentials ?? [];
 
   return (
@@ -357,7 +380,7 @@ function CredentialsStep({
         <div className="grid gap-1">
           <Label htmlFor="cred-secret" className="text-xs font-medium">
             Signing secret from {meta.label}
-            {integration.config.secret ? (
+            {integration.secretSet ? (
               <Badge variant="outline" className="ml-2 font-normal">
                 stored
               </Badge>

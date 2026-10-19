@@ -50,6 +50,8 @@ import { renderMessage } from "./template";
 import { matchesTargeting, targetingCacheKey, type VisitContext } from "./targeting";
 
 const DEFAULT_TTL = 30;
+// Demo events injected by the dashboard are never public social proof.
+const NOT_TEST_EVENT = sql`coalesce((${event.payload} ->> 'test'), 'false') <> 'true'`;
 const LIVE_WINDOW_MS = 5 * 60_000;
 const COUNTER_WINDOW_MS = 7 * 86_400_000;
 const COMBO_WINDOW_MS = 30 * 86_400_000;
@@ -443,8 +445,9 @@ export function createWidgetService(
     // Only serve registered domains (SRS FR-SITE-03, NFR-SEC-05).
     if (!originAllowed(input.origin, siteRow.domain)) return { kind: "forbidden" };
 
-    // First served payload from the real domain verifies the pixel (F21).
-    if (!siteRow.pixelVerifiedAt) {
+    // First served payload from a real browser origin verifies the pixel (F21).
+    // A null Origin (curl/server-to-server) must not be able to spoof this.
+    if (!siteRow.pixelVerifiedAt && input.origin) {
       await db
         .update(site)
         .set({ pixelVerifiedAt: new Date() })
@@ -586,10 +589,13 @@ export function createWidgetService(
       timing: config.timing as NotificationTiming,
       ...(variant ? { variantId: variant.id } : {}),
       ...(config.inlineSelector ? { inlineSelector: config.inlineSelector } : {}),
-      ...(config.style.clickAction?.type === "url" && config.style.clickAction.url
+      // Pinned media is type-agnostic; recent-sales/review branches override it
+      // with their event-derived image/avatar.
+      ...(config.media?.imageUrl ? { mediaUrl: config.media.imageUrl } : {}),
+      ...((variant?.style?.clickAction ?? config.style.clickAction)?.type === "url"
         ? {
-            clickUrl: config.style.clickAction.url,
-            clickNewTab: config.style.clickAction.newTab,
+            clickUrl: (variant?.style?.clickAction ?? config.style.clickAction)?.url,
+            clickNewTab: (variant?.style?.clickAction ?? config.style.clickAction)?.newTab,
           }
         : {}),
     };
@@ -746,7 +752,7 @@ export function createWidgetService(
     const rows = await db
       .select()
       .from(event)
-      .where(and(eq(event.siteId, siteId), inArray(event.type, types), ...extra))
+      .where(and(eq(event.siteId, siteId), inArray(event.type, types), NOT_TEST_EVENT, ...extra))
       .orderBy(desc(event.occurredAt))
       .limit(1);
     return rows[0] ?? null;
@@ -767,6 +773,7 @@ export function createWidgetService(
           eq(event.siteId, siteId),
           inArray(event.type, types),
           gte(event.occurredAt, since),
+          NOT_TEST_EVENT,
           ...extra,
         ),
       );

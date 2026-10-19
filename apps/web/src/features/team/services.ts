@@ -1,12 +1,18 @@
 import { authClient } from "../../api";
 
-// Ensures the user's first organization is active (sign-up sessions start
-// without one), then returns the full organization (members + invitations).
+// Returns the full organization the session is currently scoped to. Only sets
+// an active organization when the session has none (sign-up); never overwrites
+// a user's choice with the first org in the list.
 export async function loadTeam() {
-  const orgs = await authClient.organization.list();
-  const first = orgs.data?.[0];
-  if (first) {
-    await authClient.organization.setActive({ organizationId: first.id });
+  const [orgs, session] = await Promise.all([
+    authClient.organization.list(),
+    authClient.getSession(),
+  ]);
+  const activeId = (session.data?.session as { activeOrganizationId?: string | null } | undefined)
+    ?.activeOrganizationId;
+  if (!activeId) {
+    const first = orgs.data?.[0];
+    if (first) await authClient.organization.setActive({ organizationId: first.id });
   }
   const full = await authClient.organization.getFullOrganization();
   if (full.error) throw new Error(full.error.message ?? "Failed to load team.");

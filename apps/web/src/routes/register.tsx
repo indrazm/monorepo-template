@@ -62,7 +62,9 @@ function RegisterPage() {
                 </p>
                 <ResendVerification defaultEmail={registerMutation.data.email} />
                 <Button asChild variant="link" className="justify-start px-0">
-                  <Link to="/login">Back to login</Link>
+                  <Link to="/login" search={{}}>
+                    Back to login
+                  </Link>
                 </Button>
               </div>
             ) : (
@@ -111,7 +113,9 @@ function RegisterPage() {
                     {registerMutation.isPending ? "Creating..." : "Register"}
                   </Button>
                   <Button asChild type="button" variant="link">
-                    <Link to="/login">Already have an account?</Link>
+                    <Link to="/login" search={{}}>
+                      Already have an account?
+                    </Link>
                   </Button>
                 </form>
               </>

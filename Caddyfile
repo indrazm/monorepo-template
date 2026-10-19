@@ -5,6 +5,9 @@
 # Replace :80 with your domain (e.g. app.tacto.io) for automatic HTTPS.
 :80 {
 	encode gzip
+	request_body {
+		max_size 1MB
+	}
 
 	# Pixel bundle served from the widget build.
 	handle /t.js {

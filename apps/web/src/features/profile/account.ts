@@ -7,6 +7,14 @@ function fail(error: { message?: string } | null, fallback: string): never {
   throw new Error(error?.message ?? fallback);
 }
 
+export async function changeEmail(newEmail: string): Promise<void> {
+  const { error } = await authClient.changeEmail({
+    newEmail: newEmail.trim(),
+    callbackURL: `${window.location.origin}/verify-email?verified=1`,
+  });
+  if (error) fail(error, "Could not change your email.");
+}
+
 export async function changePassword(input: {
   currentPassword: string;
   newPassword: string;
@@ -51,10 +59,15 @@ export async function revokeOtherSessions(): Promise<void> {
 
 // --- Organization ---------------------------------------------------------
 export async function getActiveOrganization(): Promise<{ id: string; name: string } | null> {
-  const { data, error } = await authClient.organization.list();
-  if (error) fail(error, "Could not load your organization.");
-  const first = data?.[0];
-  return first ? { id: first.id, name: first.name } : null;
+  const [orgs, session] = await Promise.all([
+    authClient.organization.list(),
+    authClient.getSession(),
+  ]);
+  if (orgs.error) fail(orgs.error, "Could not load your organization.");
+  const activeId = (session.data?.session as { activeOrganizationId?: string | null } | undefined)
+    ?.activeOrganizationId;
+  const active = orgs.data?.find((org) => org.id === activeId) ?? orgs.data?.[0];
+  return active ? { id: active.id, name: active.name } : null;
 }
 
 export async function renameOrganization(organizationId: string, name: string): Promise<void> {

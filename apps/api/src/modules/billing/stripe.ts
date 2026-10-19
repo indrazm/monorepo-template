@@ -26,6 +26,8 @@ export function verifyStripeSignature(
   const timestamp = parts.t;
   const v1 = parts.v1;
   if (!timestamp || !v1) return false;
+  const age = Math.abs(Date.now() / 1000 - Number(timestamp));
+  if (!Number.isFinite(age) || age > 300) return false;
   const expected = createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
   const a = Buffer.from(expected);
   const b = Buffer.from(v1);

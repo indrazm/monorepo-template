@@ -26,6 +26,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { authQueryKey } from "../../auth/query-keys";
 import {
+  changeEmail,
   changePassword,
   confirmTwoFactor,
   deleteAccount,
@@ -50,12 +51,61 @@ export function SecuritySettings({ twoFactorEnabled }: { twoFactorEnabled: boole
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <ChangePasswordCard />
+        <ChangeEmailCard />
         <TwoFactorCard enabled={twoFactorEnabled} />
         <SessionsCard />
         <OrganizationCard />
       </div>
       <DangerZone />
     </section>
+  );
+}
+
+function ChangeEmailCard() {
+  const [email, setEmail] = useState("");
+  const mutation = useMutation({
+    mutationFn: () => changeEmail(email),
+    onSuccess: () => {
+      toast.success("Check your inbox", {
+        description: "Confirm the change from your current email address.",
+      });
+      setEmail("");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Change email</CardTitle>
+        <CardDescription>
+          We send a confirmation link to your current address before the change applies.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="grid gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            mutation.mutate();
+          }}
+        >
+          <div className="grid gap-2">
+            <Label htmlFor="new-email">New email</Label>
+            <Input
+              id="new-email"
+              type="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </div>
+          <Button type="submit" disabled={mutation.isPending || email.trim() === ""}>
+            {mutation.isPending ? "Sending…" : "Send confirmation"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -403,7 +453,7 @@ function DangerZone() {
     mutationFn: deleteAccount,
     onSuccess: async () => {
       queryClient.clear();
-      await navigate({ to: "/login" });
+      await navigate({ to: "/login", search: {} });
     },
     onError: (error) => toast.error(error.message),
   });

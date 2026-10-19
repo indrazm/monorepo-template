@@ -21,6 +21,14 @@ const BASE_CSS = `
   opacity: 0; transform: translateY(10px); transition: opacity .2s ease, transform .2s ease;
 }
 .tacto-card[data-shown="1"] { opacity: 1; transform: translateY(0); }
+.tacto-card[data-animation="fade"], .tacto-bar[data-animation="fade"] { transform: none; }
+.tacto-card[data-animation="scale"] { transform: scale(.95); }
+.tacto-card[data-animation="scale"][data-shown="1"] { transform: scale(1); }
+.tacto-card[data-animation="none"], .tacto-bar[data-animation="none"] { opacity: 1; transform: none; transition: none; }
+.tacto-bar[data-animation="scale"] { transform: scale(.98); }
+.tacto-bar[data-animation="scale"][data-shown="1"] { transform: none; }
+.tacto-modal[data-animation="fade"] { transform: none; }
+.tacto-modal[data-animation="none"] { opacity: 1; transform: none; transition: none; }
 .tacto-card[data-shape="square"] { border-radius: 8px; }
 .tacto-media {
   width: 48px; height: 48px; border-radius: 11px; flex: none; display: grid; place-items: center;
@@ -48,6 +56,13 @@ const BASE_CSS = `
 .tacto-bar[data-shown="1"] { opacity: 1; transform: translateY(0); }
 .tacto-bar[data-shape="square"] { border-radius: 0; }
 .tacto-bar-icon { display: inline-flex; align-items: center; flex: none; }
+.tacto-bar[data-size="sm"] { font-size: 12px; padding: 9px 14px; }
+.tacto-bar[data-size="lg"] { font-size: 16px; padding: 15px 24px; }
+.tacto-modal[data-size="sm"] { max-width: 300px; padding: 20px 18px; }
+.tacto-modal[data-size="lg"] { max-width: 420px; padding: 30px 26px; }
+.tacto-modal[data-font="rounded"] { font-family: ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", "Quicksand", system-ui, sans-serif; }
+.tacto-modal[data-font="serif"] { font-family: "Iowan Old Style", Georgia, Cambria, "Times New Roman", serif; }
+.tacto-modal[data-font="mono"] { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .tacto-bar-msg { flex: 1; min-width: 0; }
 .tacto-bar .tacto-verified { color: #eafff5; margin: 0; }
 .tacto-bar .tacto-badge { margin: 0; }

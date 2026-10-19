@@ -49,6 +49,7 @@ export const twoFactor = pgTable(
     lockedUntil: timestamp("lockedUntil", { precision: 3 }),
   },
   (table) => [
+    index("TwoFactor_userId_idx").on(table.userId),
     foreignKey({
       name: "TwoFactor_userId_fkey",
       columns: [table.userId],
@@ -77,6 +78,7 @@ export const session = pgTable(
   },
   (table) => [
     uniqueIndex("Session_token_key").on(table.token),
+    index("Session_userId_idx").on(table.userId),
     foreignKey({
       name: "Session_userId_fkey",
       columns: [table.userId],
@@ -114,17 +116,22 @@ export const account = pgTable(
     })
       .onDelete("cascade")
       .onUpdate("cascade"),
+    index("Account_userId_idx").on(table.userId),
   ],
 );
 
-export const verification = pgTable("Verification", {
-  id: text("id").primaryKey(),
-  identifier: text("identifier").notNull(),
-  value: text("value").notNull(),
-  expiresAt: timestamp("expiresAt", { precision: 3 }).notNull(),
-  createdAt: timestamp("createdAt", { precision: 3 }).defaultNow(),
-  updatedAt: timestamp("updatedAt", { precision: 3 }).$onUpdate(() => new Date()),
-});
+export const verification = pgTable(
+  "Verification",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expiresAt", { precision: 3 }).notNull(),
+    createdAt: timestamp("createdAt", { precision: 3 }).defaultNow(),
+    updatedAt: timestamp("updatedAt", { precision: 3 }).$onUpdate(() => new Date()),
+  },
+  (table) => [index("Verification_identifier_idx").on(table.identifier)],
+);
 
 // ---------------------------------------------------------------------------
 // Better Auth organization plugin (tenancy). Column names match the plugin's
@@ -149,6 +156,8 @@ export const member = pgTable(
     createdAt: timestamp("createdAt", { precision: 3 }).defaultNow().notNull(),
   },
   (table) => [
+    uniqueIndex("Member_organizationId_userId_key").on(table.organizationId, table.userId),
+    index("Member_userId_idx").on(table.userId),
     foreignKey({
       name: "Member_organizationId_fkey",
       columns: [table.organizationId],
@@ -318,7 +327,10 @@ export const integration = pgTable(
     externalRef: text("external_ref"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("integration_org_idx").on(t.organizationId)],
+  (t) => [
+    index("integration_org_idx").on(t.organizationId),
+    index("integration_org_provider_idx").on(t.organizationId, t.provider),
+  ],
 );
 
 // ---------- NOTIFICATION ENGINE (F6) ----------
@@ -344,7 +356,10 @@ export const notification = pgTable(
     extra: jsonb("extra"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("notification_site_idx").on(t.siteId)],
+  (t) => [
+    index("notification_site_idx").on(t.siteId),
+    index("notification_site_active_idx").on(t.siteId, t.isActive),
+  ],
 );
 
 export const domainSetting = pgTable("domain_setting", {
@@ -387,6 +402,7 @@ export const event = pgTable(
   },
   (t) => [
     index("event_site_occurred_idx").on(t.siteId, t.occurredAt),
+    index("event_site_type_occurred_idx").on(t.siteId, t.type, t.occurredAt),
     uniqueIndex("event_site_dedupe_key").on(t.siteId, t.dedupeKey),
   ],
 );
@@ -491,7 +507,28 @@ export const impression = pgTable(
   },
   (t) => [
     index("impression_site_created_idx").on(t.siteId, t.createdAt),
+    index("impression_site_kind_created_idx").on(t.siteId, t.kind, t.createdAt),
+    index("impression_site_ref_kind_created_idx").on(t.siteId, t.refId, t.kind, t.createdAt),
     uniqueIndex("impression_site_ref_kind_dedupe_key").on(t.siteId, t.refId, t.kind, t.dedupeKey),
+  ],
+);
+
+// Provider webhook deliveries already applied. Used for replay/idempotency on
+// billing events (and available to integration ingest when a provider supplies
+// an event id). Scoped by provider so Stripe and Paddle ids cannot collide.
+export const webhookEvent = pgTable(
+  "webhook_event",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    provider: text("provider").notNull(),
+    eventId: text("event_id").notNull(),
+    receivedAt: timestamp("received_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("webhook_event_provider_event_key").on(t.provider, t.eventId),
+    index("webhook_event_received_idx").on(t.receivedAt),
   ],
 );
 

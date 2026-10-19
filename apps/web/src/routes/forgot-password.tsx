@@ -37,7 +37,9 @@ function ForgotPasswordPage() {
                 If an account exists for {email}, a reset link is on its way.
               </p>
               <Button asChild variant="link" className="justify-start px-0">
-                <Link to="/login">Back to login</Link>
+                <Link to="/login" search={{}}>
+                  Back to login
+                </Link>
               </Button>
             </div>
           ) : (
@@ -56,7 +58,9 @@ function ForgotPasswordPage() {
                 {reset.isPending ? "Sending…" : "Send reset link"}
               </Button>
               <Button asChild variant="link" className="justify-start px-0">
-                <Link to="/login">Back to login</Link>
+                <Link to="/login" search={{}}>
+                  Back to login
+                </Link>
               </Button>
             </form>
           )}

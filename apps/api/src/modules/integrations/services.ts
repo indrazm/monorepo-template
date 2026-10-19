@@ -26,15 +26,17 @@ export type IntegrationsServiceDeps = {
   publicApiUrl: string;
 };
 
-// Credentials never leave the server: the API returns only which keys are set.
+// Credentials and the inbound signing secret never leave the server: the API
+// returns only which credential keys are set and whether a secret exists.
 function toIntegration(row: IntegrationRow): Integration {
   const stored = (row.config ?? {}) as IntegrationConfig;
-  const { credentials, ...config } = stored;
+  const { credentials, secret, ...config } = stored;
   return {
     id: row.id,
     provider: row.provider as IntegrationProvider,
     status: row.status as IntegrationStatus,
     config,
+    secretSet: Boolean(secret),
     credentialKeys: Object.keys(credentials ?? {}),
     lastCheckedAt: row.lastCheckedAt?.toISOString() ?? null,
     lastEventAt: row.lastEventAt?.toISOString() ?? null,
@@ -53,6 +55,8 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
     remove,
     resolveForWebhook,
     recordDelivery,
+    revealSecret,
+    rotateSecret,
   };
 
   async function list(organizationId: string): Promise<Integration[]> {
@@ -73,9 +77,11 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
   ): Promise<Integration> {
     const meta = integrationMeta[input.provider];
     const generated = meta.auth === "generated_secret";
+    const plainSecret =
+      input.config.secret ?? (generated ? randomBytes(24).toString("hex") : undefined);
     const config: IntegrationConfig = {
       ...input.config,
-      secret: input.config.secret ?? (generated ? randomBytes(24).toString("hex") : undefined),
+      secret: plainSecret ? deps.cipher.encrypt(plainSecret) : undefined,
       credentials: input.config.credentials
         ? deps.cipher.encryptAll(input.config.credentials)
         : undefined,
@@ -111,13 +117,19 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
       }
     }
 
+    // `secret` is write-only and encrypted separately; never let a plaintext
+    // value slip through the general config merge.
+    const { secret: patchSecret, ...patchConfig } = patch;
     const merged = integrationConfigSchema.parse({
       ...current,
-      ...patch,
+      ...patchConfig,
       credentials: Object.keys(credentials).length > 0 ? credentials : undefined,
     });
+    if (patchSecret !== undefined) {
+      merged.secret = patchSecret ? deps.cipher.encrypt(patchSecret) : undefined;
+    }
 
-    const credentialsChanged = Boolean(patch.credentials) || patch.secret !== undefined;
+    const credentialsChanged = Boolean(patch.credentials) || patchSecret !== undefined;
     const status: IntegrationStatus =
       input.status ??
       (credentialsChanged && row.status !== "disabled"
@@ -152,8 +164,18 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
     const meta = integrationMeta[provider];
     const config = (row.config ?? {}) as IntegrationConfig;
     const credentials = deps.cipher.decryptAll(config.credentials);
-    const api = getProviderApi(provider);
+    const storedSecret = config.secret ? deps.cipher.decrypt(config.secret) : null;
+    const plainSecret = inboundSecret(provider, storedSecret);
     const checkedAt = new Date();
+    if (config.secret && !storedSecret) {
+      return finish(
+        row,
+        "error",
+        "Reconnect this integration: its signing secret can no longer be read.",
+        checkedAt,
+      );
+    }
+    const api = getProviderApi(provider);
 
     const required = (meta.credentials ?? []).filter((field) => !field.optional);
     const absent = required.filter((field) => !credentials[field.key]).map((field) => field.label);
@@ -167,7 +189,7 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
         credentials,
         server: deps.server,
         webhookUrl,
-        secret: config.secret,
+        secret: plainSecret ?? undefined,
         externalRef: row.externalRef,
       };
       const result = await api.test(ctx);
@@ -182,26 +204,47 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
             checkedAt,
           );
         }
+        // A provider with a valid signing secret can still prove itself via
+        // its first delivery even when an optional API test is unavailable.
+        if (plainSecret) {
+          return finish(
+            row,
+            "pending",
+            `${result.message} Waiting for the first signed delivery.`,
+            checkedAt,
+          );
+        }
         return finish(row, "error", result.message, checkedAt);
       }
       // Credentials are good — register the webhook if we can and have not yet.
       let message = result.message;
       if (meta.managesWebhook && api.subscribe && !row.externalRef) {
         const subscription = await api.subscribe(ctx);
-        if (subscription.ok) {
-          message = `${result.message} ${subscription.message}`;
-          await db
-            .update(integration)
-            .set({
-              externalRef: subscription.externalRef ?? null,
-              ...(subscription.secret
-                ? { config: { ...config, secret: subscription.secret } }
-                : {}),
-            })
-            .where(eq(integration.id, row.id));
-        } else {
-          message = `${result.message} Webhook not registered: ${subscription.message}`;
+        if (!subscription.ok) {
+          // Do not claim "connected" when the provider webhook was not
+          // registered; no events can arrive in that state.
+          return finish(
+            row,
+            "error",
+            `${result.message} Webhook not registered: ${subscription.message}`,
+            checkedAt,
+          );
         }
+        message = `${result.message} ${subscription.message}`;
+        await db
+          .update(integration)
+          .set({
+            externalRef: subscription.externalRef ?? null,
+            ...(subscription.secret
+              ? {
+                  config: {
+                    ...config,
+                    secret: deps.cipher.encrypt(subscription.secret),
+                  },
+                }
+              : {}),
+          })
+          .where(eq(integration.id, row.id));
       }
       return finish(row, "connected", message, checkedAt);
     }
@@ -215,7 +258,7 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
         checkedAt,
       );
     }
-    if (!config.secret) {
+    if (!plainSecret) {
       return finish(row, "error", "No signing secret stored yet.", checkedAt);
     }
     return finish(
@@ -257,7 +300,7 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
           credentials: deps.cipher.decryptAll(config.credentials),
           server: deps.server,
           webhookUrl: await buildWebhookUrl(organizationId, provider, config),
-          secret: config.secret,
+          secret: config.secret ? (deps.cipher.decrypt(config.secret) ?? undefined) : undefined,
           externalRef: row.externalRef,
         });
       } catch {
@@ -277,26 +320,34 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
   async function resolveForWebhook(
     organizationId: string,
     provider: string,
+    siteKey?: string,
   ): Promise<{
     id: string;
     status: IntegrationStatus;
     config: IntegrationConfig;
     credentials: Record<string, string>;
   } | null> {
-    const [row] = await db
+    const rows = await db
       .select()
       .from(integration)
       .where(
         and(eq(integration.organizationId, organizationId), eq(integration.provider, provider)),
       )
-      .orderBy(asc(integration.createdAt))
-      .limit(1);
+      .orderBy(asc(integration.createdAt));
+    // When the webhook URL carries a site, use that connection. Falling back to
+    // the oldest integration would verify site B's delivery with site A's
+    // secret (or accept it against the wrong tenant site).
+    const row = siteKey
+      ? rows.find((candidate) => (candidate.config as IntegrationConfig)?.siteKey === siteKey)
+      : rows[0];
     if (!row) return null;
     const config = (row.config ?? {}) as IntegrationConfig;
+    const storedSecret = config.secret ? deps.cipher.decrypt(config.secret) : null;
+    const plainSecret = inboundSecret(row.provider as IntegrationProvider, storedSecret);
     return {
       id: row.id,
       status: row.status as IntegrationStatus,
-      config,
+      config: { ...config, secret: plainSecret ?? undefined },
       credentials: deps.cipher.decryptAll(config.credentials),
     };
   }
@@ -316,6 +367,47 @@ export function createIntegrationsService(db: Database, deps: IntegrationsServic
           : { status: "error", lastCheckedAt: now, lastError: outcome.error.slice(0, 500) },
       )
       .where(eq(integration.id, id));
+  }
+
+  // Manager-only reveal. The list response only carries `secretSet`.
+  async function revealSecret(
+    organizationId: string,
+    id: string,
+  ): Promise<{ secret: string } | null> {
+    const row = await findRow(organizationId, id);
+    if (!row) return null;
+    const config = (row.config ?? {}) as IntegrationConfig;
+    const secret = config.secret ? deps.cipher.decrypt(config.secret) : null;
+    return secret ? { secret } : null;
+  }
+
+  async function rotateSecret(
+    organizationId: string,
+    id: string,
+  ): Promise<{ secret: string } | null> {
+    const row = await findRow(organizationId, id);
+    if (!row) return null;
+    const secret = randomBytes(24).toString("hex");
+    const config = (row.config ?? {}) as IntegrationConfig;
+    await db
+      .update(integration)
+      .set({
+        config: { ...config, secret: deps.cipher.encrypt(secret) },
+        status: "pending",
+        lastError: null,
+      })
+      .where(and(eq(integration.id, id), eq(integration.organizationId, organizationId)));
+    return { secret };
+  }
+
+  // Some native providers sign with an app-level secret Tacto already holds
+  // (Shopify app secret, HubSpot client secret). Use it when the user did not
+  // paste a per-connection secret.
+  function inboundSecret(provider: IntegrationProvider, stored: string | null): string | null {
+    if (stored) return stored;
+    if (provider === "shopify") return deps.server.shopify?.apiSecret ?? null;
+    if (provider === "hubspot") return deps.server.hubspot?.clientSecret ?? null;
+    return null;
   }
 
   async function findRow(organizationId: string, id: string): Promise<IntegrationRow | null> {

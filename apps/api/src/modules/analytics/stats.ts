@@ -6,6 +6,8 @@
 
 // Below this many views per arm, a result is noise regardless of the p-value.
 export const MIN_SAMPLE_PER_ARM = 100;
+// A winner should also have real click volume, not just views.
+export const MIN_CLICKS_PER_ARM = 5;
 export const SIGNIFICANCE_LEVEL = 0.05;
 
 // Wilson score interval — behaves sensibly at small samples and at rates near

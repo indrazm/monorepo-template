@@ -34,16 +34,25 @@ describe("integrations service", () => {
   it("auto-generates a signing secret for a webhook integration", async () => {
     const created = await service.create("org-a", { provider: "webhook", config: {} });
     expect(created.provider).toBe("webhook");
-    expect(created.config.secret).toBeTruthy();
-    expect((created.config.secret ?? "").length).toBeGreaterThanOrEqual(32);
+    expect(created.secretSet).toBe(true);
+    const revealed = await service.revealSecret("org-a", created.id);
+    expect(revealed?.secret.length).toBeGreaterThanOrEqual(32);
     // A fresh connection has not proven itself yet (FR-INT-04).
     expect(created.status).toBe("pending");
   });
 
   it("does not mint a secret for providers that sign with their own", async () => {
     const created = await service.create("org-a", { provider: "stripe", config: {} });
-    expect(created.config.secret).toBeUndefined();
+    expect(created.secretSet).toBe(false);
     expect(created.status).toBe("pending");
+  });
+
+  it("never returns the signing secret in list responses", async () => {
+    const created = await service.create("org-a", { provider: "webhook", config: {} });
+    const listed = (await service.list("org-a")).find((row) => row.id === created.id);
+    expect(listed?.secretSet).toBe(true);
+    expect(listed?.config).not.toHaveProperty("secret");
+    expect(await service.revealSecret("org-b", created.id)).toBeNull();
   });
 
   it("lists and scopes delete to the owning org", async () => {

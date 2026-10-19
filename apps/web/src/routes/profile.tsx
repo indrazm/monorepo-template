@@ -9,7 +9,7 @@ export const Route = createFileRoute("/profile")({
       await context.queryClient.ensureQueryData(meQueryOptions);
     } catch (error) {
       if (error instanceof UnauthorizedApiError) {
-        throw redirect({ to: "/login" });
+        throw redirect({ to: "/login", search: {} });
       }
 
       throw error;

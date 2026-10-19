@@ -332,7 +332,9 @@ function IntegrationRow({
               update.mutate(
                 {
                   id: integration.id,
-                  patch: { status: integration.status === "disabled" ? "connected" : "disabled" },
+                  // Re-enabling returns to pending; only a verified delivery can
+                  // promote the connection to connected.
+                  patch: { status: integration.status === "disabled" ? "pending" : "disabled" },
                 },
                 {
                   onSuccess: () =>

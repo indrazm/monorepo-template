@@ -10,6 +10,11 @@ export function createRateLimiter(options: { limit: number; windowMs: number }):
 
   return async function take(key: string): Promise<boolean> {
     const now = Date.now();
+    if (buckets.size > 10_000) {
+      for (const [bucketKey, bucket] of buckets) {
+        if (bucket.resetAt <= now) buckets.delete(bucketKey);
+      }
+    }
     const bucket = buckets.get(key);
     if (!bucket || bucket.resetAt <= now) {
       buckets.set(key, { count: 1, resetAt: now + options.windowMs });

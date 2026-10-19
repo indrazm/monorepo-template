@@ -90,7 +90,7 @@ describe("display targeting (FR-NED-07)", () => {
     expect(Object.keys(parseParams(many)).length).toBe(20);
   });
 
-  it("keys the payload cache only on what can change targeting", () => {
+  it("keys the payload cache on arbitrary params and the full referrer", () => {
     const a = targetingCacheKey({
       url: "/",
       params: { utm_source: "ads", session: "abc" },
@@ -103,10 +103,12 @@ describe("display targeting (FR-NED-07)", () => {
       referrer: "https://google.com/other",
       visitor: "new",
     });
-    // Noise params, the referrer path and the URL are not part of the key.
-    expect(a).toBe(b);
+    // Custom params and the referrer path can change targeting, so they must
+    // not share a cache entry.
+    expect(a).not.toBe(b);
     expect(a).toContain("utm_source=ads");
-    expect(a).toContain("google.com");
+    expect(a).toContain("session=abc");
+    expect(a).toContain("search?q=secret");
 
     const different = targetingCacheKey({ url: "/", params: { utm_source: "seo" } });
     expect(different).not.toBe(a);

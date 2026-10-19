@@ -13,6 +13,7 @@ export const Route = createFileRoute("/verify-email")({
     // Better Auth appends `error` when the token is invalid, expired or unknown.
     error: typeof search.error === "string" ? search.error : "",
     email: typeof search.email === "string" ? search.email : "",
+    redirect: typeof search.redirect === "string" ? search.redirect : "",
   }),
   component: VerifyEmailPage,
 });
@@ -25,7 +26,7 @@ const errorMessages: Record<string, string> = {
 };
 
 function VerifyEmailPage() {
-  const { verified, error, email } = Route.useSearch();
+  const { verified, error, email, redirect } = Route.useSearch();
   const navigate = useNavigate();
   // The activation link redirects here with `?verified=1`. A mail client or the
   // ngrok interstitial can strip that query on the cross-site hop, so we also
@@ -42,10 +43,14 @@ function VerifyEmailPage() {
   useEffect(() => {
     if (!success) return;
     const timer = setTimeout(() => {
+      if (redirect.startsWith("/") && !redirect.startsWith("//")) {
+        window.location.assign(redirect);
+        return;
+      }
       void navigate({ to: "/" });
     }, 1200);
     return () => clearTimeout(timer);
-  }, [success, navigate]);
+  }, [success, navigate, redirect]);
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
@@ -80,7 +85,9 @@ function VerifyEmailPage() {
                 </p>
                 <ResendVerification defaultEmail={email} />
                 <Button asChild variant="link" className="justify-start px-0">
-                  <Link to="/login">Back to login</Link>
+                  <Link to="/login" search={{}}>
+                    Back to login
+                  </Link>
                 </Button>
               </div>
             )}

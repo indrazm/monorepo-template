@@ -18,7 +18,7 @@ import {
   SidebarTrigger,
 } from "@repo/ui/components/sidebar";
 import { toast } from "@repo/ui/components/sonner";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
   BarChart3Icon,
@@ -34,6 +34,7 @@ import {
   UsersIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { authClient } from "../../api";
 import { meQueryOptions, useLogoutMutation } from "../auth/hooks/use-auth";
 import { ThemeSelector } from "@repo/ui/components/theme-selector";
 import { ChatWidget } from "../support/chat-widget";
@@ -86,6 +87,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
+          <OrganizationSwitcher />
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
@@ -173,6 +175,46 @@ export function AppShell({ children }: { children: ReactNode }) {
       </SidebarInset>
       <ChatWidget />
     </SidebarProvider>
+  );
+}
+
+// Multi-organization users need an explicit way to choose the tenant; without
+// it, team/profile pages silently used the first org in the list.
+function OrganizationSwitcher() {
+  const queryClient = useQueryClient();
+  const orgs = useQuery({
+    queryKey: ["organizations"],
+    queryFn: async () => (await authClient.organization.list()).data ?? [],
+  });
+  const session = useQuery({
+    queryKey: ["session", "active-organization"],
+    queryFn: async () => (await authClient.getSession()).data,
+  });
+  const activeId = (session.data?.session as { activeOrganizationId?: string | null } | undefined)
+    ?.activeOrganizationId;
+  const switchOrganization = useMutation({
+    mutationFn: (organizationId: string) => authClient.organization.setActive({ organizationId }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries();
+      window.location.reload();
+    },
+  });
+
+  if (!orgs.data || orgs.data.length < 2) return null;
+  return (
+    <select
+      className="mt-2 w-full rounded-md border bg-background px-2 py-1.5 text-sm group-data-[collapsible=icon]:hidden"
+      aria-label="Active organization"
+      value={activeId ?? orgs.data[0]?.id}
+      disabled={switchOrganization.isPending}
+      onChange={(event) => switchOrganization.mutate(event.target.value)}
+    >
+      {orgs.data.map((organization) => (
+        <option key={organization.id} value={organization.id}>
+          {organization.name}
+        </option>
+      ))}
+    </select>
   );
 }
 

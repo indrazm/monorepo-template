@@ -104,21 +104,13 @@ export function parseParams(query: string | null | undefined): Record<string, st
 }
 
 // The part of the visit context that can change which notifications are served.
-// Used in the payload cache key, kept low-cardinality: only utm-ish params and
-// the referrer host matter, not the full referring URL.
+// Used in the payload cache key. Include every query param (targeting supports
+// arbitrary names, not only utm_*) and the full referrer (contains/regex rules
+// can match its path). The resulting key is hashed before it reaches Redis.
 export function targetingCacheKey(context: VisitContext): string {
   const params = Object.entries(context.params ?? {})
-    .filter(([name]) => name.startsWith("utm_") || name === "gclid" || name === "fbclid")
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, value]) => `${name}=${value}`)
     .join("&");
-  let referrerHost = "";
-  if (context.referrer) {
-    try {
-      referrerHost = new URL(context.referrer).hostname.toLowerCase();
-    } catch {
-      referrerHost = "invalid";
-    }
-  }
-  return `${params}|${referrerHost}|${context.visitor ?? ""}`;
+  return `${params}|${context.referrer ?? ""}|${context.visitor ?? ""}`;
 }

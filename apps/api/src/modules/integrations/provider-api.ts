@@ -1,3 +1,5 @@
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import type { IntegrationProvider } from "@repo/contracts/integrations";
 
 // ---------------------------------------------------------------------------
@@ -55,15 +57,51 @@ type RequestOptions = {
 
 type HttpResult = { ok: boolean; status: number; json: unknown; text: string };
 
+function privateIp(address: string): boolean {
+  if (address.includes(":")) {
+    const ip = address.toLowerCase();
+    return ip === "::1" || ip.startsWith("fc") || ip.startsWith("fd") || ip.startsWith("fe80");
+  }
+  const [a, b] = address.split(".").map(Number);
+  return (
+    address === "0.0.0.0" ||
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && (b ?? 0) >= 16 && (b ?? 0) <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
+
+// Blocks SSRF: only public HTTPS hosts may be called with customer credentials.
+async function assertSafeUrl(value: string): Promise<void> {
+  const url = new URL(value);
+  if (url.protocol !== "https:") throw new Error("Provider URL must use HTTPS.");
+  const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost")) {
+    throw new Error("Provider URL must be public.");
+  }
+  if (isIP(host)) {
+    if (privateIp(host)) throw new Error("Provider URL must be public.");
+    return;
+  }
+  const resolved = await lookup(host, { all: true });
+  if (resolved.length === 0 || resolved.some((entry) => privateIp(entry.address))) {
+    throw new Error("Provider URL must resolve to a public address.");
+  }
+}
+
 // Thin fetch wrapper: never throws, always reports something printable.
 async function request(url: string, options: RequestOptions = {}): Promise<HttpResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
+    await assertSafeUrl(url);
     const response = await fetch(url, {
       method: options.method ?? "GET",
       headers: options.headers,
       body: options.body,
+      redirect: "manual",
       signal: controller.signal,
     });
     const text = await response.text();
@@ -199,7 +237,7 @@ function shopifyHost(credentials: ProviderCredentials): string | null {
   const raw = credentials.shopDomain?.trim().toLowerCase();
   if (!raw) return null;
   const host = raw.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-  return /^[a-z0-9-]+(\.myshopify\.com|\.[a-z.]+)$/.test(host) ? host : null;
+  return /^[a-z0-9-]+\.myshopify\.com$/.test(host) ? host : null;
 }
 
 const shopifyApi: ProviderApi = {

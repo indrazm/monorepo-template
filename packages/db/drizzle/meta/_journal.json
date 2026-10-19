@@ -134,6 +134,20 @@
       "when": 1792387495983,
       "tag": "0018_flawless_wildside",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792413000358,
+      "tag": "0019_perfect_shooting_star",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792413829748,
+      "tag": "0020_luxuriant_black_bird",
+      "breakpoints": true
     }
   ]
 }

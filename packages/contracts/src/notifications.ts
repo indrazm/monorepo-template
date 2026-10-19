@@ -273,6 +273,36 @@ export const notificationConfigSchema = z.object({
   variants: z.array(notificationVariantSchema).min(2).max(6).optional(),
 });
 
+// Type-aware requirements that cannot be expressed by the flat config object
+// alone. Returns a human message for the dashboard, or null when valid.
+export function notificationTypeConfigIssue(
+  type: z.output<typeof notificationTypeSchema>,
+  config: z.output<typeof notificationConfigSchema>,
+): string | null {
+  if (type === "countdown" && !config.countdown?.endsAt) {
+    return "Choose the countdown end date.";
+  }
+  if (type === "review" && (config.reviews?.length ?? 0) === 0) {
+    return "Add at least one review.";
+  }
+  if (type === "social_counter" && !config.socialCounter) {
+    return "Add the social counter value.";
+  }
+  if (type === "youtube" && !config.youtube) {
+    return "Add the YouTube subscriber/view count.";
+  }
+  if (type === "spin_to_win" && (config.spin?.prizes.length ?? 0) < 2) {
+    return "Add at least two spin prizes.";
+  }
+  if (type === "bar" && !["top-bar", "bottom-bar"].includes(config.style.position)) {
+    return "A notification bar must use the top-bar or bottom-bar position.";
+  }
+  if ((type === "popup" || type === "spin_to_win") && config.style.position !== "center") {
+    return "This widget must use the center position.";
+  }
+  return null;
+}
+
 export const createNotificationSchema = z.object({
   siteId: z.string().trim().min(1),
   name: z.string().trim().min(1).max(120).default("Untitled notification"),

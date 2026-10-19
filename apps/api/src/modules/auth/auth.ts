@@ -2,12 +2,19 @@ import { randomUUID } from "node:crypto";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
 import { admin, organization, twoFactor } from "better-auth/plugins";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import type { Database } from "@repo/db";
-import { member, organization as organizationTable, subscription } from "@repo/db/schema";
+import {
+  integration,
+  member,
+  organization as organizationTable,
+  site,
+  subscription,
+} from "@repo/db/schema";
 import type { createApiConfig } from "../../config";
 import * as schema from "@repo/db/schema";
 import {
+  changeEmailEmailContent,
   invitationEmailContent,
   passwordResetEmailContent,
   verificationEmailContent,
@@ -35,6 +42,10 @@ export function createAuth(
     telemetry: { enabled: false },
     baseURL: config.url,
     advanced: {
+      ipAddress: {
+        ipAddressHeaders: ["x-forwarded-for"],
+        ...(config.trustedProxies.length > 0 ? { trustedProxies: config.trustedProxies } : {}),
+      },
       cookies: {
         session_token: { attributes: sessionCookieAttributes },
         session_data: { attributes: sessionCookieAttributes },
@@ -53,7 +64,52 @@ export function createAuth(
     // user's sessions/accounts; domain data is scoped to the org, removed
     // separately when the org is deleted.
     user: {
-      deleteUser: { enabled: true },
+      changeEmail: {
+        enabled: true,
+        // Verified accounts confirm the change from their current inbox, so a
+        // hijacked session cannot silently move the login email.
+        sendChangeEmailConfirmation: async ({ user, newEmail, url }) => {
+          await mailer.send({
+            to: user.email,
+            ...changeEmailEmailContent({ name: user.name, newEmail, url, appUrl }),
+          });
+        },
+      },
+      deleteUser: {
+        enabled: true,
+        // A sole owner taking their account away must not leave an orphaned
+        // workspace (sites, events, PII, subscription). Other memberships are
+        // removed by the auth cascade.
+        beforeDelete: async (user) => {
+          const memberships = await db
+            .select({ organizationId: member.organizationId, role: member.role })
+            .from(member)
+            .where(eq(member.userId, user.id));
+          for (const membership of memberships) {
+            const [row] = await db
+              .select({ value: count() })
+              .from(member)
+              .where(eq(member.organizationId, membership.organizationId));
+            if ((row?.value ?? 0) !== 1 || membership.role !== "owner") continue;
+            const sites = await db
+              .select({ id: site.id })
+              .from(site)
+              .where(eq(site.organizationId, membership.organizationId));
+            for (const ownedSite of sites) {
+              await db.delete(site).where(eq(site.id, ownedSite.id));
+            }
+            await db
+              .delete(integration)
+              .where(eq(integration.organizationId, membership.organizationId));
+            await db
+              .delete(subscription)
+              .where(eq(subscription.organizationId, membership.organizationId));
+            await db
+              .delete(organizationTable)
+              .where(eq(organizationTable.id, membership.organizationId));
+          }
+        },
+      },
     },
     emailAndPassword: {
       enabled: true,

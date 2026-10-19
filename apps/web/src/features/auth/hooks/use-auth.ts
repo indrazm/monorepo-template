@@ -9,7 +9,13 @@ export const meQueryOptions = queryOptions({
   retry: false,
 });
 
-export function useLoginMutation() {
+// `redirect` is an internal path captured by the route guard (e.g. an
+// invitation link). Only same-origin absolute paths are accepted.
+function safeRedirect(value: string | undefined): string | null {
+  return value && value.startsWith("/") && !value.startsWith("//") ? value : null;
+}
+
+export function useLoginMutation(redirect?: string) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -17,6 +23,11 @@ export function useLoginMutation() {
     mutationFn: login,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: authQueryKey });
+      const target = safeRedirect(redirect);
+      if (target) {
+        window.location.assign(target);
+        return;
+      }
       await navigate({ to: "/" });
     },
   });
@@ -39,7 +50,7 @@ export function useLogoutMutation() {
     mutationFn: logout,
     onSuccess: async () => {
       queryClient.removeQueries({ queryKey: authQueryKey });
-      await navigate({ to: "/login" });
+      await navigate({ to: "/login", search: {} });
     },
   });
 }

@@ -211,13 +211,14 @@ export const integrationMeta: Record<IntegrationProvider, IntegrationMeta> = {
     header: "X-BC-Signature (hex HMAC-SHA256)",
     docsUrl: "https://developer.bigcommerce.com/docs/integrations/webhooks",
   },
-  wix: {
-    label: "Wix",
-    group: "E-commerce",
-    auth: "webhook_secret",
-    header: "X-Wix-Signature (base64 HMAC-SHA256)",
-    docsUrl: "https://dev.wix.com/docs/rest/articles/getting-started/webhooks",
-  },
+  // Wix sends a signed JWT in the body, not an HMAC header. Until JWT
+  // verification is implemented, the honest path is Zapier/Make forwarding with
+  // Tacto's generated secret.
+  wix: forwarded(
+    "Wix",
+    "E-commerce",
+    "https://dev.wix.com/docs/rest/articles/getting-started/webhooks",
+  ),
   squarespace: forwarded("Squarespace", "E-commerce"),
   ecwid: {
     label: "Ecwid",
@@ -464,20 +465,29 @@ export const createIntegrationSchema = z.object({
 });
 export type CreateIntegrationInput = z.output<typeof createIntegrationSchema>;
 
-// A connect wizard patches the config step by step.
+// A connect wizard patches the config step by step. `connected` is never
+// client-settable: only a verified delivery (or a successful Verify call) may
+// promote a connection. Re-enabling a paused connection returns it to pending.
 export const updateIntegrationSchema = z.object({
   config: integrationConfigSchema.partial().optional(),
-  status: z.enum(["connected", "disabled"]).optional(),
+  status: z.enum(["pending", "disabled"]).optional(),
 });
 export type UpdateIntegrationInput = z.output<typeof updateIntegrationSchema>;
 
-// What the API returns. Credentials are reduced to the list of keys that are
-// set, so the dashboard can show "configured" without exposing the values.
+// What the API returns. Credentials and the inbound signing secret are omitted
+// entirely; the dashboard only learns whether a secret is set.
+export const integrationConfigPublicSchema = integrationConfigSchema.omit({
+  credentials: true,
+  secret: true,
+});
+export type IntegrationPublicConfig = z.output<typeof integrationConfigPublicSchema>;
+
 export const integrationSchema = z.object({
   id: z.string(),
   provider: integrationProviderSchema,
   status: integrationStatusSchema,
-  config: integrationConfigSchema.omit({ credentials: true }),
+  config: integrationConfigPublicSchema,
+  secretSet: z.boolean(),
   credentialKeys: z.array(z.string()),
   // Connection health (FR-INT-04).
   lastCheckedAt: z.iso.datetime().nullable(),

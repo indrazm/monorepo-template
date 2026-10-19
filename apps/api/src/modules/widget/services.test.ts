@@ -46,6 +46,8 @@ function fakeStore(overrides: Partial<RealtimeStore> = {}): RealtimeStore {
     async drainImpressions() {
       return [];
     },
+    async ackImpressions() {},
+    async requeueImpressions() {},
     async recordVisit() {},
     async countVisitors() {
       return 0;

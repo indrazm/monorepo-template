@@ -10,7 +10,7 @@ import { createShadowHost } from "./shadow";
 import { claimSpin } from "./spin";
 import { track } from "./track";
 import { visit } from "./visit";
-import type { WidgetPayloadResponse } from "@repo/contracts/widget";
+import type { WidgetNotification, WidgetPayloadResponse } from "@repo/contracts/widget";
 
 // Captured at synchronous eval time (document.currentScript is null later).
 const currentScript =
@@ -31,9 +31,9 @@ function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string)
   // Auto-capture is independent of having notifications to show.
   const cleanupCapture = attachCapture(apiBase, siteKey);
   let cleanupInline: () => void = () => undefined;
-  let stopScheduler: (() => void) | null = null;
+  const stopSchedulers: (() => void)[] = [];
   const cleanup = () => {
-    stopScheduler?.();
+    for (const stop of stopSchedulers) stop();
     cleanupInline();
     cleanupCapture();
     started = false;
@@ -114,26 +114,37 @@ function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string)
 
   if (floating.length === 0) return cleanup;
 
-  const position = floating[0]?.style.position ?? "bottom-left";
-  const host = createShadowHost(position);
-
-  // Per-domain custom CSS, scoped to the widget's shadow root (FR-NGS-04).
-  if (payload.settings.customCss) {
-    const custom = document.createElement("style");
-    custom.textContent = payload.settings.customCss;
-    host.root.appendChild(custom);
+  // One host per position: a bar and a corner card must not share the same
+  // stack (their CSS anchors differ). Each group runs its own scheduler.
+  const byPosition = new Map<string, WidgetNotification[]>();
+  for (const notification of floating) {
+    const position = notification.style.position;
+    const group = byPosition.get(position) ?? [];
+    group.push(notification);
+    byPosition.set(position, group);
   }
 
-  stopScheduler = startScheduler({
-    host,
-    siteKey,
-    notifications: floating,
-    settings: payload.settings,
-    onView: emitView,
-    onClick: emitClick,
-    onClaim: emitClaim,
-    onSpinClaim,
-  });
+  for (const [position, notifications] of byPosition) {
+    const host = createShadowHost(position);
+    // Per-domain custom CSS, scoped to the widget's shadow root (FR-NGS-04).
+    if (payload.settings.customCss) {
+      const custom = document.createElement("style");
+      custom.textContent = payload.settings.customCss;
+      host.root.appendChild(custom);
+    }
+    stopSchedulers.push(
+      startScheduler({
+        host,
+        siteKey,
+        notifications,
+        settings: payload.settings,
+        onView: emitView,
+        onClick: emitClick,
+        onClaim: emitClaim,
+        onSpinClaim,
+      }),
+    );
+  }
   return cleanup;
 }
 

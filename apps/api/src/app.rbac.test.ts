@@ -23,6 +23,7 @@ function app() {
   return createApp({
     db,
     config: {
+      metricsToken: null,
       clientOrigins: ["http://localhost:3000"],
       stripe: {
         secretKey: "sk_test_x",

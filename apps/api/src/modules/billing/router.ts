@@ -202,6 +202,11 @@ export function createBillingRouter(
         } catch {
           return c.json(apiError("validation_error"), 400);
         }
+        const eventId = (raw as { id?: unknown }).id;
+        if (typeof eventId === "string" && !(await service.claimWebhookEvent("stripe", eventId))) {
+          // Already applied: acknowledge Stripe without touching state again.
+          return c.json({ received: true }, 200);
+        }
         const update = parseBillingEvent(raw, stripe.prices);
         if (update) await service.updatePlan(update);
         return c.json({ received: true }, 200);

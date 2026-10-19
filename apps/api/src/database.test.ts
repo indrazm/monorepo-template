@@ -33,6 +33,7 @@ const app = createApp({
   },
   db,
   config: {
+    metricsToken: null,
     clientOrigins: ["http://localhost:3000"],
     stripe: {
       secretKey: null,

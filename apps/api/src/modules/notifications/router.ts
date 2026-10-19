@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   createNotificationSchema,
   listNotificationsQuerySchema,
+  notificationTypeConfigIssue,
   updateNotificationSchema,
 } from "@repo/contracts/notifications";
 import { type AuthVariables, requireOrg } from "../auth/middleware";
@@ -85,6 +86,10 @@ export function createNotificationsRouter(
           const input = c.req.valid("json");
           if (!(await service.planAllows(organizationId, input.type))) {
             return c.json(apiError("plan_limit_reached"), 403);
+          }
+          const configIssue = notificationTypeConfigIssue(input.type, input.config);
+          if (configIssue) {
+            return c.json(apiError("validation_error", { message: configIssue }), 400);
           }
           const notification = await service.create(organizationId, input);
           if (!notification) return c.json(apiError("site_not_found"), 404);

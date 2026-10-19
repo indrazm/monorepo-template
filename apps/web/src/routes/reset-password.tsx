@@ -27,7 +27,7 @@ function ResetPasswordPage() {
     mutationFn: () => resetPassword(token, password),
     onSuccess: async () => {
       toast.success("Password updated — please log in.");
-      await navigate({ to: "/login" });
+      await navigate({ to: "/login", search: {} });
     },
     onError: (error) => {
       // A used or expired link fails server-side with INVALID_TOKEN; the token
@@ -63,7 +63,9 @@ function ResetPasswordPage() {
                 <Link to="/forgot-password">Request a new link</Link>
               </Button>
               <Button asChild variant="link" className="justify-start px-0">
-                <Link to="/login">Back to login</Link>
+                <Link to="/login" search={{}}>
+                  Back to login
+                </Link>
               </Button>
             </>
           ) : token ? (

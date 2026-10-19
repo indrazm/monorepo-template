@@ -109,8 +109,11 @@ export function createSitesRouter(
       })
       // Inject a demo event so the user can preview a notification (feedback T5).
       .post("/:id/test-event", async (c) => {
-        const organizationId = requireOrg(c);
-        if (!organizationId) return c.json(apiError("unauthorized"), 401);
+        // A demo event must never be injectable by a plain member: it controls
+        // what visitors see on the public site.
+        const allowed = requireRole(c, ...MANAGER_ROLES);
+        if ("error" in allowed) return c.json(apiError(allowed.error), roleStatus(allowed.error));
+        const { organizationId } = allowed;
         const ok = await service.sendTestEvent(organizationId, c.req.param("id"));
         if (ok === null) return c.json(apiError("site_not_found"), 404);
         return c.json({ ok: true }, 201);
@@ -151,7 +154,11 @@ export function createSitesRouter(
         const allowed = requireRole(c, ...MANAGER_ROLES);
         if ("error" in allowed) return c.json(apiError(allowed.error), roleStatus(allowed.error));
         const { organizationId } = allowed;
-        const removed = await service.purgeEvents(organizationId, c.req.param("id"));
+        const removed = await service.purgeEvents(
+          organizationId,
+          c.req.param("id"),
+          c.req.query("includeAnalytics") === "true",
+        );
         if (removed === null) return c.json(apiError("site_not_found"), 404);
         return c.json({ removed }, 200);
       })

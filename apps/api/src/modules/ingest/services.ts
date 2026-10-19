@@ -49,6 +49,18 @@ export type IngestServiceDeps = {
     eventType: EventType,
     dedupeKey?: string | null,
   ) => Promise<void> | void;
+  // Resolves the integration for this site/provider with its secret decrypted
+  // (production). Tests and unit callers fall back to the plaintext row below.
+  resolveIntegration?: (
+    organizationId: string,
+    provider: string,
+    siteKey: string,
+  ) => Promise<{
+    id: string;
+    status: string;
+    config: IntegrationConfig;
+    credentials: Record<string, string>;
+  } | null>;
 };
 
 export function createIngestService(
@@ -77,34 +89,44 @@ export function createIngestService(
       .limit(1);
     if (!siteRow) return "not_found";
 
-    const [integrationRow] = await db
-      .select({
-        id: integration.id,
-        config: integration.config,
-        status: integration.status,
-      })
-      .from(integration)
-      .where(
-        and(
-          eq(integration.organizationId, siteRow.organizationId),
-          eq(integration.provider, input.provider),
-        ),
-      )
-      .orderBy(asc(integration.createdAt))
-      .limit(1);
-    const config = integrationRow?.config as IntegrationConfig | undefined;
-    const integrationId = integrationRow?.id;
-    if (integrationRow?.status === "disabled") return "disabled";
+    const resolved = deps.resolveIntegration
+      ? await deps.resolveIntegration(siteRow.organizationId, input.provider, input.siteKey)
+      : null;
+    let config: IntegrationConfig | undefined;
+    let integrationId: string | undefined;
+    let integrationStatus: string | undefined;
+    if (resolved) {
+      config = resolved.config;
+      integrationId = resolved.id;
+      integrationStatus = resolved.status;
+    } else if (!deps.resolveIntegration) {
+      // Unit-test fallback: the row stores a plaintext secret.
+      const [integrationRow] = await db
+        .select({
+          id: integration.id,
+          config: integration.config,
+          status: integration.status,
+        })
+        .from(integration)
+        .where(
+          and(
+            eq(integration.organizationId, siteRow.organizationId),
+            eq(integration.provider, input.provider),
+          ),
+        )
+        .orderBy(asc(integration.createdAt))
+        .limit(1);
+      config = integrationRow?.config as IntegrationConfig | undefined;
+      integrationId = integrationRow?.id;
+      integrationStatus = integrationRow?.status;
+    }
+    if (integrationStatus === "disabled") return "disabled";
 
     const secret = config?.secret;
     if (!secret) return "unauthorized";
     if (!connector.verify({ rawBody: input.rawBody, headers: input.headers, secret })) {
-      // Record *why* the delivery was rejected so the dashboard can show it
-      // instead of the user guessing (FR-INT-04).
-      await markDelivery(integrationId, {
-        ok: false,
-        error: `Signature check failed for ${input.provider}. Expected ${connector.provider} signature or x-tacto-signature.`,
-      });
+      // Do not mutate integration health on an unauthenticated request: an
+      // attacker with the public siteKey could otherwise force a false outage.
       return "unauthorized";
     }
 

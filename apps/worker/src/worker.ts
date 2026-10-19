@@ -54,6 +54,7 @@ export function runWorker(config: ReturnType<typeof createWorkerConfig>) {
       connection: createQueueConnection(config.redisUrl),
     });
     worker.on("ready", () => console.info("Queue listening", { queue: name }));
+    worker.on("error", (error) => console.error("Queue error", { queue: name }, error));
     worker.on("completed", (job) => console.info("Job completed", { queue: name, jobId: job.id }));
     worker.on("failed", (job, error) =>
       console.error("Job failed", { queue: name, jobId: job?.id }, error),

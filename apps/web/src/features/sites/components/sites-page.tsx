@@ -38,6 +38,7 @@ import {
   sitesQueryOptions,
   useCreateSiteMutation,
   useDeleteSiteMutation,
+  useUpdateSiteMutation,
 } from "../hooks/use-sites";
 
 export function SitesPage() {
@@ -85,6 +86,7 @@ export function SitesPage() {
                   )}
                   <div className="flex items-center gap-1">
                     <InstallSiteButton site={site} />
+                    <EditSiteButton site={site} />
                     <SiteSettingsDialog siteId={site.id} />
                     <DeleteSiteButton id={site.id} name={site.name} />
                   </div>
@@ -212,6 +214,74 @@ function CreateSiteDialog() {
   );
 }
 
+function EditSiteButton({ site }: { site: Site }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(site.name);
+  const [domain, setDomain] = useState(site.domain);
+  const update = useUpdateSiteMutation();
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    update.mutate(
+      { id: site.id, name: name.trim(), domain: domain.trim() },
+      {
+        onSuccess: () => {
+          toast.success("Site updated");
+          setOpen(false);
+        },
+        onError: (error) => toast.error(error.message),
+      },
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm">
+          Edit
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit site</DialogTitle>
+          <DialogDescription>Rename the site or correct its domain.</DialogDescription>
+        </DialogHeader>
+        <form className="grid gap-4" onSubmit={submit}>
+          <div className="grid gap-2">
+            <Label htmlFor={`site-name-${site.id}`}>Name</Label>
+            <Input
+              id={`site-name-${site.id}`}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor={`site-domain-${site.id}`}>Domain</Label>
+            <Input
+              id={`site-domain-${site.id}`}
+              value={domain}
+              onChange={(event) => setDomain(event.target.value)}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              Bare domain only — no http:// and no /path.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={update.isPending}>
+              {update.isPending ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function DeleteSiteButton({ id, name }: { id: string; name: string }) {
   const deleteSite = useDeleteSiteMutation();
   return (
@@ -318,7 +388,12 @@ function InstallSiteButton({ site }: { site: Site }) {
     mutationFn: () => verifySite(site.id),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: sitesQueryKey });
-      if (result.verified) toast.success("Pixel detected — you're all set.");
+      if (result.verified && result.recentlyActive)
+        toast.success("Pixel detected and active — you're all set.");
+      else if (result.verified)
+        toast.message("Pixel verified earlier but not active recently", {
+          description: "Open your site in a browser to send a fresh payload.",
+        });
       else
         toast.message("Pixel not detected yet", {
           description: "Make sure the snippet is live on your site, then check again.",

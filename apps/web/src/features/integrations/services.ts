@@ -41,6 +41,15 @@ export async function verifyIntegration(id: string): Promise<VerifyIntegrationRe
   return await response.json();
 }
 
+// Manager-only reveal of the signing secret; the list response only says
+// whether one is set.
+export async function revealIntegrationSecret(id: string): Promise<string | null> {
+  const response = await integrations[":id"].secret.$get({ param: { id } });
+  if (response.status === 403 || response.status === 404) return null;
+  if (!response.ok) throw new Error("Failed to reveal the signing secret.");
+  return (await response.json()).secret;
+}
+
 export async function deleteIntegration(id: string): Promise<void> {
   const response = await integrations[":id"].$delete({ param: { id } });
   if (!response.ok) throw new Error("Failed to remove integration.");

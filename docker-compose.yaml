@@ -36,6 +36,11 @@ services:
     image: tacto-api
     container_name: tacto-api
     restart: unless-stopped
+    # Bring in the full application env (Resend, Stripe, integration keys,
+    # PUBLIC_API_URL, credentials secret, metrics token). Explicit environment
+    # values below still win for container-specific URLs.
+    env_file:
+      - .env
     environment:
       NODE_ENV: "production"
       API_PORT: "8000"
@@ -69,6 +74,8 @@ services:
     image: tacto-api
     container_name: tacto-worker
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       NODE_ENV: "production"
       DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/tacto}"

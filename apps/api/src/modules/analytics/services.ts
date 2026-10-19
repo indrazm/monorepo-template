@@ -5,6 +5,7 @@ import { event, impression, notification, site } from "@repo/db/schema";
 import type { Activation, AnalyticsSummary } from "@repo/contracts/analytics";
 import type { EventRecord } from "@repo/contracts/events";
 import {
+  MIN_CLICKS_PER_ARM,
   MIN_SAMPLE_PER_ARM,
   SIGNIFICANCE_LEVEL,
   twoProportionPValue,
@@ -217,14 +218,21 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
         runnerUp.clicks,
         runnerUp.views,
       );
-      const enoughData = leader.views >= MIN_SAMPLE_PER_ARM && runnerUp.views >= MIN_SAMPLE_PER_ARM;
+      const enoughData =
+        leader.views >= MIN_SAMPLE_PER_ARM &&
+        runnerUp.views >= MIN_SAMPLE_PER_ARM &&
+        leader.clicks >= MIN_CLICKS_PER_ARM &&
+        runnerUp.clicks >= MIN_CLICKS_PER_ARM;
+      // Bonferroni correction: with up to five arms, the leader is compared
+      // against the runner-up at alpha / (arms - 1), not a flat 5%.
+      const adjustedLevel = SIGNIFICANCE_LEVEL / Math.max(1, arms.length - 1);
       abTests.push({
         notificationId,
         name: metaById.get(notificationId)?.name ?? "Notification",
         leaderVariantId: leader.variantId,
         runnerUpVariantId: runnerUp.variantId,
         pValue,
-        significant: enoughData && pValue !== null && pValue < SIGNIFICANCE_LEVEL,
+        significant: enoughData && pValue !== null && pValue < adjustedLevel,
         enoughData,
       });
     }
@@ -331,7 +339,11 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
     if (!(await siteInOrg(organizationId, siteId))) return null;
     const { limit, cursor, type, source, verified, q } = filters;
 
-    let where = eq(event.siteId, siteId);
+    // Dashboard test events are a preview, not part of the customer's feed.
+    let where = and(
+      eq(event.siteId, siteId),
+      sql`coalesce((${event.payload} ->> 'test'), 'false') <> 'true'`,
+    )!;
     if (type) where = and(where, eq(event.type, type))!;
     if (source) where = and(where, eq(event.source, source))!;
     if (verified !== undefined) where = and(where, eq(event.verified, verified))!;

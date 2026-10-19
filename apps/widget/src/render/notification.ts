@@ -28,6 +28,7 @@ function decorateCard(card: HTMLElement, notification: WidgetNotification): void
   card.setAttribute("data-shape", notification.style.shape ?? "rounded");
   card.setAttribute("data-size", notification.style.size ?? "md");
   card.setAttribute("data-font", notification.style.font ?? "system");
+  card.setAttribute("data-animation", notification.style.animation ?? "slide");
   if (notification.clickUrl) card.setAttribute("data-clickable", "1");
 }
 
@@ -196,6 +197,9 @@ function renderBar(notification: WidgetNotification, options: RenderOptions): Re
   const bar = document.createElement("div");
   bar.className = "tacto-bar";
   bar.setAttribute("data-shape", notification.style.shape ?? "rounded");
+  bar.setAttribute("data-size", notification.style.size ?? "md");
+  bar.setAttribute("data-font", notification.style.font ?? "system");
+  bar.setAttribute("data-animation", notification.style.animation ?? "slide");
   bar.style.background = notification.style.accent;
 
   const icon = document.createElement("span");
@@ -230,6 +234,9 @@ function overlayWithModal(shape: string): { overlay: HTMLElement; modal: HTMLEle
 function renderPopup(notification: WidgetNotification, options: RenderOptions): RenderResult {
   const { overlay, modal } = overlayWithModal(notification.style.shape ?? "rounded");
   const close = buildClose();
+  modal.setAttribute("data-size", notification.style.size ?? "md");
+  modal.setAttribute("data-font", notification.style.font ?? "system");
+  modal.setAttribute("data-animation", notification.style.animation ?? "slide");
 
   const media = document.createElement("div");
   media.className = "tacto-modal-icon";

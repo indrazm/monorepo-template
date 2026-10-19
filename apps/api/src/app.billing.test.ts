@@ -15,6 +15,7 @@ const WEBHOOK_SECRET = "whsec_test_123";
 const app = createApp({
   db,
   config: {
+    metricsToken: null,
     clientOrigins: ["http://localhost:3000"],
     stripe: {
       secretKey: "sk_test_x",

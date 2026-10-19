@@ -15,25 +15,33 @@ import { authQueryKey } from "../features/auth/query-keys";
 import { AuthError, verifyTwoFactor } from "../features/auth/services";
 
 export const Route = createFileRoute("/login")({
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
+    redirect: typeof search.redirect === "string" ? search.redirect : undefined,
+  }),
   component: LoginPage,
 });
 
 function LoginPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { redirect } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [twoFactorPending, setTwoFactorPending] = useState(false);
   const [code, setCode] = useState("");
   const [trustDevice, setTrustDevice] = useState(false);
-  const loginMutation = useLoginMutation();
+  const loginMutation = useLoginMutation(redirect);
 
   // Completes a 2FA challenge with a TOTP code (feedback T12).
   const verifyMutation = useMutation({
     mutationFn: () => verifyTwoFactor(code.trim(), trustDevice),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: authQueryKey });
+      if (redirect && redirect.startsWith("/") && !redirect.startsWith("//")) {
+        window.location.assign(redirect);
+        return;
+      }
       await navigate({ to: "/" });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Invalid code."),
@@ -171,7 +179,9 @@ function LoginPage() {
                   </Button>
                   <div className="flex items-center justify-between">
                     <Button asChild type="button" variant="link" className="px-0">
-                      <Link to="/register">Create a user account</Link>
+                      <Link to="/register" search={{ redirect }}>
+                        Create a user account
+                      </Link>
                     </Button>
                     <Button asChild type="button" variant="link" className="px-0">
                       <Link to="/forgot-password">Forgot password?</Link>

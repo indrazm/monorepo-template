@@ -1,6 +1,6 @@
 import { apiError } from "@repo/contracts/errors";
 import { zValidator } from "@hono/zod-validator";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { ingestEventSchema } from "@repo/contracts/events";
 import { createRateLimiter, type RateLimiter } from "./rate-limit";
 import type { createIngestService } from "./services";
@@ -10,6 +10,12 @@ function readApiKey(header: string | undefined, bearer: string | undefined): str
   if (header) return header.trim();
   if (bearer?.startsWith("Bearer ")) return bearer.slice("Bearer ".length).trim();
   return null;
+}
+
+function requestIp(c: Context): string {
+  return (
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? "unknown"
+  );
 }
 
 export function createIngestRouter(
@@ -24,6 +30,10 @@ export function createIngestRouter(
         if (!result.success) return c.json(apiError("validation_error"), 400);
       }),
       async (c) => {
+        // Limit by IP before the database lookup: random/invalid API keys must
+        // not be able to drive unbounded site-key queries.
+        const ip = requestIp(c);
+        if (!(await limiter(`event-ip:${ip}`))) return c.json(apiError("rate_limited"), 429);
         const apiKey = readApiKey(c.req.header("x-api-key"), c.req.header("authorization"));
         if (!apiKey) return c.json(apiError("unauthorized"), 401);
         const siteId = await service.resolveSiteByApiKey(apiKey);
@@ -37,7 +47,11 @@ export function createIngestRouter(
     .post("/v1/webhook/:provider", async (c) => {
       const siteKey = c.req.query("site");
       if (!siteKey) return c.json(apiError("validation_error"), 400);
-      if (!(await limiter(`webhook:${siteKey}`))) return c.json(apiError("rate_limited"), 429);
+      // Key by IP + site so a public siteKey cannot be used to exhaust the
+      // shared bucket and block legitimate provider deliveries.
+      if (!(await limiter(`webhook:${siteKey}:${requestIp(c)}`))) {
+        return c.json(apiError("rate_limited"), 429);
+      }
       const rawBody = await c.req.text();
       const result = await service.processWebhook({
         siteKey,

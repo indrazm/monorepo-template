@@ -1,6 +1,6 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import type { Database } from "@repo/db";
-import { domainSetting, event, site } from "@repo/db/schema";
+import { domainSetting, event, impression, site } from "@repo/db/schema";
 import type {
   CreateSiteInput,
   DomainLoopSettings,
@@ -166,8 +166,15 @@ export function createSitesService(db: Pick<Database, "select" | "insert" | "upd
 
   // Right to erasure (NFR-PRIV-03): delete every event of the site. Impressions
   // are anonymous counters and are kept for billing/analytics accuracy.
-  async function purgeEvents(organizationId: string, siteId: string): Promise<number | null> {
+  async function purgeEvents(
+    organizationId: string,
+    siteId: string,
+    includeAnalytics = false,
+  ): Promise<number | null> {
     if (!(await ownsSite(organizationId, siteId))) return null;
+    if (includeAnalytics) {
+      await db.delete(impression).where(eq(impression.siteId, siteId));
+    }
     const rows = await db.delete(event).where(eq(event.siteId, siteId)).returning({ id: event.id });
     return rows.length;
   }

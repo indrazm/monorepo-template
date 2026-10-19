@@ -68,6 +68,23 @@ export function createIntegrationsRouter(service: IntegrationsService) {
         if (!result) return c.json(apiError("integration_not_found"), 404);
         return c.json(result, 200);
       })
+      // Reveal the signing secret only to a manager, and only on demand. It is
+      // never part of the list response.
+      .get("/:id/secret", async (c) => {
+        const allowed = manage(c);
+        if ("error" in allowed) return c.json(apiError(allowed.error), allowed.status);
+        const result = await service.revealSecret(allowed.organizationId, c.req.param("id"));
+        if (!result) return c.json(apiError("integration_not_found"), 404);
+        return c.json(result, 200);
+      })
+      // Mint a new generated secret; old deliveries stop verifying immediately.
+      .post("/:id/rotate-secret", async (c) => {
+        const allowed = manage(c);
+        if ("error" in allowed) return c.json(apiError(allowed.error), allowed.status);
+        const result = await service.rotateSecret(allowed.organizationId, c.req.param("id"));
+        if (!result) return c.json(apiError("integration_not_found"), 404);
+        return c.json(result, 200);
+      })
       .delete("/:id", async (c) => {
         const allowed = manage(c);
         if ("error" in allowed) return c.json(apiError(allowed.error), allowed.status);

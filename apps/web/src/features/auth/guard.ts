@@ -9,7 +9,11 @@ export async function ensureAuthenticated(context: { queryClient: QueryClient })
     await context.queryClient.ensureQueryData(meQueryOptions);
   } catch (error) {
     if (error instanceof UnauthorizedApiError) {
-      throw redirect({ to: "/login" });
+      const current =
+        typeof window === "undefined"
+          ? "/"
+          : `${window.location.pathname}${window.location.search}`;
+      throw redirect({ to: "/login", search: { redirect: current } });
     }
     throw error;
   }

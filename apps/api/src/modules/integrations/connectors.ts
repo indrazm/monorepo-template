@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { integrationMeta, webhookEventSchema } from "@repo/contracts/integrations";
 import type {
   IntegrationAuthKind,
@@ -71,13 +71,24 @@ function match(value: string, expected: string, prefix?: string): boolean {
 }
 
 // Parses composite signature headers like `t=123,v1=abc` or `ts=123;h1=abc`.
+// Split on the first "=" only: base64 signatures end with padding "=", which
+// must not be truncated.
 function parsePairs(header: string, separator: ";" | ","): Record<string, string> {
   return Object.fromEntries(
     header.split(separator).map((part) => {
-      const [key, value] = part.split("=");
-      return [key?.trim() ?? "", value?.trim() ?? ""];
+      const index = part.indexOf("=");
+      if (index < 0) return [part.trim(), ""];
+      return [part.slice(0, index).trim(), part.slice(index + 1).trim()];
     }),
   );
+}
+
+// Rejects replayed signed requests older than five minutes.
+function timestampFresh(value: string | undefined, toleranceSeconds = 300): boolean {
+  if (!value) return false;
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp)) return false;
+  return Math.abs(Date.now() / 1000 - timestamp) <= toleranceSeconds;
 }
 
 // Compares the request against any of the given headers, each being an HMAC of
@@ -99,7 +110,7 @@ function verifyStripe(ctx: VerifyContext): boolean {
   const header = headerValue(ctx.headers, ["stripe-signature"]);
   if (!header) return false;
   const parts = parsePairs(header, ",");
-  if (!parts.t || !parts.v1) return false;
+  if (!parts.t || !parts.v1 || !timestampFresh(parts.t)) return false;
   return match(parts.v1, encode(ctx.secret, `${parts.t}.${ctx.rawBody}`, "hex"));
 }
 
@@ -108,7 +119,7 @@ function verifyCalendly(ctx: VerifyContext): boolean {
   const header = headerValue(ctx.headers, ["calendly-webhook-signature"]);
   if (!header) return false;
   const parts = parsePairs(header, ",");
-  if (!parts.t || !parts.v1) return false;
+  if (!parts.t || !parts.v1 || !timestampFresh(parts.t)) return false;
   return match(parts.v1, encode(ctx.secret, `${parts.t}.${ctx.rawBody}`, "base64"));
 }
 
@@ -117,15 +128,19 @@ function verifyPaddle(ctx: VerifyContext): boolean {
   const header = headerValue(ctx.headers, ["paddle-signature"]);
   if (!header) return false;
   const parts = parsePairs(header, ";");
-  if (!parts.ts || !parts.h1) return false;
+  if (!parts.ts || !parts.h1 || !timestampFresh(parts.ts)) return false;
   return match(parts.h1, encode(ctx.secret, `${parts.ts}:${ctx.rawBody}`, "hex"));
 }
 
-// HubSpot (v1): `X-HubSpot-Signature` = sha256(secret + body) as hex.
+// HubSpot (v1): `X-HubSpot-Signature` = sha256(secret + body) as hex. This is
+// a plain hash, not an HMAC keyed by the secret.
 function verifyHubspot(ctx: VerifyContext): boolean {
   const value = headerValue(ctx.headers, ["x-hubspot-signature"]);
   if (!value) return false;
-  return match(value, encode(ctx.secret, ctx.secret + ctx.rawBody, "hex"));
+  const expected = createHash("sha256")
+    .update(ctx.secret + ctx.rawBody)
+    .digest("hex");
+  return match(value, expected);
 }
 
 // Generic fallback every provider can use: HMAC-SHA256 of the body in

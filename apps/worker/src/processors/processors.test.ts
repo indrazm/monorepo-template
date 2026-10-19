@@ -28,6 +28,8 @@ function createFakeStore() {
     async drainImpressions(limit = 1000) {
       return buffer.splice(0, limit);
     },
+    async ackImpressions() {},
+    async requeueImpressions() {},
     async recordVisit(_siteId, visitorId) {
       visits.push(visitorId);
     },
