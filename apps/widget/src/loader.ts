@@ -1,6 +1,25 @@
-import type { WidgetPayloadResponse } from "@repo/contracts/widget";
+import type { WidgetConfigResponse, WidgetPayloadResponse } from "@repo/contracts/widget";
 import { tunnelHeaders } from "./net";
 import { isReturningVisitor, visitorId } from "./visitor";
+
+// Consent probe: no visitor id, page context, or beacon is sent before this
+// resolves, so a consent-gated site does not track first and ask later.
+export async function loadConfig(
+  apiBase: string,
+  siteKey: string,
+): Promise<WidgetConfigResponse | null> {
+  try {
+    const endpoint = `${apiBase}/widget/v1/config?site=${encodeURIComponent(siteKey)}`;
+    const response = await fetch(endpoint, {
+      credentials: "omit",
+      headers: tunnelHeaders(apiBase),
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as WidgetConfigResponse;
+  } catch {
+    return null;
+  }
+}
 
 // Fetches the notification payload for the current page. Fail-safe: any error
 // resolves to null so the host site is never affected (SRS NFR-REL-02).

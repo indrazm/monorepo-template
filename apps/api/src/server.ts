@@ -16,7 +16,7 @@ import { createMailer } from "./modules/auth/mailer";
 
 export function startServer(config: ReturnType<typeof createApiConfig>) {
   const { db, pool } = createDatabase(config.databaseUrl);
-  const mailer = createMailer(config.smtp);
+  const mailer = createMailer(config.email);
   const auth = createAuth(db, config.auth, mailer);
 
   // Warns the organization owner before (80%) and when (100%) the monthly

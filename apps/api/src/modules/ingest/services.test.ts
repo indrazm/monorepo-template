@@ -60,6 +60,18 @@ describe("ingest service", () => {
     expect(payload?.product).toBe("Nike Air");
   });
 
+  it("keeps the same dedupeKey across different sites", async () => {
+    const firstSite = await seedSiteWithKey();
+    const secondSite = await seedSiteWithKey();
+    expect(await ingest.ingestEvent(firstSite.id, { type: "purchase", dedupeKey: "order-1" })).toBe(
+      "created",
+    );
+    // Two tenants may legitimately use the same order id.
+    expect(
+      await ingest.ingestEvent(secondSite.id, { type: "purchase", dedupeKey: "order-1" }),
+    ).toBe("created");
+  });
+
   it("rejects duplicate events by dedupeKey", async () => {
     const { id } = await seedSiteWithKey();
     const first = await ingest.ingestEvent(id, { type: "purchase", dedupeKey: "order-1" });

@@ -80,11 +80,12 @@ export function BillingPage() {
   const billing = useQuery(billingQueryOptions);
   const plans = useQuery(plansQuery(interval));
   const overview = billing.data;
+  const effectivePlan = overview?.effectivePlan ?? overview?.plan ?? "free";
   const trialDays = plans.data?.find((offer) => offer.trialDays > 0)?.trialDays ?? 0;
   const usagePct = overview
     ? Math.min(100, (overview.usage / Math.max(1, overview.trafficQuota)) * 100)
     : 0;
-  const overQuota = overview ? overview.usage > overview.trafficQuota : false;
+  const overQuota = overview ? overview.usage >= overview.trafficQuota : false;
   const nearQuota = !overQuota && usagePct >= 80;
   const checkout = useMutation({
     mutationFn: startCheckout,
@@ -101,8 +102,12 @@ export function BillingPage() {
     onError: (error) => toast.error(error.message),
   });
 
+  const planOrder = ["free", "starter", "growth", "agency"] as const;
+  const currentRank = planOrder.indexOf(effectivePlan as (typeof planOrder)[number]);
   const upgrades = (plans.data ?? []).filter(
-    (offer) => offer.plan !== "free" && offer.plan !== overview?.plan,
+    (offer) =>
+      offer.plan !== "free" &&
+      planOrder.indexOf(offer.plan as (typeof planOrder)[number]) > currentRank,
   );
 
   return (
@@ -134,13 +139,24 @@ export function BillingPage() {
           </Alert>
         ) : null}
 
+        {overview && !overview.active ? (
+          <Alert variant="destructive">
+            <TriangleAlertIcon />
+            <AlertTitle>Your subscription is {overview.status}</AlertTitle>
+            <AlertDescription>
+              Paid features have fallen back to the Free plan until the subscription is active
+              again. Update your payment method in the billing portal.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {overview ? (
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  {planLabels[overview.plan] ?? overview.plan} plan
-                  {overview.plan === "free" ? <Badge variant="secondary">Free</Badge> : null}
+                  {planLabels[effectivePlan] ?? effectivePlan} plan
+                  {effectivePlan === "free" ? <Badge variant="secondary">Free</Badge> : null}
                 </CardTitle>
                 <CardDescription>
                   {overview.removeBadge
@@ -166,11 +182,18 @@ export function BillingPage() {
                 </div>
                 {overview.renewsAt ? (
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Renews</span>
+                    <span className="text-muted-foreground">
+                      {overview.cancelAtPeriodEnd ? "Ends" : "Renews"}
+                    </span>
                     <span className="font-medium">
                       {new Date(overview.renewsAt).toLocaleDateString()}
                     </span>
                   </div>
+                ) : null}
+                {overview.cancelAtPeriodEnd ? (
+                  <p className="text-xs text-muted-foreground">
+                    This subscription is set to cancel at the end of the current period.
+                  </p>
                 ) : null}
                 {overview.manageable ? (
                   <Button

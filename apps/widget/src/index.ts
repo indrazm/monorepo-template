@@ -1,12 +1,13 @@
 import { attachCapture } from "./capture";
-import { grantConsent, hasConsent, revokeConsent } from "./consent";
+import { grantConsent, hasConsent, onConsentRevoked, revokeConsent } from "./consent";
 import { debug } from "./debug";
 import { mountInline } from "./inline";
-import { loadPayload } from "./loader";
+import { loadConfig, loadPayload } from "./loader";
 import { forwardAnalytics } from "./passthrough";
 import { startScheduler } from "./scheduler";
 import { createSandbox, forwardCustom } from "./sandbox";
 import { createShadowHost } from "./shadow";
+import { claimSpin } from "./spin";
 import { track } from "./track";
 import { visit } from "./visit";
 import type { WidgetPayloadResponse } from "@repo/contracts/widget";
@@ -20,15 +21,23 @@ let started = false;
 
 // Boots rendering + tracking once. Under consent mode this runs only after the
 // visitor (or their CMP) grants consent (SRS FR-NGS-05).
-function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string): void {
-  if (started) return;
+function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string): () => void {
+  if (started) return () => undefined;
   started = true;
 
   // One pageview per session feeds the traffic quota (FR-BIL-01).
   visit(apiBase, siteKey);
 
   // Auto-capture is independent of having notifications to show.
-  attachCapture(apiBase, siteKey);
+  const cleanupCapture = attachCapture(apiBase, siteKey);
+  let cleanupInline: () => void = () => undefined;
+  let stopScheduler: (() => void) | null = null;
+  const cleanup = () => {
+    stopScheduler?.();
+    cleanupInline();
+    cleanupCapture();
+    started = false;
+  };
 
   // Over the monthly visitor quota the API serves no notifications (FR-BIL-01).
   // The host page is left untouched on purpose — a visitor should never see an
@@ -41,14 +50,14 @@ function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string)
         payload.settings.upgradeUrl ? ` Upgrade: ${payload.settings.upgradeUrl}` : ""
       }`,
     );
-    return;
+    return cleanup;
   }
 
   if (payload.notifications.length === 0) {
     debug.log(
       "No notifications matched this page. Check targeting (URL/visitor/geo), that a notification is active, and that matching events exist.",
     );
-    return;
+    return cleanup;
   }
   debug.log(
     `Serving ${payload.notifications.length} notification(s):`,
@@ -78,6 +87,14 @@ function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string)
     forwardAnalytics(payload.settings, "click", refId);
     sandbox?.emit({ event: "click", id: refId, type: typeOf(refId) });
   };
+  const emitClaim = (refId: string, variantId?: string) => {
+    // A spin reward was won and handed to the visitor (F69): record the claim
+    // as a first-class outcome so it shows up in analytics and goals.
+    track(apiBase, { site: siteKey, refId, kind: "claim", variantId });
+    forwardAnalytics(payload.settings, "claim", refId);
+    sandbox?.emit({ event: "click", id: refId, type: typeOf(refId) });
+  };
+  const onSpinClaim = (refId: string) => claimSpin(apiBase, siteKey, refId);
 
   // Inline social proof (feedback T8): notifications with a target selector are
   // embedded in the page; the rest float and cycle through the scheduler.
@@ -85,15 +102,17 @@ function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string)
   const floating = payload.notifications.filter((item) => !item.inlineSelector);
 
   if (inlineNotifs.length > 0) {
-    mountInline({
+    cleanupInline = mountInline({
       notifications: inlineNotifs,
       showBadge: payload.settings.showBadge,
       onView: emitView,
       onClick: emitClick,
+      onClaim: emitClaim,
+      onSpinClaim,
     });
   }
 
-  if (floating.length === 0) return;
+  if (floating.length === 0) return cleanup;
 
   const position = floating[0]?.style.position ?? "bottom-left";
   const host = createShadowHost(position);
@@ -105,21 +124,17 @@ function start(payload: WidgetPayloadResponse, apiBase: string, siteKey: string)
     host.root.appendChild(custom);
   }
 
-  startScheduler({
+  stopScheduler = startScheduler({
     host,
     siteKey,
     notifications: floating,
     settings: payload.settings,
     onView: emitView,
     onClick: emitClick,
-    onClaim: (refId, variantId) => {
-      // A spin reward was won and handed to the visitor (F69): record the claim
-      // as a first-class outcome so it shows up in analytics and goals.
-      track(apiBase, { site: siteKey, refId, kind: "claim", variantId });
-      forwardAnalytics(payload.settings, "claim", refId);
-      sandbox?.emit({ event: "click", id: refId, type: typeOf(refId) });
-    },
+    onClaim: emitClaim,
+    onSpinClaim,
   });
+  return cleanup;
 }
 
 // Entry for the Tacto pixel. Reads config from its own <script> tag and boots
@@ -130,37 +145,66 @@ async function boot(): Promise<void> {
   if (!siteKey) return;
   const apiBase = script?.getAttribute("data-api") ?? __TACTO_API_URL__;
 
-  debug.log("Fetching payload for", siteKey, "on", location.pathname);
-  const payload = await loadPayload(apiBase, siteKey, location.pathname);
-  if (!payload) {
-    debug.log("No payload returned (site not found, blocked origin, or network error).");
+  // Ask only for the consent requirement first. No visitor id, page URL,
+  // referrer, query string or beacon is sent before consent is granted.
+  const config = await loadConfig(apiBase, siteKey);
+  if (!config) {
+    debug.log("No config returned (site not found or network error).");
     return;
   }
 
-  const begin = () => start(payload, apiBase, siteKey);
+  let stop: (() => void) | null = null;
+  let starting = false;
+  let consentTimer: ReturnType<typeof setInterval> | null = null;
+
+  const begin = async () => {
+    if (started || starting) return;
+    if (config.requireConsent && !hasConsent()) return;
+    if (consentTimer) {
+      clearInterval(consentTimer);
+      consentTimer = null;
+    }
+    starting = true;
+    debug.log("Fetching payload for", siteKey, "on", location.pathname);
+    const payload = await loadPayload(apiBase, siteKey, location.pathname);
+    starting = false;
+    if (!payload) {
+      debug.log("No payload returned (site not found, blocked origin, or network error).");
+      return;
+    }
+    stop = start(payload, apiBase, siteKey);
+  };
+
+  // Withdrawing consent tears down the scheduler, inline mounts and capture
+  // listener; a later grant can boot the widget again.
+  onConsentRevoked(() => {
+    stop?.();
+    stop = null;
+  });
 
   // Expose a consent API so the host site or its CMP can opt in (FR-NGS-05).
   const api = {
     hasConsent,
     grantConsent: () => {
       grantConsent();
-      begin();
+      void begin();
     },
-    revokeConsent,
+    revokeConsent: () => {
+      revokeConsent();
+      // Consent is not required: revoking it does not change tracking.
+      if (!config.requireConsent) void begin();
+    },
   };
   (window as unknown as { tacto?: typeof api }).tacto = api;
 
-  if (payload.settings.requireConsent && !hasConsent()) {
+  if (config.requireConsent && !hasConsent()) {
     // Wait for consent set via `window.tacto`, a CMP cookie, or localStorage.
-    const timer = setInterval(() => {
-      if (hasConsent()) {
-        clearInterval(timer);
-        begin();
-      }
+    consentTimer = setInterval(() => {
+      if (hasConsent()) void begin();
     }, 1500);
     return;
   }
-  begin();
+  await begin();
 }
 
 try {

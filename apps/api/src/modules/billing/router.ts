@@ -62,7 +62,9 @@ export function createBillingRouter(
         maxSites: limits.maxSites,
         removeBadge: limits.removeBadge,
         source: price ? "stripe" : "fallback",
-        purchasable: Boolean(price),
+        // Checkout is only useful when the webhook can actually activate the
+        // plan; otherwise the customer would pay and never receive it.
+        purchasable: Boolean(price && stripe.webhookSecret),
         trialDays,
       });
     }
@@ -89,7 +91,16 @@ export function createBillingRouter(
       .get("/", async (c) => {
         const organizationId = requireOrg(c);
         if (!organizationId) return c.json(apiError("unauthorized"), 401);
-        return c.json({ overview: await service.getOverview(organizationId) }, 200);
+        const overview = await service.getOverview(organizationId);
+        return c.json(
+          {
+            overview: {
+              ...overview,
+              billingConfigured: Boolean(stripe.secretKey && stripe.webhookSecret),
+            },
+          },
+          200,
+        );
       })
       // Plans + live prices from Stripe (FR-BIL-01/02). `?interval=year` returns
       // annual pricing (feedback T11).
@@ -112,6 +123,26 @@ export function createBillingRouter(
           }
           const { organizationId } = allowed;
           if (!stripe.secretKey) return c.json(apiError("integration_unconfigured"), 400);
+          if (!stripe.webhookSecret) return c.json(apiError("integration_unconfigured"), 400);
+
+          // An existing subscriber changes plans in the Billing Portal. Starting
+          // a second Checkout would create a duplicate Stripe subscription and
+          // canceling either one could wrongly downgrade the organization.
+          const existingCustomer = await service.getCustomerId(organizationId);
+          if (existingCustomer) {
+            try {
+              const url = await createBillingPortalSession({
+                secretKey: stripe.secretKey,
+                customerId: existingCustomer,
+                returnUrl: `${appUrl}/billing`,
+              });
+              return c.json({ url }, 200);
+            } catch (error) {
+              console.error("Stripe portal failed", error);
+              return c.json(apiError("integration_unconfigured"), 502);
+            }
+          }
+
           const { plan, interval } = c.req.valid("json");
           const priceId = stripe.prices?.[plan]?.[interval] ?? null;
           if (!priceId) return c.json(apiError("integration_unconfigured"), 400);
@@ -171,7 +202,7 @@ export function createBillingRouter(
         } catch {
           return c.json(apiError("validation_error"), 400);
         }
-        const update = parseBillingEvent(raw);
+        const update = parseBillingEvent(raw, stripe.prices);
         if (update) await service.updatePlan(update);
         return c.json({ received: true }, 200);
       })

@@ -1,9 +1,10 @@
 import type { WidgetNotification } from "@repo/contracts/widget";
+import { isSafeHttpUrl } from "./safe-url";
 
 // Opens a notification's click-action URL (feedback T9). Defaults to a new tab
 // with noopener; never throws so a failed open cannot break the host page.
 export function openClickTarget(notification: WidgetNotification): void {
-  if (!notification.clickUrl) return;
+  if (!isSafeHttpUrl(notification.clickUrl)) return;
   try {
     window.open(
       notification.clickUrl,

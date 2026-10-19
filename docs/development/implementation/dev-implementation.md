@@ -66,7 +66,7 @@ Jalur ujung-ke-ujung hidup & terverifikasi di Docker (Postgres+Redis+API+worker,
 - **Dihapus (keputusan produk, 15 Okt 2026):** **fitur Review dihapus sepenuhnya** — tipe notifikasi `review`, tipe event `review`, dan integrasi Google Places (`google_reviews`) dikeluarkan dari produk; enum DB, kode (API/widget/web), UI, env (`GOOGLE_MAPS_API_KEY`), dan test dibersihkan. Migrasi `0012` menghapus nilai enum + mem-purge baris lama.
 - **Ditunda (opsional):**
   - Perluasan katalog integrasi lebih lanjut & optimisasi biaya/perf lanjutan — opsional.
-- **Credential yang perlu diisi di `.env`:** `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` (diisi), `GOOGLE_CLIENT_ID`/`SECRET` (diisi), `SMTP_*` (opsional — tanpa itu link email di-log), `HUBSPOT_*`/`SHOPIFY_*` (placeholder opsional untuk konektor OAuth mendatang; integrasi webhook memakai secret per-integrasi di dashboard).
+- **Credential yang perlu diisi di `.env`:** `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` (diisi), `GOOGLE_CLIENT_ID`/`SECRET` (diisi), `RESEND_API_KEY` + `MAIL_FROM_EMAIL` (wajib di production; tanpa itu link email di-log saat development), `HUBSPOT_*`/`SHOPIFY_*` (placeholder opsional untuk konektor OAuth mendatang; integrasi webhook memakai secret per-integrasi di dashboard).
 
 ---
 

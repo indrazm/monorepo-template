@@ -1,21 +1,6 @@
 import type { NotificationConfig, NotificationType } from "@repo/contracts/notifications";
 import { CheckIcon } from "lucide-react";
-
-const TYPE_ICON: Record<string, string> = {
-  recent_sales: "🛒",
-  live_visitors: "👀",
-  counter: "📈",
-  combo: "📈",
-  custom: "💬",
-  countdown: "⏳",
-  low_stock: "🔥",
-  popup: "🎉",
-  bar: "📣",
-  spin_to_win: "🎁",
-  review: "⭐",
-  social_counter: "👥",
-  youtube: "▶️",
-};
+import { NotificationTypeIcon } from "./type-icon";
 
 function compact(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
@@ -75,7 +60,7 @@ export function NotificationPreview({
             {config.media?.imageUrl ? (
               <img src={config.media.imageUrl} alt="" className="size-full object-cover" />
             ) : (
-              (TYPE_ICON[type] ?? "🔔")
+              <NotificationTypeIcon type={type} className="size-5" />
             )}
           </span>
           <div className="min-w-0 text-[#17181c]">

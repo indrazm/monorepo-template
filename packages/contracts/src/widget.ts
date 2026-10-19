@@ -2,12 +2,23 @@ import { z } from "zod";
 import { notificationPositionSchema, notificationTypeSchema } from "./notifications";
 
 // ---------- payload served to the pixel (GET /widget/v1/payload) ----------
+// Public spin payload: labels only. Weights and coupon codes stay server-side
+// so every code cannot be read from the page source before a claim.
 export const widgetRewardSchema = z.object({
+  label: z.string(),
+});
+
+export const spinClaimInputSchema = z.object({
+  site: z.string().trim().min(1),
+  notificationId: z.string().trim().min(1),
+  visitorId: z.string().trim().min(1).max(128),
+});
+
+export const spinClaimResponseSchema = z.object({
   label: z.string(),
   code: z.string().optional(),
   url: z.string().optional(),
-  // Relative chance the pixel uses to draw this outcome for this visitor.
-  weight: z.number().int().min(1),
+  validForDays: z.number().int().min(1),
 });
 
 export const widgetNotificationSchema = z.object({
@@ -82,6 +93,15 @@ export const widgetPayloadResponseSchema = z.object({
   ttl: z.number().int().positive(),
 });
 
+// Consent gate probe: fetched before any visitor identifier, URL context, or
+// beacon is sent, so a site that requires consent drops no personal data first.
+export const widgetConfigQuerySchema = z.object({
+  site: z.string().trim().min(1),
+});
+export const widgetConfigResponseSchema = z.object({
+  requireConsent: z.boolean(),
+});
+
 export const widgetPayloadQuerySchema = z.object({
   site: z.string().trim().min(1),
   url: z.string().trim().min(1),
@@ -130,6 +150,9 @@ export const visitEventSchema = z.object({
 
 export type WidgetNotification = z.output<typeof widgetNotificationSchema>;
 export type WidgetSettings = z.output<typeof widgetSettingsSchema>;
+export type WidgetConfigResponse = z.output<typeof widgetConfigResponseSchema>;
+export type SpinClaimInput = z.output<typeof spinClaimInputSchema>;
+export type SpinClaimResponse = z.output<typeof spinClaimResponseSchema>;
 export type WidgetPayloadResponse = z.output<typeof widgetPayloadResponseSchema>;
 export type TrackEventInput = z.output<typeof trackEventSchema>;
 export type CaptureEventInput = z.output<typeof captureEventSchema>;

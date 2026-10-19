@@ -41,10 +41,20 @@ export function createExampleQueueEvents(connection: ConnectionOptions) {
 // so producers (apps/api) and the consumer (apps/worker) stay in sync.
 // ---------------------------------------------------------------------------
 
+// Event/queue jobs are retried with exponential backoff; completed/failed jobs
+// are retained for inspection but bounded so Redis cannot grow forever.
+const JOB_OPTIONS = {
+  attempts: 5,
+  backoff: { type: "exponential" as const, delay: 1_000 },
+  removeOnComplete: { age: 3_600, count: 1_000 },
+  removeOnFail: { age: 7 * 86_400, count: 5_000 },
+};
+
 export function createWebhookQueue(connection: ConnectionOptions) {
   const queue = new Queue<WebhookJob>(webhookQueueName, { connection });
   return {
-    add: (input: WebhookJob) => queue.add(webhookQueueName, webhookJobSchema.parse(input)),
+    add: (input: WebhookJob) =>
+      queue.add(webhookQueueName, webhookJobSchema.parse(input), JOB_OPTIONS),
     // Job-state depths for the /metrics endpoint (NFR-OBS-02).
     counts: () => queue.getJobCounts("waiting", "active", "failed", "completed", "delayed"),
     close: () => queue.close(),
@@ -55,7 +65,7 @@ export function createAnalyticsQueue(connection: ConnectionOptions) {
   const queue = new Queue<AnalyticsJob>(analyticsQueueName, { connection });
   return {
     add: (input: AnalyticsJob = {}) =>
-      queue.add(analyticsQueueName, analyticsJobSchema.parse(input)),
+      queue.add(analyticsQueueName, analyticsJobSchema.parse(input), JOB_OPTIONS),
     // Repeatable flush schedule (F47). Idempotent: re-registering the same
     // scheduler id just updates the interval.
     scheduleFlush: (everyMs: number) =>
@@ -72,7 +82,8 @@ export function createAnalyticsQueue(connection: ConnectionOptions) {
 export function createCounterQueue(connection: ConnectionOptions) {
   const queue = new Queue<CounterJob>(counterQueueName, { connection });
   return {
-    add: (input: CounterJob) => queue.add(counterQueueName, counterJobSchema.parse(input)),
+    add: (input: CounterJob) =>
+      queue.add(counterQueueName, counterJobSchema.parse(input), JOB_OPTIONS),
     counts: () => queue.getJobCounts("waiting", "active", "failed", "completed", "delayed"),
     close: () => queue.close(),
   };

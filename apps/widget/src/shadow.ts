@@ -27,11 +27,12 @@ const BASE_CSS = `
   background: #f3f4f8; font-size: 21px; overflow: hidden;
 }
 .tacto-media img { width: 100%; height: 100%; object-fit: cover; }
+.tacto-media svg, .tacto-modal-icon svg, .tacto-countdown svg { display: block; }
 .tacto-body { min-width: 0; }
 .tacto-msg { font-weight: 700; font-size: 14.5px; line-height: 1.35; }
 .tacto-sub { font-size: 12.5px; color: #5b606e; margin-top: 2px; }
 .tacto-verified { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px; font-size: 11px; font-weight: 700; color: #0e9f6e; }
-.tacto-countdown { margin-top: 4px; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: #17181c; }
+.tacto-countdown { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: #17181c; }
 .tacto-close {
   position: absolute; top: 6px; right: 8px; border: 0; background: transparent; cursor: pointer;
   color: #8a90a0; font-size: 15px; line-height: 1; padding: 2px;
@@ -46,7 +47,7 @@ const BASE_CSS = `
 .tacto-stack[data-pos="bottom-bar"] .tacto-bar { transform: translateY(8px); }
 .tacto-bar[data-shown="1"] { opacity: 1; transform: translateY(0); }
 .tacto-bar[data-shape="square"] { border-radius: 0; }
-.tacto-bar-icon { font-size: 18px; flex: none; }
+.tacto-bar-icon { display: inline-flex; align-items: center; flex: none; }
 .tacto-bar-msg { flex: 1; min-width: 0; }
 .tacto-bar .tacto-verified { color: #eafff5; margin: 0; }
 .tacto-bar .tacto-badge { margin: 0; }

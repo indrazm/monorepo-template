@@ -8,13 +8,26 @@ import {
   impression,
   notification,
   site,
+  spinClaim,
   subscription,
 } from "@repo/db/schema";
-import type { CaptureEventInput, TrackEventInput, VisitEventInput } from "@repo/contracts/widget";
-import { planLimits, type Plan } from "@repo/contracts/billing";
+import type {
+  CaptureEventInput,
+  SpinClaimInput,
+  SpinClaimResponse,
+  TrackEventInput,
+  VisitEventInput,
+} from "@repo/contracts/widget";
+import { spinConfigSchema } from "@repo/contracts/notifications";
+import {
+  effectivePlanFor,
+  planAllowsNotificationType,
+  planLimits,
+  type Plan,
+} from "@repo/contracts/billing";
 import { currentMonthKey, type RealtimeStore } from "@repo/queue";
 import { analyticsPassthroughSchema, domainPrivacySchema } from "@repo/contracts/sites";
-import type { DomainLoopSettings } from "@repo/contracts/sites";
+import type { DomainLoopSettings, DomainPrivacy } from "@repo/contracts/sites";
 import { maskProfanity } from "./profanity";
 import { classifyUserAgent, pathOf } from "./ua";
 import type {
@@ -56,7 +69,11 @@ export type WidgetServiceDeps = {
   store?: RealtimeStore;
   enqueueCounter?: (siteId: string) => Promise<void> | void;
   // Records event-based goal conversions for pixel-captured events (FR-ANL-03).
-  onEvent?: (siteId: string, eventType: EventType) => Promise<void> | void;
+  onEvent?: (
+    siteId: string,
+    eventType: EventType,
+    dedupeKey?: string | null,
+  ) => Promise<void> | void;
   // Keyed static-map template (with {lat}/{lng}) for the media fallback. Unset =
   // no map fallback (audit O).
   staticMapTemplate?: string | null;
@@ -65,31 +82,203 @@ export type WidgetServiceDeps = {
   // Called when an organization crosses a quota threshold (0.8 / 1.0) so the
   // owner can be warned by email before notifications stop (FR-BIL-01).
   onQuotaThreshold?: (organizationId: string, ratio: number) => void;
+  // Redis-backed limiter for the public beacon endpoints, keyed by site/IP.
+  hitRateLimit?: (key: string, limit: number, windowMs: number) => Promise<boolean>;
 };
+
+// Public write beacons are limited per site/IP. They are fire-and-forget, so a
+// rejected request is silently dropped by the router rather than retried.
+const WRITE_RATE_LIMIT = { limit: 120, windowMs: 60_000 } as const;
+
+type WriteMeta = { origin?: string | null; requestIp?: string | null };
 
 export function createWidgetService(
   db: Pick<Database, "select" | "update" | "insert">,
   deps: WidgetServiceDeps = {},
 ) {
-  return { getPayload, recordImpression, capture, recordVisit };
+  return { getConfig, getPayload, recordImpression, capture, recordVisit, claimSpin };
+
+  // Minimal, non-personal config probe used before consent. It deliberately
+  // reads only the site and its privacy setting.
+  async function getConfig(siteKey: string): Promise<{ requireConsent: boolean } | null> {
+    const [siteRow] = await db
+      .select({ id: site.id })
+      .from(site)
+      .where(eq(site.siteKey, siteKey))
+      .limit(1);
+    if (!siteRow) return null;
+    const [settingRow] = await db
+      .select({ privacy: domainSetting.privacy })
+      .from(domainSetting)
+      .where(eq(domainSetting.siteId, siteRow.id))
+      .limit(1);
+    const privacy = domainPrivacySchema.parse(settingRow?.privacy ?? {});
+    return { requireConsent: privacy.requireConsent };
+  }
+
+  // Draws and persists a spin reward server-side. The visitor can call this
+  // again (or inspect the network tab) but always receives the same prize; the
+  // public payload never contains coupon codes or prize weights.
+  async function claimSpin(
+    input: SpinClaimInput,
+    meta: WriteMeta = {},
+  ): Promise<SpinClaimResponse | null> {
+    const [siteRow] = await db
+      .select({ id: site.id, domain: site.domain })
+      .from(site)
+      .where(eq(site.siteKey, input.site))
+      .limit(1);
+    if (!siteRow) return null;
+    if (!(await allowWrite(siteRow, meta, "spin"))) return null;
+    // Claims are more sensitive than impressions: cap them tightly per IP so a
+    // visitor cannot farm every coupon by rotating client-side ids.
+    if (
+      deps.hitRateLimit &&
+      !(await deps.hitRateLimit(`spin:${siteRow.id}:${meta.requestIp ?? "unknown"}`, 5, 60_000))
+    ) {
+      return null;
+    }
+
+    const [row] = await db
+      .select({
+        id: notification.id,
+        type: notification.type,
+        extra: notification.extra,
+      })
+      .from(notification)
+      .where(
+        and(
+          eq(notification.id, input.notificationId),
+          eq(notification.siteId, siteRow.id),
+          eq(notification.isActive, true),
+        ),
+      )
+      .limit(1);
+    if (!row || row.type !== "spin_to_win") return null;
+
+    const extra = (row.extra ?? {}) as { spin?: unknown };
+    const parsed = spinConfigSchema.safeParse(extra.spin);
+    if (!parsed.success) return null;
+    const { prizes, validForDays } = parsed.data;
+
+    const existing = await findClaim(row.id, input.visitorId);
+    if (existing) return toClaimResponse(existing, validForDays);
+
+    const total = prizes.reduce((sum, prize) => sum + prize.weight, 0);
+    let roll = Math.random() * total;
+    let prize = prizes[prizes.length - 1]!;
+    for (const candidate of prizes) {
+      roll -= candidate.weight;
+      if (roll < 0) {
+        prize = candidate;
+        break;
+      }
+    }
+
+    try {
+      await db.insert(spinClaim).values({
+        siteId: siteRow.id,
+        notificationId: row.id,
+        visitorId: input.visitorId,
+        prizeLabel: prize.label,
+        prizeCode: prize.code ?? null,
+        prizeUrl: prize.url ?? null,
+      });
+    } catch (error) {
+      // A concurrent request from the same visitor already inserted a claim;
+      // return that prize rather than failing the spin.
+      const raced = await findClaim(row.id, input.visitorId);
+      if (raced) return toClaimResponse(raced, validForDays);
+      throw error;
+    }
+
+    return {
+      label: prize.label,
+      ...(prize.code ? { code: prize.code } : {}),
+      ...(prize.url ? { url: prize.url } : {}),
+      validForDays,
+    };
+  }
+
+  async function findClaim(notificationId: string, visitorId: string) {
+    const [claim] = await db
+      .select()
+      .from(spinClaim)
+      .where(and(eq(spinClaim.notificationId, notificationId), eq(spinClaim.visitorId, visitorId)))
+      .limit(1);
+    return claim ?? null;
+  }
+
+  function toClaimResponse(
+    claim: typeof spinClaim.$inferSelect,
+    validForDays: number,
+  ): SpinClaimResponse {
+    return {
+      label: claim.prizeLabel,
+      ...(claim.prizeCode ? { code: claim.prizeCode } : {}),
+      ...(claim.prizeUrl ? { url: claim.prizeUrl } : {}),
+      validForDays,
+    };
+  }
+
+  // Public beacon guard: the origin must belong to the registered site and the
+  // site/IP pair must stay under the write rate limit. Without an origin the
+  // caller is not a browser using the pixel, so writes are rejected at the
+  // router; a null origin is allowed here only for direct service tests.
+  async function allowWrite(
+    siteRow: { id: string; domain: string },
+    meta: WriteMeta,
+    action: string,
+  ): Promise<boolean> {
+    if (meta.origin && !originAllowed(meta.origin, siteRow.domain)) return false;
+    if (!deps.hitRateLimit) return true;
+    const key = `widget:${siteRow.id}:${meta.requestIp ?? "unknown"}:${action}`;
+    return deps.hitRateLimit(key, WRITE_RATE_LIMIT.limit, WRITE_RATE_LIMIT.windowMs);
+  }
+
+  async function privacyFor(siteId: string): Promise<DomainPrivacy> {
+    const [row] = await db
+      .select({ privacy: domainSetting.privacy })
+      .from(domainSetting)
+      .where(eq(domainSetting.siteId, siteId))
+      .limit(1);
+    return domainPrivacySchema.parse(row?.privacy ?? {});
+  }
+
+  function isBlocked(privacy: { blockedIps: string[] }, requestIp?: string | null): boolean {
+    return Boolean(requestIp && privacy.blockedIps.includes(requestIp));
+  }
 
   // Records a pageview as a `visit` event once per session. This is the real
   // traffic signal behind the plan's monthly visitor quota (FR-BIL-01) and the
   // analytics live-visitor window fallback (FR-NOT-03).
-  async function recordVisit(input: VisitEventInput): Promise<boolean> {
+  async function recordVisit(input: VisitEventInput, meta: WriteMeta = {}): Promise<boolean> {
     const [siteRow] = await db
-      .select({ id: site.id, organizationId: site.organizationId })
+      .select({ id: site.id, domain: site.domain, organizationId: site.organizationId })
       .from(site)
       .where(eq(site.siteKey, input.site))
       .limit(1);
     if (!siteRow) return false;
-    await db.insert(event).values({
-      siteId: siteRow.id,
-      type: "visit",
-      source: "pixel",
-      verified: false,
-      occurredAt: new Date(),
-    });
+    if (!(await allowWrite(siteRow, meta, "visit"))) return false;
+    const privacy = await privacyFor(siteRow.id);
+    if (isBlocked(privacy, meta.requestIp)) return false;
+    const [storedVisit] = await db
+      .insert(event)
+      .values({
+        siteId: siteRow.id,
+        type: "visit",
+        source: "pixel",
+        verified: false,
+        occurredAt: new Date(),
+      })
+      .returning({ id: event.id });
+    if (deps.onEvent) {
+      try {
+        await deps.onEvent(siteRow.id, "visit", storedVisit?.id);
+      } catch {
+        // Best-effort: goal recording must not fail the visit beacon.
+      }
+    }
     // Unique monthly visitors per organization drive the plan quota. Redis
     // dedupes per visitor id, so a returning visitor is counted once a month.
     if (deps.store && input.visitorId) {
@@ -121,29 +310,38 @@ export function createWidgetService(
 
   async function quotaFor(organizationId: string): Promise<number> {
     const [subRow] = await db
-      .select({ plan: subscription.plan, trafficQuota: subscription.trafficQuota })
+      .select({ plan: subscription.plan, status: subscription.status })
       .from(subscription)
       .where(eq(subscription.organizationId, organizationId))
       .limit(1);
-    const plan = (subRow?.plan ?? "free") as Plan;
-    return subRow?.trafficQuota ?? planLimits[plan].trafficQuota;
+    const plan = effectivePlanFor((subRow?.plan ?? "free") as Plan, subRow?.status);
+    return planLimits[plan].trafficQuota;
   }
 
   // Records a view/click impression (SRS FR-ANL-01). Buffered in Redis on the
   // hot path and flushed to Postgres by the worker (F46/F47); fallback inserts.
   async function recordImpression(
     input: TrackEventInput,
-    meta: { visitorId?: string; userAgent?: string | null; country?: string | null } = {},
+    meta: WriteMeta & {
+      visitorId?: string;
+      userAgent?: string | null;
+      country?: string | null;
+    } = {},
   ): Promise<boolean> {
     const [siteRow] = await db
-      .select({ id: site.id })
+      .select({ id: site.id, domain: site.domain })
       .from(site)
       .where(eq(site.siteKey, input.site))
       .limit(1);
     if (!siteRow) return false;
+    if (!(await allowWrite(siteRow, meta, "track"))) return false;
+    const privacy = await privacyFor(siteRow.id);
+    if (isBlocked(privacy, meta.requestIp)) return false;
     // Audience dimensions for the analytics breakdown (FR-ANL-02).
     const { device, browser, isBot } = classifyUserAgent(meta.userAgent);
-    const country = meta.country?.trim().slice(0, 2).toUpperCase() || null;
+    const country = privacy.trackIpGeo
+      ? meta.country?.trim().slice(0, 2).toUpperCase() || null
+      : null;
     const path = pathOf(input.url);
     if (deps.store) {
       await deps.store.pushImpression({
@@ -181,39 +379,44 @@ export function createWidgetService(
   // Pixel auto-capture: turns a form submission into a form_submit event
   // (SRS FR-ING-01). Only a first name + city are stored (NFR-PRIV-01), unless
   // the domain's privacy settings opt in to storing the email (FR-NGS-05).
-  async function capture(input: CaptureEventInput): Promise<boolean> {
+  async function capture(input: CaptureEventInput, meta: WriteMeta = {}): Promise<boolean> {
     const [siteRow] = await db
-      .select({ id: site.id })
+      .select({ id: site.id, domain: site.domain })
       .from(site)
       .where(eq(site.siteKey, input.site))
       .limit(1);
     if (!siteRow) return false;
+    if (!(await allowWrite(siteRow, meta, "capture"))) return false;
     const [settingRow] = await db
       .select({ privacy: domainSetting.privacy })
       .from(domainSetting)
       .where(eq(domainSetting.siteId, siteRow.id))
       .limit(1);
     const privacy = domainPrivacySchema.parse(settingRow?.privacy ?? {});
+    if (isBlocked(privacy, meta.requestIp)) return false;
 
     const rawName = input.fields.name ?? input.fields.first_name ?? input.fields.fullname;
     const displayName = rawName ? rawName.trim().split(/\s+/)[0] : undefined;
     const email = privacy.storeEmail
       ? (input.fields.email ?? input.fields.email_address)?.trim()
       : undefined;
-    await db.insert(event).values({
-      siteId: siteRow.id,
-      type: "form_submit",
-      source: "pixel",
-      verified: false,
-      displayName: displayName ?? null,
-      city: input.fields.city?.trim() ?? null,
-      payload: { url: input.url, ...(email ? { email } : {}) },
-      occurredAt: new Date(),
-    });
+    const [storedEvent] = await db
+      .insert(event)
+      .values({
+        siteId: siteRow.id,
+        type: "form_submit",
+        source: "pixel",
+        verified: false,
+        displayName: displayName ?? null,
+        city: input.fields.city?.trim() ?? null,
+        payload: { url: input.url, ...(email ? { email } : {}) },
+        occurredAt: new Date(),
+      })
+      .returning({ id: event.id });
     await notifyCounter(siteRow.id);
     if (deps.onEvent) {
       try {
-        await deps.onEvent(siteRow.id, "form_submit");
+        await deps.onEvent(siteRow.id, "form_submit", storedEvent?.id);
       } catch {
         // Best-effort: goal recording must not affect capture.
       }
@@ -262,11 +465,11 @@ export function createWidgetService(
       .from(subscription)
       .where(eq(subscription.organizationId, siteRow.organizationId))
       .limit(1);
-    const plan = (subRow?.plan ?? "free") as Plan;
+    const plan = effectivePlanFor((subRow?.plan ?? "free") as Plan, subRow?.status);
 
     // Monthly visitor quota (FR-BIL-01, F51). Over the quota the site serves no
     // social proof at all — the freemium tier has to convert to stay useful.
-    const quota = subRow?.trafficQuota ?? planLimits[plan].trafficQuota;
+    const quota = planLimits[plan].trafficQuota;
     const used = deps.store
       ? await deps.store.getVisitorCount(siteRow.organizationId, currentMonthKey())
       : 0;
@@ -316,6 +519,9 @@ export function createWidgetService(
     // neither does an organization over its monthly visitor quota.
     if (!blocked && !overQuota) {
       for (const row of orderedRows) {
+        // Re-check the plan at serve time: a paid notification type stops
+        // rendering immediately after a downgrade or failed payment.
+        if (!planAllowsNotificationType(plan, row.type as NotificationType)) continue;
         const config = toConfig(row);
         // URL, country, UTM, referrer and visitor segment (FR-NED-07).
         if (!matchesTargeting(config.display, visitContext)) continue;
@@ -443,12 +649,9 @@ export function createWidgetService(
           ...base,
           message: render(),
           spin: {
-            prizes: spin.prizes.map((prize) => ({
-              label: prize.label,
-              weight: prize.weight,
-              ...(prize.code ? { code: prize.code } : {}),
-              ...(prize.url ? { url: prize.url } : {}),
-            })),
+            // Labels only: the weighted draw and the coupon code stay on the
+            // server and are revealed by POST /widget/v1/spin/claim.
+            prizes: spin.prizes.map((prize) => ({ label: prize.label })),
             validForDays: spin.validForDays,
           },
         };
@@ -725,6 +928,10 @@ function toConfig(row: NotificationRow): NotificationConfig {
     spin?: unknown;
     media?: unknown;
     variants?: unknown;
+    reviews?: unknown;
+    socialCounter?: unknown;
+    youtube?: unknown;
+    inlineSelector?: unknown;
   };
   return {
     message: row.message,
@@ -737,6 +944,10 @@ function toConfig(row: NotificationRow): NotificationConfig {
     ...(extra.spin ? { spin: extra.spin } : {}),
     ...(extra.media ? { media: extra.media } : {}),
     ...(extra.variants ? { variants: extra.variants } : {}),
+    ...(extra.reviews ? { reviews: extra.reviews } : {}),
+    ...(extra.socialCounter ? { socialCounter: extra.socialCounter } : {}),
+    ...(extra.youtube ? { youtube: extra.youtube } : {}),
+    ...(extra.inlineSelector ? { inlineSelector: extra.inlineSelector } : {}),
   } as NotificationConfig;
 }
 

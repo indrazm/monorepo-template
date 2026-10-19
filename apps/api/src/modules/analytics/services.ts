@@ -66,6 +66,19 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
       .groupBy(sql`date_trunc('day', ${impression.createdAt})`, impression.kind);
 
     const byDay = new Map<string, { views: number; clicks: number; claims: number }>();
+    // Fill every calendar day in the window (including zero-traffic days) so
+    // the trend chart does not connect across gaps. The first bucket may be
+    // partial because `since` carries a time of day.
+    const firstDay = new Date(
+      Date.UTC(since.getUTCFullYear(), since.getUTCMonth(), since.getUTCDate()),
+    );
+    for (
+      let cursor = firstDay;
+      cursor.getTime() <= until.getTime();
+      cursor = new Date(cursor.getTime() + 86_400_000)
+    ) {
+      byDay.set(cursor.toISOString().slice(0, 10), { views: 0, clicks: 0, claims: 0 });
+    }
     let views = 0;
     let clicks = 0;
     let claims = 0;
@@ -77,7 +90,9 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
       } else if (row.kind === "claim") {
         bucket.claims += row.count;
         claims += row.count;
-      } else {
+      } else if (row.kind === "view") {
+        // Only real views count. Goal conversions live in the same table with
+        // kind="conversion" and must never inflate impressions or CTR.
         bucket.views += row.count;
         views += row.count;
       }
@@ -231,6 +246,7 @@ export function createAnalyticsService(db: Pick<Database, "select">) {
             eq(impression.siteId, siteId),
             gte(impression.createdAt, prevSince),
             lt(impression.createdAt, since),
+            ...(query.includeBots ? [] : [eq(impression.isBot, false)]),
           ),
         );
       const pv = row ?? { views: 0, clicks: 0, claims: 0 };

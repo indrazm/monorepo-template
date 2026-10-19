@@ -24,6 +24,23 @@ export const eventTypeSchema = z.enum(eventTypes);
 
 const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/i, "Expected a hex color like #3B82F6.");
 
+// Only http(s) URLs may reach browser sinks (href/src/window.open). Plain
+// `z.url()` also accepts `javascript:`, `data:` and `vbscript:`, which would
+// execute in the customer's page when a notification is clicked or rendered.
+const httpUrlSchema = z
+  .string()
+  .trim()
+  .url()
+  .max(2048)
+  .refine((value) => {
+    try {
+      const url = new URL(value);
+      return url.protocol === "http:" || url.protocol === "https:";
+    } catch {
+      return false;
+    }
+  }, "Use an http(s) URL.");
+
 // A localized variant of the message template (FR-NED-12). Keyed by locale
 // (e.g. "id", "es", "pt-BR"); picked from the visitor's language when present.
 export const notificationTranslationSchema = z.object({
@@ -68,7 +85,7 @@ export const notificationFontSchema = z.enum(notificationFonts);
 export const clickActionSchema = z
   .object({
     type: z.enum(["none", "url"]).default("none"),
-    url: z.string().trim().url().max(2048).optional(),
+    url: httpUrlSchema.optional(),
     newTab: z.boolean().default(true),
   })
   .refine((action) => action.type !== "url" || Boolean(action.url), {
@@ -165,7 +182,7 @@ export const fomoConfigSchema = z.object({ stock: z.number().int().min(0).max(1_
 // auto (image → map → gravatar → flag), a single source, or none.
 export const mediaFallbacks = ["auto", "image", "map", "gravatar", "flag", "none"] as const;
 export const notificationMediaSchema = z.object({
-  imageUrl: z.string().trim().url().max(2048).optional(),
+  imageUrl: httpUrlSchema.optional(),
   fallback: z.enum(mediaFallbacks).default("auto"),
 });
 export type MediaFallback = (typeof mediaFallbacks)[number];
@@ -178,7 +195,7 @@ export const spinPrizeSchema = z
     label: z.string().trim().min(1).max(60),
     // A coupon code shown to the winner (copyable), and/or a link to redeem.
     code: z.string().trim().min(1).max(80).optional(),
-    url: z.string().trim().url().max(2048).optional(),
+    url: httpUrlSchema.optional(),
     // Relative chance of this prize; "no prize" is expressed by a low weight.
     weight: z.number().int().min(1).max(100).default(1),
   })
@@ -201,7 +218,7 @@ export const reviewSchema = z.object({
   author: z.string().trim().min(1).max(80),
   rating: z.number().min(0).max(5).default(5),
   text: z.string().trim().min(1).max(500),
-  avatarUrl: z.string().trim().url().max(2048).optional(),
+  avatarUrl: httpUrlSchema.optional(),
   // Where the review came from, shown as a small source label ("Google", etc.).
   source: z.string().trim().max(40).optional(),
 });
@@ -220,7 +237,7 @@ export type SocialCounter = z.output<typeof socialCounterSchema>;
 export const youtubeStatSchema = z.object({
   metric: z.enum(["subscribers", "views"]).default("subscribers"),
   count: z.number().int().min(0).max(100_000_000_000),
-  channelUrl: z.string().trim().url().max(2048).optional(),
+  channelUrl: httpUrlSchema.optional(),
   label: z.string().trim().max(40).optional(),
 });
 export type YoutubeStat = z.output<typeof youtubeStatSchema>;

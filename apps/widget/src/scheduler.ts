@@ -1,4 +1,4 @@
-import type { WidgetNotification, WidgetSettings } from "@repo/contracts/widget";
+import type { SpinClaimResponse, WidgetNotification, WidgetSettings } from "@repo/contracts/widget";
 import { openClickTarget } from "./click";
 import { renderCard } from "./render/notification";
 import type { ShadowHost } from "./shadow";
@@ -45,8 +45,10 @@ export function startScheduler(options: {
   onClick: (refId: string, variantId?: string) => void;
   // A conversion widget handed out a reward (F69); reported once per claim.
   onClaim: (refId: string, variantId?: string) => void;
+  // Server-side draw: returns the visitor's (idempotent) reward.
+  onSpinClaim?: (refId: string, variantId?: string) => Promise<SpinClaimResponse | null>;
 }): () => void {
-  const { host, siteKey, notifications, settings, onView, onClick, onClaim } = options;
+  const { host, siteKey, notifications, settings, onView, onClick, onClaim, onSpinClaim } = options;
   let stopped = false;
   const timers: ReturnType<typeof setTimeout>[] = [];
   const wait = (ms: number) => new Promise<void>((resolve) => timers.push(setTimeout(resolve, ms)));
@@ -54,6 +56,9 @@ export function startScheduler(options: {
   if (notifications.length === 0 || isSnoozed(siteKey)) return () => undefined;
 
   const ordered = settings.order === "random" ? shuffle(notifications) : notifications;
+  // FR-NGS-01: repeat the rotation only when there are more notifications than
+  // the configured threshold. 0 disables looping (a single pass).
+  const shouldLoop = settings.loopAfter > 0 && ordered.length > settings.loopAfter;
 
   async function loop() {
     let shownCount = 0;
@@ -65,7 +70,7 @@ export function startScheduler(options: {
         await showOne(notification);
         shownCount++;
       }
-    } while (!stopped && settings.loopAfter > 0);
+    } while (!stopped && shouldLoop);
   }
 
   function showOne(notification: WidgetNotification): Promise<void> {
@@ -74,6 +79,7 @@ export function startScheduler(options: {
         showClose: settings.showClose,
         showBadge: settings.showBadge,
         onClaim: (refId, variantId) => onClaim(refId, variantId),
+        onSpinClaim,
       });
       host.stack.appendChild(card);
       onView(notification.id, notification.variantId);
@@ -83,7 +89,7 @@ export function startScheduler(options: {
         openClickTarget(notification);
       });
       close?.addEventListener("click", () => {
-        snooze(siteKey, settings.closeForDays || 1);
+        if (settings.closeForDays > 0) snooze(siteKey, settings.closeForDays);
         card.remove();
         stopped = true;
         host.destroy();
@@ -104,5 +110,6 @@ export function startScheduler(options: {
   return () => {
     stopped = true;
     for (const timer of timers) clearTimeout(timer);
+    host.destroy();
   };
 }

@@ -44,7 +44,11 @@ export type IngestServiceDeps = {
   enqueueCounter?: (siteId: string) => Promise<void> | void;
   // Lets event-based goals record a conversion when an event is stored
   // (FR-ANL-03). Best-effort.
-  onEvent?: (siteId: string, eventType: EventType) => Promise<void> | void;
+  onEvent?: (
+    siteId: string,
+    eventType: EventType,
+    dedupeKey?: string | null,
+  ) => Promise<void> | void;
 };
 
 export function createIngestService(
@@ -131,7 +135,6 @@ export function createIngestService(
       return "filtered";
     }
     await markDelivery(integrationId, { ok: true });
-    await fireEvent(siteRow.id, mapped.type);
 
     if (deps.enqueueWebhook) {
       await deps.enqueueWebhook({
@@ -151,17 +154,23 @@ export function createIngestService(
     }
 
     try {
-      await db.insert(event).values({
-        siteId: siteRow.id,
-        type: mapped.type,
-        source: input.provider,
-        verified: true,
-        displayName: mapped.displayName,
-        city: mapped.city,
-        payload: mapped.product ? { product: mapped.product } : null,
-        dedupeKey: mapped.dedupeKey,
-        occurredAt: mapped.occurredAt,
-      });
+      const [stored] = await db
+        .insert(event)
+        .values({
+          siteId: siteRow.id,
+          type: mapped.type,
+          source: input.provider,
+          verified: true,
+          displayName: mapped.displayName,
+          city: mapped.city,
+          payload: mapped.product ? { product: mapped.product } : null,
+          dedupeKey: mapped.dedupeKey,
+          occurredAt: mapped.occurredAt,
+        })
+        .returning({ id: event.id });
+      // Fire only after the event is durable, and key the conversion by the
+      // event so a provider retry cannot double-count the goal.
+      await fireEvent(siteRow.id, mapped.type, mapped.dedupeKey ?? stored?.id);
       await notifyCounter(siteRow.id);
       return "created";
     } catch (error) {
@@ -187,17 +196,21 @@ export function createIngestService(
       ...(input.product ? { product: input.product } : {}),
     };
     try {
-      await db.insert(event).values({
-        siteId,
-        type: input.type,
-        source: "manual",
-        verified: false,
-        displayName: firstName(input.displayName),
-        city: input.city?.trim() ?? null,
-        payload,
-        dedupeKey: input.dedupeKey ?? null,
-        occurredAt: input.occurredAt ? new Date(input.occurredAt) : new Date(),
-      });
+      const [stored] = await db
+        .insert(event)
+        .values({
+          siteId,
+          type: input.type,
+          source: "manual",
+          verified: false,
+          displayName: firstName(input.displayName),
+          city: input.city?.trim() ?? null,
+          payload,
+          dedupeKey: input.dedupeKey ?? null,
+          occurredAt: input.occurredAt ? new Date(input.occurredAt) : new Date(),
+        })
+        .returning({ id: event.id });
+      await fireEvent(siteId, input.type, input.dedupeKey ?? stored?.id);
       await notifyCounter(siteId);
       return "created";
     } catch (error) {
@@ -207,10 +220,14 @@ export function createIngestService(
   }
 
   // Records event-based goal conversions for a stored event (FR-ANL-03).
-  async function fireEvent(siteId: string, eventType: EventType): Promise<void> {
+  async function fireEvent(
+    siteId: string,
+    eventType: EventType,
+    dedupeKey?: string | null,
+  ): Promise<void> {
     if (!deps.onEvent) return;
     try {
-      await deps.onEvent(siteId, eventType);
+      await deps.onEvent(siteId, eventType, dedupeKey);
     } catch {
       // Best-effort: goal recording must never fail an ingestion.
     }

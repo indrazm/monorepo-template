@@ -7,6 +7,11 @@ import type { Database } from "@repo/db";
 import { member, organization as organizationTable, subscription } from "@repo/db/schema";
 import type { createApiConfig } from "../../config";
 import * as schema from "@repo/db/schema";
+import {
+  invitationEmailContent,
+  passwordResetEmailContent,
+  verificationEmailContent,
+} from "./email-templates";
 import type { Mailer } from "./mailer";
 
 export function createAuth(
@@ -34,6 +39,10 @@ export function createAuth(
         session_token: { attributes: sessionCookieAttributes },
         session_data: { attributes: sessionCookieAttributes },
         dont_remember: { attributes: sessionCookieAttributes },
+        // The two-factor challenge and trust-device cookies are sent on
+        // cross-site requests from the dashboard, like the session cookies.
+        two_factor: { attributes: sessionCookieAttributes },
+        trust_device: { attributes: sessionCookieAttributes },
       },
     },
     database: drizzleAdapter(db, {
@@ -62,21 +71,7 @@ export function createAuth(
       sendResetPassword: async ({ user, url }) => {
         await mailer.send({
           to: user.email,
-          subject: "Reset your Tacto password",
-          text: [
-            `Hi ${user.name},`,
-            "",
-            "We received a request to reset your Tacto password. Open the link below to choose a new one:",
-            url,
-            "",
-            "This link expires in 1 hour. If you did not request this, you can ignore this email.",
-          ].join("\n"),
-          html: [
-            `<p>Hi ${escapeHtml(user.name)},</p>`,
-            "<p>We received a request to reset your Tacto password. Click the button below to choose a new one.</p>",
-            `<p><a href="${url}">Reset password</a></p>`,
-            "<p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>",
-          ].join(""),
+          ...passwordResetEmailContent({ name: user.name, url, appUrl }),
         });
       },
     },
@@ -89,23 +84,13 @@ export function createAuth(
       // user lands on the dashboard already signed in.
       autoSignInAfterVerification: true,
       sendVerificationEmail: async ({ user, url }) => {
+        // Force the callback to the dashboard success page. Older clients (or
+        // a stale web build) can otherwise omit `verified=1`, which leaves the
+        // user on the "open the activation link" fallback even after success.
+        const verificationUrl = withCallbackUrl(url, `${appUrl}/verify-email?verified=1`);
         await mailer.send({
           to: user.email,
-          subject: "Activate your Tacto account",
-          text: [
-            `Welcome to Tacto, ${user.name}.`,
-            "",
-            "Confirm your email address to activate your account:",
-            url,
-            "",
-            "This link expires in 24 hours. If you did not create an account, you can ignore this email.",
-          ].join("\n"),
-          html: [
-            `<p>Welcome to Tacto, ${escapeHtml(user.name)}.</p>`,
-            "<p>Confirm your email address to activate your account.</p>",
-            `<p><a href="${url}">Activate my account</a></p>`,
-            "<p>This link expires in 24 hours. If you did not create an account, you can ignore this email.</p>",
-          ].join(""),
+          ...verificationEmailContent({ name: user.name, url: verificationUrl, appUrl }),
         });
       },
     },
@@ -131,15 +116,18 @@ export function createAuth(
       }),
       organization({
         allowUserToCreateOrganization: true,
-        // Invitations (FR-AUTH-05). Without an email provider configured we log
-        // the accept link so an admin can share it; wire SMTP to send for real.
+        // Invitations (FR-AUTH-05). The invitation link lands on the dashboard,
+        // where the team page accepts the token.
         sendInvitationEmail: async (data) => {
           const link = `${appUrl}/accept-invitation/${data.id}`;
           await mailer.send({
             to: data.email,
-            subject: "You've been invited to a Tacto organization",
-            text: `Accept your invitation: ${link}`,
-            html: `<p>You've been invited to join a Tacto organization.</p><p><a href="${link}">Accept invitation</a></p>`,
+            ...invitationEmailContent({
+              organizationName: data.organization.name,
+              inviterName: data.inviter.user.name,
+              url: link,
+              appUrl,
+            }),
           });
         },
       }),
@@ -198,13 +186,10 @@ export type Auth = ReturnType<typeof createAuth>;
 export type AuthSession = Auth["$Infer"]["Session"]["session"];
 export type AuthUser = Auth["$Infer"]["Session"]["user"];
 
-// User names are interpolated into HTML emails; escape them so a crafted name
-// cannot inject markup.
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+// Replaces the callback URL on a Better Auth link (verification/reset) so the
+// redirect target is owned by the dashboard, not by whatever the client sent.
+function withCallbackUrl(value: string, callbackURL: string): string {
+  const url = new URL(value);
+  url.searchParams.set("callbackURL", callbackURL);
+  return url.toString();
 }

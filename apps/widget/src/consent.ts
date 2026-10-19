@@ -31,11 +31,26 @@ export function grantConsent(): void {
   }
 }
 
+const revokeListeners = new Set<() => void>();
+
+// Lets the runtime tear down rendering and tracking when consent is withdrawn.
+export function onConsentRevoked(listener: () => void): () => void {
+  revokeListeners.add(listener);
+  return () => revokeListeners.delete(listener);
+}
+
 export function revokeConsent(): void {
   try {
     document.cookie = `${CONSENT_KEY}=; max-age=0; path=/`;
     window.localStorage.removeItem(CONSENT_KEY);
   } catch {
     /* fail-safe */
+  }
+  for (const listener of revokeListeners) {
+    try {
+      listener();
+    } catch {
+      /* a listener must not break consent revocation */
+    }
   }
 }

@@ -90,4 +90,23 @@ describe("widget payload (HTTP end-to-end)", () => {
     const response = await app.request("/widget/v1/payload?site=missing&url=/");
     expect(response.status).toBe(404);
   });
+
+  it("exposes only the consent requirement before consent", async () => {
+    const sites = createSitesService(db);
+    const site = await sites.create("org-a", { name: "Config Shop", domain: "config.example.com" });
+    const response = await app.request(`/widget/v1/config?site=${site.siteKey}`);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ requireConsent: false });
+  });
+
+  it("rejects write beacons that do not come from a browser origin", async () => {
+    const sites = createSitesService(db);
+    const site = await sites.create("org-a", { name: "Write Shop", domain: "write.example.com" });
+    const response = await app.request("/widget/v1/visit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ site: site.siteKey, visitorId: "v1" }),
+    });
+    expect(response.status).toBe(403);
+  });
 });

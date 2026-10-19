@@ -161,8 +161,14 @@ export function createSitesRouter(
 // Minimal RFC-4180 CSV: quote every field and double embedded quotes.
 function toEventsCsv(rows: (typeof import("@repo/db/schema").event.$inferSelect)[]): string {
   const header = "id,type,source,verified,displayName,city,payload,occurredAt,createdAt";
-  const cell = (value: unknown) =>
-    `"${(value === null || value === undefined ? "" : String(value)).replace(/"/g, '""')}"`;
+  // RFC-4180 quoting alone does not stop spreadsheet formula injection: a
+  // customer-controlled name/city/payload beginning with =, +, - or @ would be
+  // evaluated by Excel/LibreOffice. Prefix those cells with an apostrophe.
+  const cell = (value: unknown) => {
+    let text = value === null || value === undefined ? "" : String(value);
+    if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+  };
   const lines = rows.map((row) =>
     [
       row.id,

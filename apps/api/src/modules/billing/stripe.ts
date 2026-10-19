@@ -39,6 +39,8 @@ export type BillingUpdate = {
   renewsAt: Date | null;
   // Stripe customer id (`cus_...`), captured to open the billing portal later.
   customerId: string | null;
+  // The subscription will end at the current period end (Portal cancellation).
+  cancelAtPeriodEnd?: boolean;
 };
 
 function customerIdOf(object: Record<string, unknown>): string | null {
@@ -51,9 +53,29 @@ function customerIdOf(object: Record<string, unknown>): string | null {
   return null;
 }
 
+// Maps the active subscription Price back to a Tacto plan. The Billing Portal
+// changes items/prices but does not rewrite subscription metadata, so the Price
+// ID is the authoritative source for upgrades/downgrades made in the Portal.
+function planFromPriceId(priceId: string | null, prices: StripeConfig["prices"]): Plan | null {
+  if (!priceId || !prices) return null;
+  for (const [plan, ids] of Object.entries(prices)) {
+    if (ids.month === priceId || ids.year === priceId) return plan as Plan;
+  }
+  return null;
+}
+
+function priceIdOf(object: Record<string, unknown>): string | null {
+  const items = object.items as { data?: { price?: { id?: unknown } }[] } | undefined;
+  const id = items?.data?.[0]?.price?.id;
+  return typeof id === "string" ? id : null;
+}
+
 // Extracts the subscription change we care about from a Stripe event. We only
 // act on checkout completion and subscription lifecycle events.
-export function parseBillingEvent(raw: unknown): BillingUpdate | null {
+export function parseBillingEvent(
+  raw: unknown,
+  prices?: StripeConfig["prices"],
+): BillingUpdate | null {
   const event = (raw ?? {}) as { type?: string; data?: { object?: Record<string, unknown> } };
   const object = event.data?.object ?? {};
   const metadata = (object.metadata ?? {}) as Record<string, unknown>;
@@ -69,7 +91,9 @@ export function parseBillingEvent(raw: unknown): BillingUpdate | null {
     }
     case "customer.subscription.updated":
     case "customer.subscription.created": {
-      const plan = typeof metadata.plan === "string" ? (metadata.plan as Plan) : null;
+      const plan =
+        planFromPriceId(priceIdOf(object), prices) ??
+        (typeof metadata.plan === "string" ? (metadata.plan as Plan) : null);
       const periodEnd =
         typeof object.current_period_end === "number" ? object.current_period_end : null;
       const status = typeof object.status === "string" ? object.status : "active";
@@ -79,6 +103,7 @@ export function parseBillingEvent(raw: unknown): BillingUpdate | null {
         status,
         renewsAt: periodEnd ? new Date(periodEnd * 1000) : null,
         customerId,
+        cancelAtPeriodEnd: object.cancel_at_period_end === true,
       };
     }
     case "customer.subscription.deleted":

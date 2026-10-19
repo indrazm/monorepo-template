@@ -1,4 +1,4 @@
-import type { WidgetNotification } from "@repo/contracts/widget";
+import type { SpinClaimResponse, WidgetNotification } from "@repo/contracts/widget";
 import { openClickTarget } from "./click";
 import { debug } from "./debug";
 import { renderCard } from "./render/notification";
@@ -12,8 +12,11 @@ export function mountInline(options: {
   showBadge: boolean;
   onView: (refId: string, variantId?: string) => void;
   onClick: (refId: string, variantId?: string) => void;
-}): void {
-  const { notifications, showBadge, onView, onClick } = options;
+  onClaim?: (refId: string, variantId?: string) => void;
+  onSpinClaim?: (refId: string, variantId?: string) => Promise<SpinClaimResponse | null>;
+}): () => void {
+  const { notifications, showBadge, onView, onClick, onClaim, onSpinClaim } = options;
+  const hosts: ReturnType<typeof createInlineHost>[] = [];
   for (const notification of notifications) {
     const selector = notification.inlineSelector;
     if (!selector) continue;
@@ -29,7 +32,13 @@ export function mountInline(options: {
       continue;
     }
     const host = createInlineHost(target);
-    const { card, close } = renderCard(notification, { showClose: false, showBadge });
+    hosts.push(host);
+    const { card, close } = renderCard(notification, {
+      showClose: false,
+      showBadge,
+      onClaim,
+      onSpinClaim,
+    });
     host.stack.appendChild(card);
     card.setAttribute("data-shown", "1");
     onView(notification.id, notification.variantId);
@@ -40,4 +49,7 @@ export function mountInline(options: {
     });
     debug.log(`Inline notification mounted into ${selector}`);
   }
+  return () => {
+    for (const host of hosts) host.destroy();
+  };
 }

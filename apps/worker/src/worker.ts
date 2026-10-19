@@ -17,6 +17,7 @@ import type { createWorkerConfig } from "./config";
 import { createAnalyticsProcessor } from "./processors/analytics-aggregate";
 import { createCounterProcessor } from "./processors/counter-recompute";
 import { processExampleJob } from "./processors/example";
+import { recordEventConversions } from "./processors/goal-conversions";
 import { createWebhookProcessor } from "./processors/webhook";
 
 // How often the worker drains the Redis impression buffer into Postgres (F47).
@@ -35,9 +36,13 @@ export function runWorker(config: ReturnType<typeof createWorkerConfig>) {
     { name: exampleQueueName, processor: processExampleJob },
     {
       name: webhookQueueName,
-      processor: createWebhookProcessor(db, async (siteId) => {
-        await counterQueue.add({ siteId });
-      }),
+      processor: createWebhookProcessor(
+        db,
+        async (siteId) => {
+          await counterQueue.add({ siteId });
+        },
+        (siteId, eventType, dedupeKey) => recordEventConversions(db, siteId, eventType, dedupeKey),
+      ),
     },
     { name: analyticsQueueName, processor: createAnalyticsProcessor(db, store) },
     { name: counterQueueName, processor: createCounterProcessor(db, store) },

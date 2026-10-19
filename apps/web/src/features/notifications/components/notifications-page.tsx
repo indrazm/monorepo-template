@@ -41,6 +41,7 @@ import {
 import { importReviews } from "../services";
 import { NotificationPreview } from "./notification-preview";
 import { TargetingFields } from "./targeting-fields";
+import { NotificationTypeIcon } from "./type-icon";
 
 const TYPES: { value: NotificationType; label: string }[] = [
   { value: "recent_sales", label: "Recent sales" },
@@ -101,21 +102,22 @@ const MEDIA_FALLBACKS: {
   { value: "none", label: "None (type icon)" },
 ];
 
-// Icons + one-line descriptions for the visual type gallery (feedback T13).
-const TYPE_META: Record<NotificationType, { icon: string; hint: string }> = {
-  recent_sales: { icon: "🛒", hint: "Latest purchases, live" },
-  counter: { icon: "📈", hint: "Sales in the last 7 days" },
-  combo: { icon: "📊", hint: "30-day activity count" },
-  live_visitors: { icon: "👀", hint: "People on the site now" },
-  review: { icon: "⭐", hint: "Star rating + quote" },
-  social_counter: { icon: "👥", hint: "Follower / like count" },
-  youtube: { icon: "▶️", hint: "Subscribers or views" },
-  custom: { icon: "💬", hint: "Any message you write" },
-  low_stock: { icon: "🔥", hint: "Units-left urgency" },
-  countdown: { icon: "⏳", hint: "Live countdown timer" },
-  popup: { icon: "🎉", hint: "Centered modal offer" },
-  bar: { icon: "📣", hint: "Full-width top/bottom bar" },
-  spin_to_win: { icon: "🎁", hint: "Spin wheel for a reward" },
+// One-line descriptions for the visual type gallery (feedback T13). The icon
+// comes from the shared SVG type-icon map, not an emoji.
+const TYPE_META: Record<NotificationType, { hint: string }> = {
+  recent_sales: { hint: "Latest purchases, live" },
+  counter: { hint: "Sales in the last 7 days" },
+  combo: { hint: "30-day activity count" },
+  live_visitors: { hint: "People on the site now" },
+  review: { hint: "Star rating + quote" },
+  social_counter: { hint: "Follower / like count" },
+  youtube: { hint: "Subscribers or views" },
+  custom: { hint: "Any message you write" },
+  low_stock: { hint: "Units-left urgency" },
+  countdown: { hint: "Live countdown timer" },
+  popup: { hint: "Centered modal offer" },
+  bar: { hint: "Full-width top/bottom bar" },
+  spin_to_win: { hint: "Spin wheel for a reward" },
 };
 
 const EVENT_TYPE_LABELS: Record<EventType, string> = {
@@ -735,7 +737,7 @@ function NotificationEditorDialog({
                             : "border-border hover:border-primary/50"
                         }`}
                       >
-                        <span className="text-xl leading-none">{meta.icon}</span>
+                        <NotificationTypeIcon type={t.value} className="mt-0.5 size-5 shrink-0" />
                         <span className="min-w-0">
                           <span className="block text-sm font-semibold">{t.label}</span>
                           <span className="block text-xs text-muted-foreground">{meta.hint}</span>

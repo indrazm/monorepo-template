@@ -1,17 +1,22 @@
 import { and, count, eq, gte, inArray } from "drizzle-orm";
 import type { Database } from "@repo/db";
 import { event, site, subscription } from "@repo/db/schema";
-import { planLimits, type Plan } from "@repo/contracts/billing";
+import { effectivePlanFor, hasPaidAccess, planLimits, type Plan } from "@repo/contracts/billing";
 import { currentMonthKey, type RealtimeStore } from "@repo/queue";
 
 export type BillingOverview = {
   plan: Plan;
+  status: string;
+  active: boolean;
+  effectivePlan: Plan;
   trafficQuota: number;
   usage: number; // visitors counted this period
   sitesUsed: number;
   maxSites: number;
   removeBadge: boolean;
+  customCode: boolean;
   renewsAt: string | null;
+  cancelAtPeriodEnd: boolean;
   // A provider customer id exists → the billing portal can be opened.
   manageable: boolean;
 };
@@ -24,23 +29,29 @@ export type BillingServiceDeps = {
 };
 
 export function createBillingService(
-  db: Pick<Database, "select" | "update">,
+  db: Pick<Database, "select" | "update" | "insert">,
   deps: BillingServiceDeps = {},
 ) {
   return { getPlan, getOverview, canCreateSite, updatePlan, getCustomerId };
 
   // Applies a subscription change from Stripe (SRS FR-BIL-05). Upserts onto the
-  // org's subscription row; plan defaults are kept when the event omits a plan.
+  // org's subscription row so an organization created after sign-up still gets
+  // billed; plan defaults are kept when the event omits a plan.
   async function updatePlan(input: {
     organizationId: string;
     plan: import("@repo/contracts/billing").Plan | null;
     status: string;
     renewsAt: Date | null;
     customerId?: string | null;
+    cancelAtPeriodEnd?: boolean;
   }): Promise<void> {
+    const plan = input.plan ?? "free";
     const values: Partial<typeof subscription.$inferInsert> = {
       status: input.status,
       renewsAt: input.renewsAt,
+      ...(input.cancelAtPeriodEnd === undefined
+        ? {}
+        : { cancelAtPeriodEnd: input.cancelAtPeriodEnd }),
     };
     if (input.plan) {
       values.plan = input.plan;
@@ -48,9 +59,17 @@ export function createBillingService(
     }
     if (input.customerId) values.externalCustomerId = input.customerId;
     await db
-      .update(subscription)
-      .set(values)
-      .where(eq(subscription.organizationId, input.organizationId));
+      .insert(subscription)
+      .values({
+        organizationId: input.organizationId,
+        plan,
+        status: input.status,
+        trafficQuota: planLimits[plan].trafficQuota,
+        renewsAt: input.renewsAt,
+        cancelAtPeriodEnd: input.cancelAtPeriodEnd ?? false,
+        ...(input.customerId ? { externalCustomerId: input.customerId } : {}),
+      })
+      .onConflictDoUpdate({ target: subscription.organizationId, set: values });
   }
 
   async function getCustomerId(organizationId: string): Promise<string | null> {
@@ -62,13 +81,15 @@ export function createBillingService(
     return row?.customerId ?? null;
   }
 
+  // The plan that actually grants entitlements. A stored paid plan whose
+  // subscription is past_due/unpaid/canceled/paused falls back to Free.
   async function getPlan(organizationId: string): Promise<Plan> {
     const [row] = await db
-      .select({ plan: subscription.plan })
+      .select({ plan: subscription.plan, status: subscription.status })
       .from(subscription)
       .where(eq(subscription.organizationId, organizationId))
       .limit(1);
-    return (row?.plan ?? "free") as Plan;
+    return effectivePlanFor((row?.plan ?? "free") as Plan, row?.status);
   }
 
   async function countSites(organizationId: string): Promise<number> {
@@ -92,7 +113,9 @@ export function createBillingService(
       .where(eq(subscription.organizationId, organizationId))
       .limit(1);
     const plan = (subRow?.plan ?? "free") as Plan;
-    const limits = planLimits[plan];
+    const status = subRow?.status ?? "active";
+    const effectivePlan = effectivePlanFor(plan, status);
+    const limits = planLimits[effectivePlan];
 
     const sitesUsed = await countSites(organizationId);
 
@@ -101,12 +124,17 @@ export function createBillingService(
       const used = await deps.store.getVisitorCount(organizationId, currentMonthKey());
       return {
         plan,
-        trafficQuota: subRow?.trafficQuota ?? limits.trafficQuota,
+        status,
+        active: hasPaidAccess(status),
+        effectivePlan,
+        trafficQuota: limits.trafficQuota,
         usage: used,
         sitesUsed,
         maxSites: limits.maxSites,
         removeBadge: limits.removeBadge,
+        customCode: limits.customCode,
         renewsAt: subRow?.renewsAt ? subRow.renewsAt.toISOString() : null,
+        cancelAtPeriodEnd: Boolean(subRow?.cancelAtPeriodEnd),
         manageable: Boolean(subRow?.externalCustomerId),
       };
     }
@@ -139,12 +167,17 @@ export function createBillingService(
 
     return {
       plan,
-      trafficQuota: subRow?.trafficQuota ?? limits.trafficQuota,
+      status,
+      active: hasPaidAccess(status),
+      effectivePlan,
+      trafficQuota: limits.trafficQuota,
       usage,
       sitesUsed,
       maxSites: limits.maxSites,
       removeBadge: limits.removeBadge,
+      customCode: limits.customCode,
       renewsAt: subRow?.renewsAt ? subRow.renewsAt.toISOString() : null,
+      cancelAtPeriodEnd: Boolean(subRow?.cancelAtPeriodEnd),
       manageable: Boolean(subRow?.externalCustomerId),
     };
   }

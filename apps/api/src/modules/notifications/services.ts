@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { Database } from "@repo/db";
 import { notification, site, subscription } from "@repo/db/schema";
-import { planAllowsNotificationType, type Plan } from "@repo/contracts/billing";
+import { effectivePlanFor, planAllowsNotificationType, type Plan } from "@repo/contracts/billing";
 import type {
   CreateNotificationInput,
   Notification,
@@ -74,11 +74,12 @@ export function createNotificationsService(
   // Plan gate (FR-BIL-03): the org's plan must permit the notification type.
   async function planAllows(organizationId: string, type: NotificationType): Promise<boolean> {
     const [row] = await db
-      .select({ plan: subscription.plan })
+      .select({ plan: subscription.plan, status: subscription.status })
       .from(subscription)
       .where(eq(subscription.organizationId, organizationId))
       .limit(1);
-    return planAllowsNotificationType((row?.plan ?? "free") as Plan, type);
+    const plan = effectivePlanFor((row?.plan ?? "free") as Plan, row?.status);
+    return planAllowsNotificationType(plan, type);
   }
 
   // Guard: the site must belong to the organization before we touch its data.

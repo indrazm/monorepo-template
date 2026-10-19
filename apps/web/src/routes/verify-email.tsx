@@ -76,7 +76,7 @@ function VerifyEmailPage() {
                 <p className={error ? "text-destructive" : "text-muted-foreground"}>
                   {error
                     ? (errorMessages[error] ?? "We couldn't verify this email.")
-                    : "Open the activation link we emailed you to finish setting up your account."}
+                    : "We couldn't confirm this activation link. It may have expired or already been used. Request a new one below."}
                 </p>
                 <ResendVerification defaultEmail={email} />
                 <Button asChild variant="link" className="justify-start px-0">

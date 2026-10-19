@@ -9,7 +9,7 @@ import { user as userTable } from "@repo/db/schema";
 
 const config = createApiConfig(parseApiEnv(process.env));
 const { db, pool } = createDatabase(config.databaseUrl);
-const auth = createAuth(db, config.auth, createMailer(config.smtp));
+const auth = createAuth(db, config.auth, createMailer(config.email));
 
 const rl = createInterface({ input, output });
 

@@ -1,6 +1,7 @@
 import { webhookJobSchema } from "@repo/contracts/jobs";
 import type { Database } from "@repo/db";
 import { event } from "@repo/db/schema";
+import type { EventType } from "@repo/contracts/notifications";
 
 const UNIQUE_VIOLATION = "23505";
 
@@ -11,25 +12,40 @@ const UNIQUE_VIOLATION = "23505";
 export function createWebhookProcessor(
   db: Pick<Database, "insert">,
   enqueueCounter?: (siteId: string) => Promise<void> | void,
+  onEvent?: (siteId: string, eventType: EventType, dedupeKey: string) => Promise<void> | void,
 ) {
   return async function processWebhookJob(job: { data: unknown }): Promise<void> {
     const payload = webhookJobSchema.parse(job.data);
     const mapped = payload.event;
+    let eventId: string | undefined;
     try {
-      await db.insert(event).values({
-        siteId: payload.siteId,
-        type: mapped.type,
-        source: payload.provider,
-        verified: true,
-        displayName: mapped.displayName,
-        city: mapped.city,
-        payload: mapped.product ? { product: mapped.product } : null,
-        dedupeKey: mapped.dedupeKey,
-        occurredAt: new Date(mapped.occurredAt),
-      });
+      const [stored] = await db
+        .insert(event)
+        .values({
+          siteId: payload.siteId,
+          type: mapped.type,
+          source: payload.provider,
+          verified: true,
+          displayName: mapped.displayName,
+          city: mapped.city,
+          payload: mapped.product ? { product: mapped.product } : null,
+          dedupeKey: mapped.dedupeKey,
+          occurredAt: new Date(mapped.occurredAt),
+        })
+        .returning({ id: event.id });
+      eventId = stored?.id;
     } catch (error) {
       if (isUniqueViolation(error)) return;
       throw error;
+    }
+    // Fire conversions only after the event is durable, and key them by the
+    // event so a retried delivery cannot increment the goal twice.
+    if (onEvent && eventId) {
+      try {
+        await onEvent(payload.siteId, mapped.type, mapped.dedupeKey ?? eventId);
+      } catch {
+        // Best-effort: goal recording must not fail the persisted event.
+      }
     }
     if (enqueueCounter) {
       try {

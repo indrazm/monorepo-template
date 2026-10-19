@@ -30,6 +30,10 @@ const optionalSecondsSchema = (fallback: number) =>
     (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
     z.coerce.number().int().positive().default(fallback),
   );
+const optionalEmailSchema = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.email().optional(),
+);
 
 export const apiEnvSchema = z
   .object({
@@ -42,10 +46,9 @@ export const apiEnvSchema = z
     REDIS_URL: z.url({ protocol: /^rediss?$/ }).default("redis://localhost:16379"),
     GOOGLE_CLIENT_ID: optionalStringSchema,
     GOOGLE_CLIENT_SECRET: optionalStringSchema,
-    // Activation/reset token lifetimes in seconds. Verification defaults to a
-    // full day so users do not have to race the clock; password reset stays
-    // strict at one hour.
-    EMAIL_VERIFICATION_EXPIRES_IN: optionalSecondsSchema(60 * 60 * 24),
+    // Activation/reset token lifetimes in seconds. Verification is kept short
+    // because the link also starts a session; password reset stays strict.
+    EMAIL_VERIFICATION_EXPIRES_IN: optionalSecondsSchema(60 * 60),
     PASSWORD_RESET_EXPIRES_IN: optionalSecondsSchema(60 * 60),
     STRIPE_SECRET_KEY: optionalStringSchema,
     STRIPE_WEBHOOK_SECRET: optionalStringSchema,
@@ -62,12 +65,16 @@ export const apiEnvSchema = z
       (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
       z.coerce.number().int().min(0).max(365).default(0),
     ),
-    // Outbound email (invitations, password reset). Unset = links are logged.
-    SMTP_HOST: optionalStringSchema,
-    SMTP_PORT: optionalStringSchema,
-    SMTP_USER: optionalStringSchema,
-    SMTP_PASSWORD: optionalStringSchema,
-    SMTP_FROM: optionalStringSchema,
+    // Transactional email through the Resend HTTP API (verification, password
+    // reset, invitations, quota warnings). Required in production.
+    RESEND_API_KEY: optionalStringSchema,
+    MAIL_FROM_EMAIL: optionalEmailSchema,
+    MAIL_FROM_NAME: optionalStringSchema,
+    // Full Resend send endpoint. Override for an EU region or a proxy.
+    RESEND_API_URL: z.preprocess(
+      (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+      z.url({ protocol: /^https$/ }).optional(),
+    ),
     // Integration connectors. Per-organization provider credentials live in
     // the database (encrypted); these are the Tacto-level app credentials.
     HUBSPOT_CLIENT_ID: optionalStringSchema,
@@ -104,6 +111,20 @@ export const apiEnvSchema = z
         code: "custom",
         message: "BETTER_AUTH_SECRET must be at least 32 characters in production.",
         path: ["BETTER_AUTH_SECRET"],
+      });
+    }
+    if (!env.RESEND_API_KEY) {
+      context.addIssue({
+        code: "custom",
+        message: "RESEND_API_KEY is required in production.",
+        path: ["RESEND_API_KEY"],
+      });
+    }
+    if (!env.MAIL_FROM_EMAIL) {
+      context.addIssue({
+        code: "custom",
+        message: "MAIL_FROM_EMAIL is required in production.",
+        path: ["MAIL_FROM_EMAIL"],
       });
     }
   });
@@ -146,12 +167,12 @@ export function createApiConfig(env: ReturnType<typeof parseApiEnv>) {
       // Free-trial days applied to Checkout subscriptions (0 = none).
       trialDays: env.STRIPE_TRIAL_DAYS,
     },
-    smtp: {
-      host: env.SMTP_HOST ?? null,
-      port: env.SMTP_PORT ?? null,
-      user: env.SMTP_USER ?? null,
-      password: env.SMTP_PASSWORD ?? null,
-      from: env.SMTP_FROM ?? null,
+    email: {
+      resendApiKey: env.RESEND_API_KEY ?? null,
+      fromEmail: env.MAIL_FROM_EMAIL ?? null,
+      fromName: env.MAIL_FROM_NAME ?? "Tacto",
+      apiUrl: env.RESEND_API_URL ?? "https://api.resend.com/emails",
+      nodeEnv: env.NODE_ENV,
     },
     publicApiUrl: env.PUBLIC_API_URL ?? env.BETTER_AUTH_URL,
     credentialsSecret: env.CREDENTIALS_SECRET ?? env.BETTER_AUTH_SECRET,

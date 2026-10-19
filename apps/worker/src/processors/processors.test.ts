@@ -1,13 +1,15 @@
 import { fileURLToPath } from "node:url";
+import { eq } from "drizzle-orm";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { event, impression, notification } from "@repo/db/schema";
+import { event, goal, impression, notification } from "@repo/db/schema";
 import * as schema from "@repo/db/schema";
 import type { RealtimeStore } from "@repo/queue";
 import { createAnalyticsProcessor } from "./analytics-aggregate";
 import { createCounterProcessor } from "./counter-recompute";
+import { recordEventConversions } from "./goal-conversions";
 import { createWebhookProcessor } from "./webhook";
 
 const client = new PGlite();
@@ -112,6 +114,46 @@ describe("worker processors", () => {
     expect(rows[0]?.source).toBe("stripe");
     expect(rows[0]?.displayName).toBe("Jane");
     expect(enqueued).toEqual([site.id]); // counter refresh enqueued once
+  });
+
+  it("records one goal conversion for a retried event", async () => {
+    const site = await seedSite();
+    const [storedGoal] = await db
+      .insert(goal)
+      .values({
+        siteId: site.id,
+        name: "Purchase",
+        rule: { type: "event", eventType: "purchase" },
+      })
+      .returning();
+    const process = createWebhookProcessor(db, undefined, (siteId, eventType, dedupeKey) =>
+      recordEventConversions(db, siteId, eventType, dedupeKey),
+    );
+    const job = {
+      data: {
+        provider: "stripe",
+        siteId: site.id,
+        receivedAt: new Date().toISOString(),
+        event: {
+          type: "purchase",
+          displayName: null,
+          city: null,
+          product: "Pro plan",
+          dedupeKey: "order-retry-1",
+          occurredAt: new Date().toISOString(),
+        },
+      },
+    };
+
+    await process(job);
+    await process(job);
+
+    const conversions = await db
+      .select()
+      .from(impression)
+      .where(eq(impression.refId, storedGoal!.id));
+    expect(conversions).toHaveLength(1);
+    expect(conversions[0]?.kind).toBe("conversion");
   });
 
   it("flushes buffered impressions into Postgres", async () => {

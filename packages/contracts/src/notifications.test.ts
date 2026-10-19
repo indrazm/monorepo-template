@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  clickActionSchema,
   notificationConfigSchema,
   notificationDataSourceSchema,
+  notificationMediaSchema,
   notificationStyleSchema,
+  spinPrizeSchema,
   urlMatchSchema,
 } from "./notifications";
 
@@ -26,6 +29,33 @@ describe("notificationConfigSchema", () => {
     expect(() =>
       notificationStyleSchema.parse({ position: "bottom-left", accent: "blue" }),
     ).toThrow();
+  });
+});
+
+describe("browser URL validation", () => {
+  it("accepts http(s) URLs", () => {
+    expect(clickActionSchema.safeParse({ type: "url", url: "https://example.com" }).success).toBe(
+      true,
+    );
+    expect(
+      notificationMediaSchema.safeParse({ imageUrl: "http://example.com/a.png" }).success,
+    ).toBe(true);
+  });
+
+  it("rejects javascript and data URLs in click actions", () => {
+    for (const url of ["javascript:alert(1)", "data:text/html,<script>alert(1)</script>"]) {
+      expect(clickActionSchema.safeParse({ type: "url", url }).success).toBe(false);
+    }
+  });
+
+  it("rejects unsafe prize and media URLs", () => {
+    expect(spinPrizeSchema.safeParse({ label: "Prize", url: "javascript:alert(1)" }).success).toBe(
+      false,
+    );
+    expect(
+      notificationMediaSchema.safeParse({ imageUrl: "data:text/html,<script>alert(1)</script>" })
+        .success,
+    ).toBe(false);
   });
 });
 

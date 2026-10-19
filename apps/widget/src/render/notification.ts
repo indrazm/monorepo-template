@@ -1,20 +1,6 @@
-import type { WidgetNotification } from "@repo/contracts/widget";
-
-const ICONS: Record<string, string> = {
-  recent_sales: "🛒",
-  live_visitors: "👀",
-  counter: "📈",
-  combo: "📈",
-  custom: "💬",
-  countdown: "⏳",
-  low_stock: "🔥",
-  popup: "🎉",
-  bar: "📣",
-  spin_to_win: "🎁",
-  review: "⭐",
-  social_counter: "👥",
-  youtube: "▶️",
-};
+import type { SpinClaimResponse, WidgetNotification } from "@repo/contracts/widget";
+import { createTypeIcon } from "../icons";
+import { isSafeHttpUrl } from "../safe-url";
 
 type RenderResult = { card: HTMLElement; close: HTMLElement | null };
 type RenderOptions = {
@@ -22,18 +8,9 @@ type RenderOptions = {
   showBadge: boolean;
   // Fired once when a conversion widget hands out a reward (F69).
   onClaim?: (refId: string, variantId?: string) => void;
+  // Server-side weighted draw; resolves with this visitor's idempotent reward.
+  onSpinClaim?: (refId: string, variantId?: string) => Promise<SpinClaimResponse | null>;
 };
-
-// Weighted draw over the spin prize pool (F69). Weights are relative chances.
-function drawPrize<T extends { weight: number }>(prizes: T[]): T {
-  const total = prizes.reduce((sum, prize) => sum + prize.weight, 0);
-  let roll = Math.random() * total;
-  for (const prize of prizes) {
-    roll -= prize.weight;
-    if (roll < 0) return prize;
-  }
-  return prizes[prizes.length - 1]!;
-}
 
 function formatRemaining(ms: number): string {
   if (ms <= 0) return "00:00:00";
@@ -107,13 +84,13 @@ function renderReview(notification: WidgetNotification, options: RenderOptions):
 
   const media = document.createElement("div");
   media.className = "tacto-media";
-  if (notification.mediaUrl) {
+  if (isSafeHttpUrl(notification.mediaUrl)) {
     const img = document.createElement("img");
     img.src = notification.mediaUrl;
     img.alt = "";
     media.appendChild(img);
   } else {
-    media.textContent = ICONS.review ?? "⭐";
+    media.appendChild(createTypeIcon("review", notification.style.accent));
   }
 
   const body = document.createElement("div");
@@ -162,13 +139,13 @@ function renderSocialCard(notification: WidgetNotification, options: RenderOptio
 
   const media = document.createElement("div");
   media.className = "tacto-media";
-  if (notification.mediaUrl) {
+  if (isSafeHttpUrl(notification.mediaUrl)) {
     const img = document.createElement("img");
     img.src = notification.mediaUrl;
     img.alt = "";
     media.appendChild(img);
   } else {
-    media.textContent = ICONS[notification.type] ?? "🔔";
+    media.appendChild(createTypeIcon(notification.type, notification.style.accent));
   }
 
   const body = document.createElement("div");
@@ -188,8 +165,11 @@ function renderSocialCard(notification: WidgetNotification, options: RenderOptio
     const endsAt = new Date(notification.countdownEndsAt).getTime();
     const timer = document.createElement("div");
     timer.className = "tacto-countdown";
+    timer.appendChild(createTypeIcon("countdown", notification.style.accent));
+    const timerText = document.createElement("span");
+    timer.appendChild(timerText);
     const tick = () => {
-      timer.textContent = `⏳ ${formatRemaining(endsAt - Date.now())}`;
+      timerText.textContent = ` ${formatRemaining(endsAt - Date.now())}`;
       if (!card.isConnected || endsAt - Date.now() <= 0) clearInterval(handle);
     };
     const handle = setInterval(tick, 1000);
@@ -220,7 +200,7 @@ function renderBar(notification: WidgetNotification, options: RenderOptions): Re
 
   const icon = document.createElement("span");
   icon.className = "tacto-bar-icon";
-  icon.textContent = ICONS[notification.type] ?? "📣";
+  icon.appendChild(createTypeIcon(notification.type, "#FFFFFF"));
 
   const msg = document.createElement("span");
   msg.className = "tacto-bar-msg";
@@ -254,7 +234,7 @@ function renderPopup(notification: WidgetNotification, options: RenderOptions): 
   const media = document.createElement("div");
   media.className = "tacto-modal-icon";
   media.style.background = `${notification.style.accent}1a`;
-  media.textContent = ICONS[notification.type] ?? "🎉";
+  media.appendChild(createTypeIcon(notification.type, notification.style.accent));
 
   const title = document.createElement("p");
   title.className = "tacto-modal-title";
@@ -282,7 +262,8 @@ function renderSpin(notification: WidgetNotification, options: RenderOptions): R
 
   const heading = document.createElement("p");
   heading.className = "tacto-modal-title";
-  heading.textContent = "🎁 Spin to win";
+  heading.appendChild(createTypeIcon("spin_to_win", notification.style.accent));
+  heading.append(" Spin to win");
 
   const wheelWrap = document.createElement("div");
   wheelWrap.className = "tacto-wheel-wrap";
@@ -302,49 +283,54 @@ function renderSpin(notification: WidgetNotification, options: RenderOptions): R
   const result = document.createElement("p");
   result.className = "tacto-spin-result";
 
-  const prizes = notification.spin?.prizes ?? [];
   let spun = false;
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async () => {
     if (spun) return;
     spun = true;
     button.disabled = true;
     const degrees = 1440 + Math.floor(Math.random() * 360);
     wheel.style.transform = `rotate(${degrees}deg)`;
+
+    // The API draws and persists the prize; the payload only carries labels.
+    const reward = await options.onSpinClaim?.(notification.id, notification.variantId);
+
     setTimeout(() => {
       result.setAttribute("data-shown", "1");
-      if (prizes.length > 0) {
-        const prize = drawPrize(prizes);
-        result.textContent = `🎉 ${prize.label}`;
-        if (prize.code || prize.url) {
-          const reward = document.createElement("div");
-          reward.className = "tacto-spin-reward";
-          if (prize.code) {
-            const code = document.createElement("code");
-            code.className = "tacto-spin-code";
-            code.textContent = prize.code;
-            reward.appendChild(code);
-          }
-          if (prize.url) {
-            const link = document.createElement("a");
-            link.className = "tacto-spin-redeem";
-            link.href = prize.url;
-            link.target = "_blank";
-            link.rel = "noopener";
-            link.textContent = "Redeem now";
-            reward.appendChild(link);
-          }
-          const valid = document.createElement("div");
-          valid.className = "tacto-sub";
-          valid.textContent = `Valid for ${notification.spin?.validForDays ?? 7} days`;
-          reward.appendChild(valid);
-          modal.insertBefore(reward, button);
+      if (!reward) {
+        result.textContent = "Could not claim the reward. Please try again.";
+        button.disabled = false;
+        spun = false;
+        return;
+      }
+
+      result.textContent = reward.label;
+      if (reward.code || isSafeHttpUrl(reward.url)) {
+        const rewardEl = document.createElement("div");
+        rewardEl.className = "tacto-spin-reward";
+        if (reward.code) {
+          const code = document.createElement("code");
+          code.className = "tacto-spin-code";
+          code.textContent = reward.code;
+          rewardEl.appendChild(code);
         }
-        // A real reward was handed out — report the claim for analytics/goals.
-        options.onClaim?.(notification.id, notification.variantId);
-      } else {
-        result.textContent = `🎉 ${notification.message}`;
+        if (isSafeHttpUrl(reward.url)) {
+          const link = document.createElement("a");
+          link.className = "tacto-spin-redeem";
+          link.href = reward.url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = "Redeem now";
+          rewardEl.appendChild(link);
+        }
+        const valid = document.createElement("div");
+        valid.className = "tacto-sub";
+        valid.textContent = `Valid for ${reward.validForDays} days`;
+        rewardEl.appendChild(valid);
+        modal.insertBefore(rewardEl, button);
       }
       button.textContent = "You won!";
+      // A real reward was handed out — report the claim for analytics/goals.
+      options.onClaim?.(notification.id, notification.variantId);
     }, 3200);
   });
 

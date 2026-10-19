@@ -379,11 +379,16 @@ export const event = pgTable(
     displayName: text("display_name"),
     city: text("city"),
     payload: jsonb("payload"),
-    dedupeKey: text("dedupe_key").unique(),
+    // Idempotency key is scoped to the site: two tenants may both use order
+    // "123" without suppressing each other's events.
+    dedupeKey: text("dedupe_key"),
     occurredAt: timestamp("occurred_at").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("event_site_occurred_idx").on(t.siteId, t.occurredAt)],
+  (t) => [
+    index("event_site_occurred_idx").on(t.siteId, t.occurredAt),
+    uniqueIndex("event_site_dedupe_key").on(t.siteId, t.dedupeKey),
+  ],
 );
 
 // ---------- TESTIMONIAL ENGINE (F7) ----------
@@ -478,9 +483,42 @@ export const impression = pgTable(
     country: text("country"),
     path: text("path"),
     isBot: boolean("is_bot").notNull().default(false),
+    // Idempotency for goal conversions: the source event id/dedupe key. Null
+    // for ordinary views/clicks and URL-goal conversions (Postgres allows
+    // multiple nulls in a unique index).
+    dedupeKey: text("dedupe_key"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("impression_site_created_idx").on(t.siteId, t.createdAt)],
+  (t) => [
+    index("impression_site_created_idx").on(t.siteId, t.createdAt),
+    uniqueIndex("impression_site_ref_kind_dedupe_key").on(t.siteId, t.refId, t.kind, t.dedupeKey),
+  ],
+);
+
+// Spin-to-win rewards are drawn and stored server-side so coupon codes never
+// reach the public payload and each visitor can claim exactly one reward.
+export const spinClaim = pgTable(
+  "spin_claim",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    notificationId: text("notification_id")
+      .notNull()
+      .references(() => notification.id, { onDelete: "cascade" }),
+    visitorId: text("visitor_id").notNull(),
+    prizeLabel: text("prize_label").notNull(),
+    prizeCode: text("prize_code"),
+    prizeUrl: text("prize_url"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("spin_claim_notification_visitor_key").on(t.notificationId, t.visitorId),
+    index("spin_claim_site_idx").on(t.siteId),
+  ],
 );
 
 // Conversion goals (FR-ANL-03). `rule` is a URL match (see @repo/contracts).

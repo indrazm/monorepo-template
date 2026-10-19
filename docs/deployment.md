@@ -16,6 +16,7 @@ Production Compose sets `NODE_ENV=production`, applies committed migrations, and
 - Use a unique auth secret of at least 32 characters.
 - Set `BETTER_AUTH_URL` to the public API URL.
 - Set `CLIENT_ORIGINS` to comma-separated HTTP(S) frontend origins without paths.
+- Set `RESEND_API_KEY` and `MAIL_FROM_EMAIL` (a domain verified in Resend) so verification and password-reset emails are delivered. Production startup fails without them. Optionally set `MAIL_FROM_NAME` and `RESEND_API_URL`.
 - Review migrations before deploying. See [database rules](database.md).
 - Supply the worker with its own runtime environment and `REDIS_URL`.
 

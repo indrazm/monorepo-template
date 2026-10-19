@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { planLimits } from "@repo/contracts/billing";
 import type { NotificationConfig } from "@repo/contracts/notifications";
 import type { RealtimeStore } from "@repo/queue";
-import { event, impression, site } from "@repo/db/schema";
+import { event, impression, site, subscription } from "@repo/db/schema";
 import * as schema from "@repo/db/schema";
 import { createNotificationsService } from "../notifications/services";
 import { createSitesService } from "../sites/services";
@@ -83,7 +83,7 @@ describe("widget payload service", () => {
     });
   });
   beforeEach(async () => {
-    await client.exec('TRUNCATE "site" CASCADE');
+    await client.exec('TRUNCATE "site", "subscription" CASCADE');
   });
   afterAll(async () => {
     await client.close();
@@ -91,6 +91,12 @@ describe("widget payload service", () => {
 
   async function seedSite() {
     return sites.create(ORG, { name: "Shop", domain: "shop.example.com" });
+  }
+
+  // Premium notification types are gated at serve time; grant a plan in tests
+  // that exercise them.
+  async function grantPlan(plan: "growth") {
+    await db.insert(subscription).values({ organizationId: ORG, plan, status: "active" });
   }
 
   it("returns not_found for an unknown site key", async () => {
@@ -267,6 +273,7 @@ describe("widget payload service", () => {
   });
 
   it("renders a low-stock (FOMO) count and a live countdown (via the extra column)", async () => {
+    await grantPlan("growth");
     const created = await seedSite();
     await notifications.create(ORG, {
       siteId: created.id,
@@ -303,6 +310,7 @@ describe("widget payload service", () => {
   });
 
   it("renders conversion widgets (bar, popup, spin_to_win) with static messages", async () => {
+    await grantPlan("growth");
     const created = await seedSite();
     await notifications.create(ORG, {
       siteId: created.id,
@@ -367,7 +375,8 @@ describe("widget payload service", () => {
     expect(byType.spin_to_win?.message).toBe("WIN10");
   });
 
-  it("carries the spin prize pool to the pixel so a reward can be won (F69)", async () => {
+  it("carries only labels to the pixel and keeps coupon codes server-side (F69)", async () => {
+    await grantPlan("growth");
     const created = await seedSite();
     await notifications.create(ORG, {
       siteId: created.id,
@@ -401,11 +410,40 @@ describe("widget payload service", () => {
     });
     expect(result.kind).toBe("ok");
     if (result.kind !== "ok") return;
-    const spin = result.payload.notifications.find((n) => n.type === "spin_to_win")?.spin;
+    const spinNotification = result.payload.notifications.find((n) => n.type === "spin_to_win");
+    const spin = spinNotification?.spin;
     expect(spin?.validForDays).toBe(3);
     expect(spin?.prizes).toHaveLength(3);
-    expect(spin?.prizes[0]).toEqual({ label: "10% off", code: "SAVE10", weight: 1 });
-    expect(spin?.prizes[1]?.url).toBe("https://shop.example.com/ship");
+    expect(spin?.prizes[0]).toEqual({ label: "10% off" });
+    expect(JSON.stringify(spin)).not.toContain("SAVE10");
+    expect(JSON.stringify(spin)).not.toContain("https://shop.example.com/ship");
+
+    if (!spinNotification) throw new Error("Spin notification missing");
+    const first = await widget.claimSpin({
+      site: created.siteKey,
+      notificationId: spinNotification.id,
+      visitorId: "spin-visitor-1",
+    });
+    expect(first).not.toBeNull();
+    expect(first?.validForDays).toBe(3);
+    expect(["10% off", "Free shipping", "Try again"]).toContain(first?.label);
+
+    // A second claim from the same visitor returns the same reward (no re-spin
+    // for a better coupon).
+    const replay = await widget.claimSpin({
+      site: created.siteKey,
+      notificationId: spinNotification.id,
+      visitorId: "spin-visitor-1",
+    });
+    expect(replay).toEqual(first);
+
+    // A different visitor gets an independent claim.
+    const other = await widget.claimSpin({
+      site: created.siteKey,
+      notificationId: spinNotification.id,
+      visitorId: "spin-visitor-2",
+    });
+    expect(other).not.toBeNull();
   });
 
   it("buckets A/B variants deterministically per visitor (FR-ANL-04)", async () => {

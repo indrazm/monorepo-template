@@ -102,6 +102,7 @@ export function createApp({
   });
   // Public widget endpoints: any origin, no credentials (runs on customer sites).
   const widgetCors = cors({
+    allowHeaders: ["Content-Type", "ngrok-skip-browser-warning"],
     allowMethods: ["GET", "POST", "OPTIONS"],
     origin: "*",
     maxAge: 86_400,
@@ -178,10 +179,14 @@ export function createApp({
           createWidgetService(db, {
             store,
             enqueueCounter: enqueue?.counter,
-            onEvent: (siteId, eventType) => goalsService.recordEventConversions(siteId, eventType),
+            onEvent: (siteId, eventType, dedupeKey) =>
+              goalsService.recordEventConversions(siteId, eventType, dedupeKey),
             staticMapTemplate: config.media.staticMapTemplate,
             upgradeUrl: dashboardOrigin ? `${dashboardOrigin}/billing` : undefined,
             onQuotaThreshold,
+            hitRateLimit: store
+              ? (key, limit, windowMs) => store.hitRateLimit(key, limit, windowMs)
+              : undefined,
           }),
           (siteKey, url) => {
             void goalsService.recordConversions(siteKey, url).catch(() => undefined);
@@ -194,7 +199,8 @@ export function createApp({
           createIngestService(db, {
             enqueueWebhook: enqueue?.webhook,
             enqueueCounter: enqueue?.counter,
-            onEvent: (siteId, eventType) => goalsService.recordEventConversions(siteId, eventType),
+            onEvent: (siteId, eventType, dedupeKey) =>
+              goalsService.recordEventConversions(siteId, eventType, dedupeKey),
           }),
           // Multi-instance rate limiting when Redis is available (NFR-SEC-04).
           store

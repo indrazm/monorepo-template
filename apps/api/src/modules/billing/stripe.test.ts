@@ -39,6 +39,34 @@ describe("parseBillingEvent", () => {
     });
   });
 
+  it("maps a Portal plan change from the subscription Price ID", () => {
+    const update = parseBillingEvent(
+      {
+        type: "customer.subscription.updated",
+        data: {
+          object: {
+            customer: "cus_abc",
+            status: "active",
+            cancel_at_period_end: true,
+            metadata: { organizationId: "org-3", plan: "starter" },
+            items: { data: [{ price: { id: "price_growth_year" } }] },
+          },
+        },
+      },
+      {
+        starter: { month: "price_starter", year: null },
+        growth: { month: "price_growth", year: "price_growth_year" },
+        agency: { month: "price_agency", year: null },
+      },
+    );
+    expect(update).toMatchObject({
+      organizationId: "org-3",
+      plan: "growth",
+      status: "active",
+      cancelAtPeriodEnd: true,
+    });
+  });
+
   it("ignores events without an organization id", () => {
     expect(
       parseBillingEvent({ type: "checkout.session.completed", data: { object: {} } }),

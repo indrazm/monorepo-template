@@ -51,6 +51,33 @@ describe("billing guard", () => {
     expect(overview.removeBadge).toBe(false);
   });
 
+  it("falls back to Free when the subscription is not active", async () => {
+    await db.insert(schema.subscription).values({
+      organizationId: "org-inactive",
+      plan: "growth",
+      status: "past_due",
+    });
+    expect(await billing.getPlan("org-inactive")).toBe("free");
+    const overview = await billing.getOverview("org-inactive");
+    expect(overview.plan).toBe("growth");
+    expect(overview.effectivePlan).toBe("free");
+    expect(overview.active).toBe(false);
+    expect(overview.maxSites).toBe(1);
+    expect(overview.removeBadge).toBe(false);
+  });
+
+  it("upserts a subscription when the organization did not have one", async () => {
+    await billing.updatePlan({
+      organizationId: "org-no-subscription",
+      plan: "starter",
+      status: "active",
+      renewsAt: null,
+      customerId: "cus_new",
+    });
+    expect(await billing.getPlan("org-no-subscription")).toBe("starter");
+    expect(await billing.getCustomerId("org-no-subscription")).toBe("cus_new");
+  });
+
   it("captures the provider customer id and flags the plan manageable (FR-BIL-05)", async () => {
     await db.insert(schema.subscription).values({ organizationId: "org-d", plan: "free" });
     expect(await billing.getCustomerId("org-d")).toBeNull();
