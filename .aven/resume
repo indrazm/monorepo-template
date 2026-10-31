@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Local-only services matching .env.example; no sudo or Docker required.
+service_dir="$HOME/.local/share/monorepo-template"
+pgdata="$service_dir/postgres"
+pgsocket="$service_dir/socket"
+redis_dir="$service_dir/redis"
+pgbin=$(printf '%s\n' /usr/lib/postgresql/*/bin | sort -V | tail -1)
+mkdir -p "$pgsocket" "$redis_dir"
+chmod 700 "$pgsocket"
+
+if [[ ! -f "$pgdata/PG_VERSION" ]]; then
+  "$pgbin/initdb" -D "$pgdata" -U postgres --auth=trust > /dev/null
+fi
+if ! "$pgbin/pg_ctl" -D "$pgdata" status > /dev/null 2>&1; then
+  "$pgbin/pg_ctl" -D "$pgdata" -l "$service_dir/postgres.log" -w -t 5 \
+    -o "-p 15432 -h 127.0.0.1 -k $pgsocket" start > /dev/null
+fi
+if ! "$pgbin/psql" -h 127.0.0.1 -p 15432 -U postgres -d postgres -Atc \
+  "SELECT 1 FROM pg_database WHERE datname = 'monorepo_template'" | grep -q 1; then
+  "$pgbin/createdb" -h 127.0.0.1 -p 15432 -U postgres monorepo_template
+fi
+
+if ! redis-cli -h 127.0.0.1 -p 16379 ping 2>/dev/null | grep -q '^PONG$'; then
+  redis-server --bind 127.0.0.1 --port 16379 --dir "$redis_dir" \
+    --appendonly yes --daemonize yes --pidfile "$redis_dir/redis.pid" \
+    --logfile "$redis_dir/redis.log"
+fi

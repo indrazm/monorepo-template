@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+printf '%s\n' 'Checking Node.js and the pinned pnpm version...'
+node -e 'if (Number(process.versions.node.split(".")[0]) < 24) throw new Error("Node.js 24+ is required")'
+package_manager=$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).packageManager')
+if [[ "$(pnpm --version 2>/dev/null || true)" != "${package_manager#pnpm@}" ]]; then
+  sudo npm install --global --silent "$package_manager"
+fi
+
+printf '%s\n' 'Installing native PostgreSQL and Redis for local development...'
+sudo apt-get update -qq
+sudo apt-get install -y -qq --no-install-recommends postgresql redis-server
+
+printf '%s\n' 'Installing workspace dependencies from pnpm-lock.yaml...'
+pnpm config set store-dir "$HOME/.local/share/pnpm/store"
+pnpm install --frozen-lockfile --reporter=silent
+
+printf '%s\n' 'Creating local environment defaults if absent...'
+if [[ ! -f .env ]]; then
+  cp .env.example .env
+fi
+
+printf '%s\n' 'Environment setup complete. Services start via .aven/resume; run pnpm db:migrate before using the API.'
