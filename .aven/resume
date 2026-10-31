@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Local-only services, matching .env.example. No sudo or Docker is needed.
+state_dir="$HOME/.local/share/monorepo-template"
+pgbin=$(find /usr/lib/postgresql -path '*/bin/initdb' -printf '%h\n' | sort -V | tail -1)
+pgdata="$state_dir/postgres"
+run_dir="$state_dir/run"
+mkdir -p "$run_dir" "$state_dir/redis"
+chmod 700 "$run_dir"
+
+if [ ! -f "$pgdata/PG_VERSION" ]; then
+  printf 'Initializing local PostgreSQL\n'
+  "$pgbin/initdb" -D "$pgdata" -U postgres --auth=trust > /dev/null
+fi
+if ! "$pgbin/pg_ctl" -D "$pgdata" status > /dev/null; then
+  printf 'Starting local PostgreSQL on 15432\n'
+  "$pgbin/pg_ctl" -D "$pgdata" -l "$state_dir/postgres.log" -w -t 5 \
+    -o "-c unix_socket_directories=$run_dir -c listen_addresses=127.0.0.1 -p 15432" start > /dev/null
+fi
+if ! "$pgbin/psql" -h 127.0.0.1 -p 15432 -U postgres -d postgres -Atc \
+  "SELECT 1 FROM pg_database WHERE datname='monorepo_template'" | grep -q 1; then
+  "$pgbin/createdb" -h 127.0.0.1 -p 15432 -U postgres monorepo_template
+fi
+
+if ! redis-cli -h 127.0.0.1 -p 16379 ping > /dev/null 2>&1; then
+  printf 'Starting local Redis on 16379\n'
+  redis-server --bind 127.0.0.1 --port 16379 --daemonize yes \
+    --dir "$state_dir/redis" --appendonly yes \
+    --pidfile "$run_dir/redis.pid" --logfile "$state_dir/redis.log"
+fi
