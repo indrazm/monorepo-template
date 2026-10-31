@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '\nChecking Node.js and pnpm\n'
+node -e 'if (Number(process.versions.node.split(".")[0]) < 24) throw new Error("Node.js 24+ is required")'
+pnpm_version=$(node -p 'require("./package.json").packageManager.split("@")[1]')
+if ! command -v pnpm > /dev/null || [ "$(pnpm --version)" != "$pnpm_version" ]; then
+  sudo npm install --global --silent "pnpm@$pnpm_version"
+fi
+
+printf '\nInstalling local PostgreSQL and Redis\n'
+sudo apt-get update -qq
+sudo apt-get install -y -qq --no-install-recommends postgresql redis-server
+
+printf '\nInstalling workspace dependencies from the lockfile\n'
+pnpm config set store-dir "$HOME/.local/share/pnpm/store"
+pnpm install --frozen-lockfile --reporter=silent
+
+printf '\nCreating local environment defaults if missing\n'
+[ -f .env ] || cp .env.example .env

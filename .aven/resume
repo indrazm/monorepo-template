@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Loopback-only development services, independent of Docker and sudo.
+# Data is container-local. Run pnpm db:migrate before using the API.
+PGBIN=$(find /usr/lib/postgresql -mindepth 2 -maxdepth 2 -type d -name bin | sort -V | tail -1)
+DATA_ROOT="$HOME/.local/share/aven/monorepo-template"
+PGDATA="$DATA_ROOT/postgres"
+REDIS_DATA="$DATA_ROOT/redis"
+mkdir -p "$DATA_ROOT" "$REDIS_DATA"
+
+if [ ! -f "$PGDATA/PG_VERSION" ]; then
+  "$PGBIN/initdb" -D "$PGDATA" -U postgres --auth=trust > /dev/null
+fi
+if ! "$PGBIN/pg_ctl" -D "$PGDATA" status > /dev/null 2>&1; then
+  "$PGBIN/pg_ctl" -D "$PGDATA" -l "$DATA_ROOT/postgres.log" -w \
+    -o "-p 15432 -c listen_addresses=127.0.0.1 -c unix_socket_directories=/tmp" start > /dev/null
+fi
+if ! "$PGBIN/psql" -h 127.0.0.1 -p 15432 -U postgres -d postgres -Atc \
+  "SELECT 1 FROM pg_database WHERE datname='monorepo_template'" | grep -qx 1; then
+  "$PGBIN/createdb" -h 127.0.0.1 -p 15432 -U postgres monorepo_template
+fi
+
+if ! redis-cli -h 127.0.0.1 -p 16379 ping 2> /dev/null | grep -qx PONG; then
+  redis-server --bind 127.0.0.1 --protected-mode yes --port 16379 \
+    --dir "$REDIS_DATA" --appendonly yes --daemonize yes \
+    --pidfile "$REDIS_DATA/redis.pid" --logfile "$REDIS_DATA/redis.log"
+fi
