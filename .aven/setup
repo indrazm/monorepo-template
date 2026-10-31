@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# Versions: Node 24 (.github/workflows/ci-cd.yml), pnpm 10.30.3
+# (package.json), PostgreSQL 16 and Redis 7 (docker-compose.dev.yaml).
+export DEBIAN_FRONTEND=noninteractive
+codename="$(. /etc/os-release && printf '%s' "$VERSION_CODENAME")"
+
+printf '%s\n' 'Installing repository signing tools'
+sudo apt-get update -qq
+sudo apt-get install -y -qq --no-install-recommends curl ca-certificates gnupg
+
+if ! command -v node >/dev/null || [[ "$(node -v)" != v24.* ]]; then
+  printf '%s\n' 'Installing Node.js 24 from NodeSource'
+  curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+    | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/nodesource.gpg
+  printf '%s\n' 'deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_24.x nodistro main' \
+    | sudo tee /etc/apt/sources.list.d/nodesource.list >/dev/null
+  sudo apt-get update -qq
+  sudo apt-get install -y -qq --no-install-recommends nodejs
+fi
+[[ "$(node -v)" == v24.* ]]
+
+printf '%s\n' 'Preparing pnpm 10.30.3'
+if ! command -v pnpm >/dev/null || [[ "$(pnpm --version)" != 10.30.3 ]]; then
+  sudo npm install --global --silent pnpm@10.30.3
+fi
+pnpm config set store-dir "$HOME/.local/share/pnpm/store" >/dev/null
+
+printf '%s\n' 'Installing PostgreSQL 16 and Redis 7 from vendor repositories'
+curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+  | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/pgdg.gpg
+printf 'deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$codename" \
+  | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+curl -fsSL https://packages.redis.io/gpg \
+  | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/redis.gpg
+printf 'deb [signed-by=/usr/share/keyrings/redis.gpg] https://packages.redis.io/deb %s main\n' "$codename" \
+  | sudo tee /etc/apt/sources.list.d/redis.list >/dev/null
+sudo apt-get update -qq
+# The Redis repository also contains newer majors; select only Redis 7.
+redis_version="$(apt-cache madison redis-server | awk '$3 ~ /^([0-9]+:)?7\./ {print $3}' | sort -V | tail -n 1)"
+[[ -n "$redis_version" ]] || { echo 'Redis 7 is unavailable in the vendor repository' >&2; exit 1; }
+sudo apt-get install -y -qq --no-install-recommends postgresql-16 postgresql-client-16 \
+  "redis-server=$redis_version" "redis-tools=$redis_version"
+sudo service postgresql stop >/dev/null
+sudo service redis-server stop >/dev/null
+/usr/lib/postgresql/16/bin/postgres --version
+redis-server --version
+
+printf '%s\n' 'Installing workspace dependencies from pnpm-lock.yaml'
+pnpm install --frozen-lockfile --reporter=silent
+
+printf '%s\n' 'Preparing local environment template (without secrets)'
+[ -f .env ] || cp .env.example .env
+printf '%s\n' 'Setup complete; .aven/resume starts local services in new threads'

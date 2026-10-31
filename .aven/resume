@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Match docker-compose.dev.yaml; run as node without sudo.
+PGBIN=/usr/lib/postgresql/16/bin
+state="$HOME/.local/share/aven/monorepo-template"
+PGDATA="$state/postgres-16"
+mkdir -p "$state/redis-7"
+
+if [ ! -f "$PGDATA/PG_VERSION" ]; then
+  # Public local-only credentials from the development Compose file.
+  "$PGBIN/initdb" -D "$PGDATA" -U postgres --auth-local=trust \
+    --auth-host=scram-sha-256 --pwfile=<(printf '%s\n' postgres) >/dev/null
+fi
+if ! "$PGBIN/pg_ctl" -D "$PGDATA" status >/dev/null 2>&1; then
+  printf '%s\n' 'Starting PostgreSQL 16 on localhost:15432'
+  "$PGBIN/pg_ctl" -D "$PGDATA" -l "$state/postgres.log" -w -t 5 \
+    -o '-h localhost -p 15432 -k /tmp' start >/dev/null
+fi
+if ! "$PGBIN/psql" -h /tmp -p 15432 -U postgres -d postgres -Atc \
+  "SELECT 1 FROM pg_database WHERE datname = 'monorepo_template'" | grep -qx 1; then
+  "$PGBIN/createdb" -h /tmp -p 15432 -U postgres monorepo_template
+fi
+
+if ! redis-cli -h 127.0.0.1 -p 16379 ping 2>/dev/null | grep -qx PONG; then
+  printf '%s\n' 'Starting Redis 7 on localhost:16379'
+  redis-server --bind 127.0.0.1 ::1 --port 16379 --appendonly yes \
+    --dir "$state/redis-7" --daemonize yes \
+    --pidfile "$state/redis-7.pid" --logfile "$state/redis-7.log"
+fi
