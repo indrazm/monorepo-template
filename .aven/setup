@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+export DEBIAN_FRONTEND=noninteractive
+
+# Versions: Node 24 (.github/workflows/ci-cd.yml, Dockerfile),
+# pnpm 10.30.3 (package.json), PostgreSQL 16 and Redis 7
+# (docker-compose.dev.yaml). Use native servers, with compose's dev settings
+# reproduced by .aven/resume; no Docker daemon is needed.
+
+echo "Installing PostgreSQL 16 and Redis 7 from their vendor repositories"
+sudo apt-get update -qq
+sudo apt-get install -y -qq --no-install-recommends curl ca-certificates gnupg
+. /etc/os-release
+curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+  | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/pgdg.gpg
+printf 'deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" \
+  | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+curl -fsSL https://packages.redis.io/gpg \
+  | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/redis.gpg
+printf 'deb [signed-by=/usr/share/keyrings/redis.gpg] https://packages.redis.io/deb %s main\n' "$VERSION_CODENAME" \
+  | sudo tee /etc/apt/sources.list.d/redis.list > /dev/null
+sudo apt-get update -qq
+redis_version="$(apt-cache madison redis-server | awk '$3 ~ /^[0-9]+:7\./ && !found {print $3; found=1}')"
+if [ -z "$redis_version" ]; then
+  echo "Redis 7 is unavailable from the vendor repository" >&2
+  exit 1
+fi
+# Package post-install hooks may start system services. Never snapshot them running.
+trap 'sudo service postgresql stop > /dev/null 2>&1 || true; sudo service redis-server stop > /dev/null 2>&1 || true' EXIT
+sudo apt-get install -y -qq --no-install-recommends postgresql-16 \
+  "redis-server=$redis_version" "redis-tools=$redis_version"
+/usr/lib/postgresql/16/bin/postgres --version
+redis-server --version | grep -q 'v=7\.'
+
+echo "Ensuring Node.js 24 and pnpm 10.30.3"
+if ! command -v node > /dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" != 24 ]; then
+  curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash - > /dev/null
+  sudo apt-get install -y -qq --no-install-recommends nodejs
+fi
+if ! command -v pnpm > /dev/null || [ "$(pnpm --version)" != 10.30.3 ]; then
+  sudo npm install --global --silent pnpm@10.30.3
+fi
+node --version
+pnpm --version
+
+echo "Installing workspace dependencies from pnpm-lock.yaml"
+pnpm config set store-dir "$HOME/.local/share/pnpm/store"
+pnpm install --frozen-lockfile --reporter=silent
+
+echo "Copying local environment defaults if .env is missing"
+[ -f .env ] || cp .env.example .env
+
+echo "Environment ready; .aven/resume starts local services in each thread"

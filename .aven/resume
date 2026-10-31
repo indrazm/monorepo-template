@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+umask 077
+
+# Native equivalents of docker-compose.dev.yaml. These are disposable local
+# services only: postgres/postgres is the compose example credential, not a
+# project secret. No sudo, installs, or migrations belong here.
+PGBIN=/usr/lib/postgresql/16/bin
+STATE="$HOME/.local/share/monorepo-template"
+PGDATA="$STATE/postgres"
+mkdir -p "$STATE/socket" "$STATE/redis"
+
+if [ ! -f "$PGDATA/PG_VERSION" ]; then
+  "$PGBIN/initdb" -D "$PGDATA" -U postgres --auth-local=trust \
+    --auth-host=scram-sha-256 --pwfile=<(printf '%s\n' postgres) > /dev/null
+fi
+if ! "$PGBIN/pg_ctl" -D "$PGDATA" status > /dev/null 2>&1; then
+  "$PGBIN/pg_ctl" -D "$PGDATA" -l "$STATE/postgres.log" -w -t 5 \
+    -o "-p 15432 -h 127.0.0.1 -k $STATE/socket" start > /dev/null
+fi
+if ! "$PGBIN/psql" -h "$STATE/socket" -p 15432 -U postgres -d postgres \
+  -Atc "SELECT 1 FROM pg_database WHERE datname='monorepo_template'" | grep -q 1; then
+  "$PGBIN/createdb" -h "$STATE/socket" -p 15432 -U postgres monorepo_template
+fi
+
+if ! redis-cli -h 127.0.0.1 -p 16379 ping 2>/dev/null | grep -q PONG; then
+  redis-server --bind 127.0.0.1 --port 16379 --appendonly yes \
+    --dir "$STATE/redis" --daemonize yes --pidfile "$STATE/redis.pid" \
+    --logfile "$STATE/redis.log"
+fi
+[ -f .env ] || cp .env.example .env
+echo "Local PostgreSQL 16 (15432) and Redis 7 (16379) ready"
