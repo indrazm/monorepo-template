@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Starts this thread's own PostgreSQL 16 and Redis servers as the plain user
+# `node` (no sudo here). Runs at every container start; must finish in under
+# 10 seconds and be safe to run any number of times.
+#
+# Matches docker-compose.dev.yaml credentials and database name:
+#   POSTGRES_USER=postgres, POSTGRES_PASSWORD=postgres, POSTGRES_DB=monorepo_template
+# The default dev ports (Postgres 15432, Redis 16379) avoid clashing with any
+# host services on 5432/6379. Data lives in the container, not the workspace,
+# so re-run migrations (pnpm db:migrate) when returning to an old thread.
+
+PGBIN=/usr/lib/postgresql/16/bin
+PGDATA="$HOME/pgdata"
+mkdir -p "$HOME/.local/run"
+
+# PostgreSQL 16 on 127.0.0.1:15432.
+if [ ! -d "$PGDATA" ]; then
+  "$PGBIN/initdb" -D "$PGDATA" -U postgres --auth=trust > /dev/null
+  printf 'listen_addresses = %s\nport = 15432\nunix_socket_directories = %s\n' \
+    "'127.0.0.1'" "'$HOME/.local/run'" >> "$PGDATA/postgresql.conf"
+fi
+"$PGBIN/pg_ctl" -D "$PGDATA" status > /dev/null 2>&1 \
+  || "$PGBIN/pg_ctl" -D "$PGDATA" -l "$HOME/pgdata.log" -w start > /dev/null
+"$PGBIN/psql" -h 127.0.0.1 -p 15432 -U postgres -d postgres -tc \
+  "ALTER USER postgres WITH PASSWORD 'postgres'" > /dev/null
+"$PGBIN/psql" -h 127.0.0.1 -p 15432 -U postgres -d postgres -tc \
+  "SELECT 1 FROM pg_database WHERE datname='monorepo_template'" | grep -q 1 \
+  || "$PGBIN/createdb" -h 127.0.0.1 -p 15432 -U postgres monorepo_template
+
+# Redis 7 on 127.0.0.1:16379 with AOF persistence, like the dev compose file.
+REDIS_DIR="$HOME/redis-data"
+mkdir -p "$REDIS_DIR"
+if ! /usr/local/bin/redis-cli -p 16379 ping > /dev/null 2>&1; then
+  /usr/local/bin/redis-server --port 16379 --bind 127.0.0.1 \
+    --dir "$REDIS_DIR" --appendonly yes --daemonize yes > /dev/null
+fi
