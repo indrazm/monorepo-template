@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Environment snapshot for this repository.
+#
+# Versions (CI wins on conflicts; CI = .github/workflows/ci-cd.yml):
+# - Node.js 24 (CI setup-node, Dockerfile node:24-alpine; sandbox has 24.x via NodeSource)
+# - pnpm 10.30.3 (package.json packageManager; enabled via corepack)
+# - PostgreSQL 16 (docker-compose.yaml + docker-compose.dev.yaml postgres:16-alpine,
+#   from PostgreSQL's apt repository because Debian trixie only ships PostgreSQL 17)
+# - Redis 7.4 (docker-compose.dev.yaml redis:7-alpine, built from the official
+#   release tarball because Debian trixie only ships Redis 8 and the vendor apt
+#   repository's bookworm packages depend on lsb-base, which trixie dropped)
+#
+# Idempotent: safe to run again on an already set-up machine.
+# No long-running processes are left behind: databases are started per-thread
+# by .aven/resume, and migrations run in the thread (pnpm db:migrate).
+
+echo "==> Installing system packages (curl, CA certs, build tools)..."
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends \
+  ca-certificates curl gnupg build-essential > /dev/null
+
+echo "==> Installing PostgreSQL 16 (PGDG)..."
+curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+  | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" \
+  | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends postgresql-16 > /dev/null
+
+echo "==> Installing Redis 7.4 (built from official release tarball)..."
+REDIS_VERSION="7.4.5"
+if [ ! -x /usr/local/bin/redis-server ] || ! /usr/local/bin/redis-server --version 2>/dev/null | grep -q "v=${REDIS_VERSION}"; then
+  rm -rf /tmp/redis-setup
+  mkdir -p /tmp/redis-setup
+  curl -fsSL "https://download.redis.io/releases/redis-${REDIS_VERSION}.tar.gz" \
+    -o "/tmp/redis-setup/redis-${REDIS_VERSION}.tar.gz"
+  tar xzf "/tmp/redis-setup/redis-${REDIS_VERSION}.tar.gz" -C /tmp/redis-setup
+  make -C "/tmp/redis-setup/redis-${REDIS_VERSION}" -j"$(nproc)" BUILD_TLS=no > /dev/null
+  sudo make -C "/tmp/redis-setup/redis-${REDIS_VERSION}" install > /dev/null
+  rm -rf /tmp/redis-setup
+fi
+/usr/local/bin/redis-server --version
+
+echo "==> Enabling pnpm via corepack..."
+corepack enable > /dev/null 2>&1 || true
+# Keep pnpm's store out of the repository (the workspace disk cannot share
+# pnpm's default store location, which would leave a .pnpm-store folder behind).
+pnpm config set store-dir "$HOME/.local/share/pnpm/store" > /dev/null
+
+echo "==> Installing workspace dependencies (frozen lockfile)..."
+pnpm install --frozen-lockfile --reporter=silent
+
+echo "==> Copying .env template (local, non-secret values only)..."
+[ -f .env ] || cp .env.example .env
+
+echo "Environment setup complete."
