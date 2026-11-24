@@ -1,7 +1,7 @@
 import { exampleQueueName, type ExampleJob, type ExampleJobResult } from "@repo/contracts/jobs";
-import { Worker } from "bullmq";
 import { createQueueConnection } from "@repo/queue";
-import type { createWorkerConfig } from "./config";
+import { Worker } from "bullmq";
+import { createWorkerConfig, parseWorkerEnv } from "./lib/config";
 import { processExampleJob } from "./processors/example";
 
 export function runWorker(config: ReturnType<typeof createWorkerConfig>) {
@@ -24,3 +24,5 @@ export function runWorker(config: ReturnType<typeof createWorkerConfig>) {
   }
   return worker;
 }
+
+runWorker(createWorkerConfig(parseWorkerEnv(process.env)));

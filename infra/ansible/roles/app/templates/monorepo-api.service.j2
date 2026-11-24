@@ -6,10 +6,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 User={{ app_user }}
-WorkingDirectory={{ app_dir }}
+WorkingDirectory={{ app_dir }}/apps/api
 EnvironmentFile={{ app_dir }}/.env
 Environment=PATH={{ bun_bin | dirname }}:/usr/local/bin:/usr/bin:/bin
-ExecStart={{ bun_bin }} run --filter @repo/api start
+ExecStart={{ app_dir }}/apps/api/node_modules/.bin/tsx src/index.ts
 Restart=on-failure
 RestartSec=5
 KillMode=mixed

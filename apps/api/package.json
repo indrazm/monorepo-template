@@ -10,9 +10,9 @@
   },
   "scripts": {
     "with-env": "dotenv -e ../../.env --",
-    "dev": "bun run with-env tsx watch src/main.ts",
+    "dev": "bun run with-env tsx watch src/index.ts",
     "createsuperuser": "bun run with-env tsx scripts/createsuperuser.ts",
-    "start": "bun run with-env tsx src/main.ts",
+    "start": "bun run with-env tsx src/index.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

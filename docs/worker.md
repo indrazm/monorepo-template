@@ -6,9 +6,9 @@
 
 - Define queue names, payload schemas, and result schemas in `@repo/contracts/jobs`.
 - Validate payloads before enqueueing and again before processing data read from Redis.
-- Keep processors in `apps/worker/src/processors`. Keep startup, queue event handlers, and shutdown in `src/worker.ts`.
+- Keep processors in `apps/worker/src/processors`, configuration in `src/lib/config.ts`, startup/shutdown in `src/index.ts`, and tests in `tests/`.
 - Shared queue factories accept configuration explicitly; they must not read environment variables or start workers.
-- Keep Redis settings in the worker's `src/config.ts` and `.env.example`. Other producers own their own runtime configuration.
+- Keep Redis settings in `src/lib/config.ts` and `.env.example`. Other producers own their own runtime configuration.
 - Set `maxRetriesPerRequest: null` on worker connections. Keep producer retry behavior bounded.
 - Assume a job can run again. Make side effects idempotent or provide an explicit deduplication strategy.
 - Define retry/backoff and failed-job retention intentionally when adding real jobs; avoid infinite retries for invalid payloads.

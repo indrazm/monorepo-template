@@ -2,7 +2,7 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
 import { admin } from "better-auth/plugins";
 import type { Database } from "@repo/db";
-import type { createApiConfig } from "../../config";
+import type { createApiConfig } from "../../lib/config";
 import * as schema from "@repo/db/schema";
 
 export function createAuth(db: Database, config: ReturnType<typeof createApiConfig>["auth"]) {

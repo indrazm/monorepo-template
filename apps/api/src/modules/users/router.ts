@@ -1,13 +1,12 @@
 import { apiError } from "@repo/contracts/errors";
+import { usersQuerySchema } from "@repo/contracts/users";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import type { AuthVariables } from "../auth/middleware";
-import { getAdminUser } from "../auth/middleware";
-import { usersQuerySchema } from "@repo/contracts/users";
-import { InvalidUsersCursorError, type createUsersService } from "./services";
+import { getAdminUser, type AuthVariables, type SessionMiddleware } from "../auth/middleware";
+import { InvalidUsersCursorError, type UsersService } from "./services";
 
-export function createUsersRouter(service: ReturnType<typeof createUsersService>) {
-  return new Hono<{ Variables: AuthVariables }>().get(
+export function createUsersRouter(service: UsersService, loadSession: SessionMiddleware) {
+  return new Hono<{ Variables: AuthVariables }>().use("*", loadSession).get(
     "/",
     zValidator("query", usersQuerySchema, (result, c) => {
       if (!result.success) return c.json(apiError("validation_error"), 400);

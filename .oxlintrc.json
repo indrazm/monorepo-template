@@ -7,17 +7,15 @@
   "jsPlugins": ["./tooling/oxlint/repo-plugin.mjs"],
   "rules": {
     "repo/no-array-filter-map": "error",
-    "repo/no-atom-import": "error",
     "repo/no-barrel-file": "error",
-    "repo/no-base-ui-outside-ui": "error",
     "repo/no-chained-type-assertions": "error",
-    "repo/no-comments": "error",
     "repo/no-conditional-spread": "error",
     "repo/no-module-mocking": "error",
     "repo/no-native-primitives": "error",
     "repo/no-reduce-accumulator-copy": "error",
     "repo/no-reflect-apply": "error",
     "repo/no-reflect-get": "error",
+    "repo/no-ui-primitives-outside-ui": "error",
     "repo/no-unknown-type-aliases": "error",
     "repo/padded-if": "error"
   },
@@ -39,7 +37,6 @@
     "**/node_modules/**",
     "**/dist/**",
     "**/build/**",
-    "**/.turbo/**",
     "**/.tanstack/**",
     "**/routeTree.gen.ts",
     "packages/ui/src/components/**"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseApiEnv } from "./config";
+import { parseApiEnv } from "../src/lib/config";
 
 const productionEnv = {
   BETTER_AUTH_URL: "http://localhost:8000",

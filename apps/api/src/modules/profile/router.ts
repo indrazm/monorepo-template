@@ -1,12 +1,12 @@
 import { apiError } from "@repo/contracts/errors";
+import { updateProfileSchema } from "@repo/contracts/profile";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import type { AuthVariables } from "../auth/middleware";
-import { updateProfileSchema } from "@repo/contracts/profile";
-import { ProfileNotFoundError, type createProfileService } from "./services";
+import type { AuthVariables, SessionMiddleware } from "../auth/middleware";
+import { ProfileNotFoundError, type ProfileService } from "./services";
 
-export function createProfileRouter(service: ReturnType<typeof createProfileService>) {
-  return new Hono<{ Variables: AuthVariables }>().patch(
+export function createProfileRouter(service: ProfileService, loadSession: SessionMiddleware) {
+  return new Hono<{ Variables: AuthVariables }>().use("*", loadSession).patch(
     "/",
     zValidator("json", updateProfileSchema, (result, c) => {
       if (!result.success) return c.json(apiError("validation_error"), 400);

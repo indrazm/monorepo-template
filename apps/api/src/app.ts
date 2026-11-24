@@ -1,28 +1,35 @@
-import { apiError } from "@repo/contracts/errors";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Database } from "@repo/db";
-import type { createApiConfig } from "./config";
+import type { createApiConfig } from "./lib/config";
 import {
-  type AuthVariables,
   type AuthProvider,
+  type AuthVariables,
   createSessionMiddleware,
 } from "./modules/auth/middleware";
+import { createAuthHandlerRouter, createSessionRouter } from "./modules/auth/router";
 import { createProfileRouter } from "./modules/profile/router";
-import { createProfileService } from "./modules/profile/services";
+import { createProfileService, type ProfileService } from "./modules/profile/services";
 import { createUsersRouter } from "./modules/users/router";
-import { createUsersService } from "./modules/users/services";
+import { createUsersService, type UsersService } from "./modules/users/services";
 
-export function createApp({
-  auth,
-  db,
-  config,
-}: {
+type AppServices = {
+  profile: ProfileService;
+  users: UsersService;
+};
+
+type CreateAppOptions = {
   auth: AuthProvider;
-  db: Pick<Database, "select" | "update">;
   config: Pick<ReturnType<typeof createApiConfig>, "clientOrigins">;
-}) {
+} & ({ db: Database; services?: Partial<AppServices> } | { db?: undefined; services: AppServices });
+
+export function createApp(options: CreateAppOptions) {
+  const { auth, config } = options;
+  const profileService =
+    options.services?.profile ?? createProfileService(requireDatabase(options.db));
+  const usersService = options.services?.users ?? createUsersService(requireDatabase(options.db));
   const loadSession = createSessionMiddleware(auth);
+
   return new Hono<{ Variables: AuthVariables }>()
     .use(
       "*",
@@ -34,19 +41,18 @@ export function createApp({
       }),
     )
     .get("/health", (c) => c.json({ ok: true, service: "api" }, 200))
-    .on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw))
-    .use("/session", loadSession)
-    .use("/profile", loadSession)
-    .use("/users", loadSession)
-    .get("/session", (c) => {
-      const user = c.get("user");
-      const session = c.get("session");
-
-      if (!user || !session) return c.json(apiError("unauthorized"), 401);
-
-      return c.json({ session, user }, 200);
-    })
-    .route("/profile", createProfileRouter(createProfileService(db)))
-    .route("/users", createUsersRouter(createUsersService(db)));
+    .route("/api/auth", createAuthHandlerRouter(auth))
+    .route("/session", createSessionRouter(loadSession))
+    .route("/profile", createProfileRouter(profileService, loadSession))
+    .route("/users", createUsersRouter(usersService, loadSession));
 }
+
+function requireDatabase(db: Database | undefined): Database {
+  if (!db) {
+    throw new Error("A database instance is required when services are not provided.");
+  }
+
+  return db;
+}
+
 export type AppType = ReturnType<typeof createApp>;

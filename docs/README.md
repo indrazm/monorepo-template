@@ -14,7 +14,7 @@ Start with the [root README](../README.md) for setup and common commands. These 
 ## Common rules
 
 - Applications own configuration, resource creation, and shutdown. Shared packages accept dependencies explicitly.
-- Import workspace packages through public exports and declare each dependency in the consumer's `package.json`.
+- Import workspace packages through public exports and declare each dependency in the consumer's `package.json`. Register new packages in `packageRuntimes` in `scripts/check-boundaries.mjs`.
 - Keep browser code free of server infrastructure. The API client may import `@repo/api/types` using `import type` for RPC inference.
 - Shared contracts and configuration primitives must not depend on other workspace packages.
 - Keep feature logic with its feature. Extract a shared package when there is a concrete reuse requirement.

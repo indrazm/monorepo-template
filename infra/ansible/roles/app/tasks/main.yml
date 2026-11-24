@@ -5,6 +5,7 @@
     dest: "{{ app_dir }}"
   become: true
   become_user: "{{ app_user }}"
+  notify: Restart application
 
 - name: Write the environment file
   ansible.builtin.template:

@@ -1,6 +1,9 @@
+import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
+
+export const migrationsFolder = fileURLToPath(new URL("../drizzle", import.meta.url));
 
 export function createDatabase(connectionString: string) {
   const pool = new Pool({ connectionString });

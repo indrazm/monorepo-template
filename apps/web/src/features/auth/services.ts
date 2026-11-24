@@ -1,5 +1,5 @@
 import { fetchSessionUser } from "@repo/api-client";
-import { apiClient, authClient } from "../../api";
+import { apiClient, authClient } from "../../lib/api";
 import type { LoginInput, RegisterInput } from "./types";
 
 export async function getCurrentUser() {

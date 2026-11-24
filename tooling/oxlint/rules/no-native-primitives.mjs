@@ -14,10 +14,10 @@ const NATIVE_PRIMITIVES = new Set([
 const noNativePrimitives = {
   meta: {
     type: "suggestion",
-    docs: { description: "Disallow native form/interactive elements; use Base UI primitives." },
+    docs: { description: "Disallow native form/interactive elements; use @repo/ui components." },
     messages: {
       noNativePrimitive:
-        "Do not use native <{{name}}>. Use the Base UI based component from src/components.",
+        "Do not use native <{{name}}>. Use the corresponding component from @repo/ui/components.",
     },
     schema: [],
   },

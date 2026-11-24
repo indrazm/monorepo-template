@@ -28,4 +28,4 @@ bun run --filter @repo/api test
 bun run db:studio
 ```
 
-API integration tests apply committed migrations to PGlite and inject that database into services and Better Auth. For PostgreSQL-specific behavior or migration risks, also verify against PostgreSQL. Database tooling reads the root `.env`; the shared database URL schema lives in `@repo/config/database`.
+API integration tests apply committed migrations from `@repo/db`'s `migrationsFolder` to PGlite and inject that database into services and Better Auth. For PostgreSQL-specific behavior or migration risks, also verify against PostgreSQL. Database tooling reads the root `.env`; the shared database URL schema lives in `@repo/config/database`.

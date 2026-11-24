@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import { apiEnvSchema } from "../apps/api/src/config";
-import { workerEnvSchema } from "../apps/worker/src/config";
-import { webEnvSchema } from "../apps/web/src/config";
+import { apiEnvSchema } from "../apps/api/src/lib/config";
+import { workerEnvSchema } from "../apps/worker/src/lib/config";
+import { webEnvSchema } from "../apps/web/src/lib/config";
 
 const example = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
 const entries: Record<string, string> = {};

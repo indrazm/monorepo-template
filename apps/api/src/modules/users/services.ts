@@ -63,3 +63,5 @@ export function createUsersService(db: Pick<Database, "select">) {
     };
   }
 }
+
+export type UsersService = ReturnType<typeof createUsersService>;

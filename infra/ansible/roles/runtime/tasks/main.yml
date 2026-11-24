@@ -17,7 +17,7 @@
 
 - name: Install Bun for the application user
   ansible.builtin.shell:
-    cmd: curl -fsSL https://bun.sh/install | bash
+    cmd: curl -fsSL https://bun.sh/install | bash -s "bun-v{{ bun_version }}"
     creates: "{{ bun_bin }}"
   become: true
   become_user: "{{ app_user }}"

@@ -3,7 +3,7 @@ import { createInterface } from "node:readline/promises";
 import { eq } from "drizzle-orm";
 import { createAuth } from "../src/modules/auth/auth";
 import { createDatabase } from "@repo/db";
-import { createApiConfig, parseApiEnv } from "../src/config";
+import { createApiConfig, parseApiEnv } from "../src/lib/config";
 import { user as userTable } from "@repo/db/schema";
 
 const config = createApiConfig(parseApiEnv(process.env));

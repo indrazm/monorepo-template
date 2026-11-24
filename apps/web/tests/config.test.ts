@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseWebEnv } from "./config";
+import { parseWebEnv } from "../src/lib/config";
 
 describe("web configuration", () => {
   it("rejects invalid public API URLs", () => {

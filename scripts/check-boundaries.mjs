@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "..");
 const projects = [];
+
 for (const group of ["apps", "packages"]) {
   for (const entry of readdirSync(resolve(root, group), { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
@@ -14,29 +15,58 @@ for (const group of ["apps", "packages"]) {
     });
   }
 }
-const browserPackages = new Set(["@repo/web", "@repo/api-client", "@repo/ui", "@repo/contracts"]);
-const serverPackages = new Set([
-  "@repo/api",
-  "@repo/worker",
-  "@repo/db",
-  "@repo/storage",
-  "@repo/queue",
-  "@repo/config",
-]);
+
+const packageRuntimes = {
+  "@repo/web": "browser",
+  "@repo/api-client": "browser",
+  "@repo/ui": "browser",
+  "@repo/contracts": "universal",
+  "@repo/api": "server",
+  "@repo/worker": "server",
+  "@repo/db": "server",
+  "@repo/storage": "server",
+  "@repo/queue": "server",
+  "@repo/config": "server",
+};
+
+const foundationPackages = new Set(["@repo/contracts", "@repo/config"]);
+
+const unclassified = projects.flatMap((project) =>
+  project.manifest.name in packageRuntimes ? [] : [project.manifest.name],
+);
+
+if (unclassified.length > 0) {
+  throw new Error(
+    `Unclassified workspace package(s): [${unclassified.join(", ")}]. Register each package in packageRuntimes in scripts/check-boundaries.mjs.`,
+  );
+}
+
+const existingNames = new Set(projects.map((project) => project.manifest.name));
+const stale = Object.keys(packageRuntimes).filter((name) => !existingNames.has(name));
+
+if (stale.length > 0) {
+  throw new Error(
+    `Stale packageRuntimes entries: [${stale.join(", ")}]. Remove deleted packages from scripts/check-boundaries.mjs.`,
+  );
+}
+
 function* sourceDirectories(path) {
   yield path;
   for (const entry of readdirSync(resolve(root, path), { withFileTypes: true })) {
     if (
       !entry.isDirectory() ||
       ["node_modules", "dist", "build", ".wrangler", ".tanstack", "drizzle"].includes(entry.name)
-    )
+    ) {
       continue;
+    }
 
     yield* sourceDirectories(`${path}/${entry.name}`);
   }
 }
+
 const overrides = projects.flatMap((project) => {
   const owner = project.manifest.name;
+  const ownerRuntime = packageRuntimes[owner];
   const declared = {
     ...project.manifest.dependencies,
     ...project.manifest.devDependencies,
@@ -47,11 +77,15 @@ const overrides = projects.flatMap((project) => {
 
     if (owner === "@repo/api-client" && name === "@repo/api") return false;
 
+    const targetRuntime = packageRuntimes[name];
+    const crossesRuntime =
+      (ownerRuntime === "browser" || ownerRuntime === "universal") && targetRuntime === "server";
+
     return (
       !(name in declared) ||
       target.path.startsWith("apps/") ||
-      (browserPackages.has(owner) && serverPackages.has(name)) ||
-      ["@repo/contracts", "@repo/config"].includes(owner)
+      crossesRuntime ||
+      foundationPackages.has(owner)
     );
   });
   const patterns = forbidden.map((target) => ({
@@ -99,6 +133,7 @@ const overrides = projects.flatMap((project) => {
     };
   });
 });
+
 // Use the existing linter's parser, including TypeScript and re-exports.
 const configPath = resolve(root, `.boundaries-${process.pid}.json`);
 try {

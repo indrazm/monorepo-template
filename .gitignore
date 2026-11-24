@@ -1,7 +1,6 @@
 node_modules
 dist
 build
-.turbo
 .wrangler
 .DS_Store
 .env

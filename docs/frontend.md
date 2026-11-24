@@ -8,11 +8,11 @@ The React application lives in `apps/web`. Use `bun run --filter @repo/web dev` 
 - Keep feature services, hooks, and components together. Authentication owns session queries; profile owns profile mutations.
 - Use TanStack Query for server state and local React state for form drafts and presentation state.
 - Keep cache keys in `query-keys.ts`. Refresh affected queries after mutations; do not insert a different response representation into an existing cache entry.
-- Use the clients configured in `src/api.ts`: Better Auth for auth operations and `@repo/api-client` for custom API operations.
+- Use the clients configured in `src/lib/api.ts`: Better Auth for auth operations and `@repo/api-client` for custom API operations.
 - Infer request and response types. Reuse shared request schemas for form validation; do not duplicate their rules or cast responses to handwritten interfaces.
 - Use `@repo/ui` for reusable visual primitives. Keep product-specific components in the application.
 - Use plain English UI text. The template includes a theme selector and no translation infrastructure.
-- Treat `VITE_*` values as public. Validate them in `src/config.ts`; keep credentials on the server.
+- Treat `VITE_*` values as public. Validate them in `src/lib/config.ts`; keep credentials on the server.
 - Never edit `src/routeTree.gen.ts` manually; the router plugin generates it.
 
 ## Adding a feature

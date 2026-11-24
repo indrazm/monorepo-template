@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { processExampleJob } from "./example";
+import { processExampleJob } from "../src/processors/example";
 
 describe("example processor", () => {
   it("processes validated job data", async () => {

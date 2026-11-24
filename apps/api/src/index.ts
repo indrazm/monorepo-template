@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { createDatabase } from "@repo/db";
 import { createApp } from "./app";
-import type { createApiConfig } from "./config";
+import { createApiConfig, parseApiEnv } from "./lib/config";
 import { createAuth } from "./modules/auth/auth";
 
 export function startServer(config: ReturnType<typeof createApiConfig>) {
@@ -34,3 +34,5 @@ export function startServer(config: ReturnType<typeof createApiConfig>) {
   }
   return server;
 }
+
+startServer(createApiConfig(parseApiEnv(process.env)));

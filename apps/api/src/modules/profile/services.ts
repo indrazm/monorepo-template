@@ -46,3 +46,5 @@ export function createProfileService(db: Pick<Database, "update">) {
     };
   }
 }
+
+export type ProfileService = ReturnType<typeof createProfileService>;
