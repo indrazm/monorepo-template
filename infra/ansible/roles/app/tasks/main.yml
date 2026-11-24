@@ -1,0 +1,54 @@
+- name: Check out the repository
+  ansible.builtin.git:
+    repo: "{{ app_repo }}"
+    version: "{{ app_ref }}"
+    dest: "{{ app_dir }}"
+  become: true
+  become_user: "{{ app_user }}"
+
+- name: Write the environment file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ app_dir }}/.env"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0600"
+  notify: Restart application
+
+- name: Install workspace dependencies
+  ansible.builtin.command:
+    cmd: "{{ bun_bin }} install --frozen-lockfile"
+    chdir: "{{ app_dir }}"
+  become: true
+  become_user: "{{ app_user }}"
+  changed_when: false
+
+- name: Apply database migrations
+  ansible.builtin.command:
+    cmd: "{{ bun_bin }} run db:migrate"
+    chdir: "{{ app_dir }}"
+  become: true
+  become_user: "{{ app_user }}"
+  changed_when: false
+
+- name: Install the systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.service.j2"
+    dest: "/etc/systemd/system/{{ item }}.service"
+    mode: "0644"
+  loop:
+    - monorepo-api
+    - monorepo-worker
+  notify:
+    - Reload systemd
+    - Restart application
+
+- name: Enable and start the services
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop:
+    - monorepo-api
+    - monorepo-worker

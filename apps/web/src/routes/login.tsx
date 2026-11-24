@@ -1,5 +1,6 @@
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
+import { FormElement } from "@repo/ui/components/form-element";
 import { Input } from "@repo/ui/components/input";
 import { Label } from "@repo/ui/components/label";
 import { toast } from "@repo/ui/components/sonner";
@@ -45,7 +46,7 @@ function LoginPage() {
             <CardTitle>Platform login</CardTitle>
           </CardHeader>
           <CardContent>
-            <form className="grid gap-4" onSubmit={handleSubmit}>
+            <FormElement className="grid gap-4" onSubmit={handleSubmit}>
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -72,7 +73,7 @@ function LoginPage() {
               <Button asChild type="button" variant="link">
                 <Link to="/register">Create a user account</Link>
               </Button>
-            </form>
+            </FormElement>
           </CardContent>
         </Card>
       </main>

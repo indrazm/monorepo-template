@@ -1,6 +1,6 @@
 # Worker
 
-`apps/worker` owns BullMQ execution. `packages/queue` owns producer and connection factories. Use `pnpm --filter @repo/worker dev` to run the worker with Redis available.
+`apps/worker` owns BullMQ execution. `packages/queue` owns producer and connection factories. Use `bun run --filter @repo/worker dev` to run the worker with Redis available.
 
 ## Rules
 

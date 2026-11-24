@@ -3,7 +3,6 @@ import { createDatabase } from "@repo/db";
 import { createApp } from "./app";
 
 const mocks = { authHandler: vi.fn(), databaseQuery: vi.fn(), getSession: vi.fn() };
-// The pool is lazy; replacing query prevents any network connection.
 const database = createDatabase("postgresql://localhost/test");
 database.pool.query = mocks.databaseQuery;
 const app = createApp({

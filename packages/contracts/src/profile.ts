@@ -28,7 +28,6 @@ export const profileUserSchema = z.object({
 });
 export const profileResponseSchema = z.object({ user: profileUserSchema });
 
-// Raw schema input allows form values; the output is normalized for the service.
 export type UpdateProfileFormValues = z.input<typeof updateProfileSchema>;
 export type UpdateProfileInput = z.output<typeof updateProfileSchema>;
 export type ProfileUser = z.output<typeof profileUserSchema>;

@@ -14,6 +14,6 @@
     "**/.tanstack/**",
     "**/routeTree.gen.ts",
     "packages/db/drizzle/**",
-    "pnpm-lock.yaml"
+    "bun.lock"
   ]
 }

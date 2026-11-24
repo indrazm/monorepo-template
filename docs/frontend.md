@@ -1,6 +1,6 @@
 # Frontend
 
-The React application lives in `apps/web`. Use `pnpm --filter @repo/web dev` to run it.
+The React application lives in `apps/web`. Use `bun run --filter @repo/web dev` to run it.
 
 ## Rules
 
@@ -23,4 +23,4 @@ The React application lives in `apps/web`. Use `pnpm --filter @repo/web dev` to 
 4. Compose it from a route and add access checks where required.
 5. Verify loading, failure, empty, and successful states, plus cache updates.
 
-Run `pnpm --filter @repo/web typecheck` and `pnpm --filter @repo/web build` after changing routes or shared UI. See [contract rules](contracts.md).
+Run `bun run --filter @repo/web typecheck` and `bun run --filter @repo/web build` after changing routes or shared UI. See [contract rules](contracts.md).

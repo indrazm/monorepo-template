@@ -1,6 +1,6 @@
 # Backend
 
-The Hono API lives in `apps/api`. Use `pnpm --filter @repo/api dev` to run it.
+The Hono API lives in `apps/api`. Use `bun run --filter @repo/api dev` to run it.
 
 ## Rules
 

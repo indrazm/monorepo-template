@@ -41,7 +41,9 @@ export function createApp({
     .get("/session", (c) => {
       const user = c.get("user");
       const session = c.get("session");
+
       if (!user || !session) return c.json(apiError("unauthorized"), 401);
+
       return c.json({ session, user }, 200);
     })
     .route("/profile", createProfileRouter(createProfileService(db)))

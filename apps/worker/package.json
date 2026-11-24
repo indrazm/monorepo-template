@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "with-env": "dotenv -e ../../.env --",
-    "dev": "pnpm with-env tsx watch src/main.ts",
-    "start": "pnpm with-env tsx src/main.ts",
+    "dev": "bun run with-env tsx watch src/main.ts",
+    "start": "bun run with-env tsx src/main.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

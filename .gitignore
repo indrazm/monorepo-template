@@ -8,3 +8,14 @@ build
 .env.*
 !.env.example
 coverage
+.dev/
+.direnv/
+result
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+crash.log
+infra/ansible/inventory.yml
+infra/ansible/group_vars/all.yml
+*.retry

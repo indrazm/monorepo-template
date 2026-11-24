@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
-    "deploy": "pnpm build && wrangler deploy",
+    "deploy": "bun run build && wrangler deploy",
+    "deploy:dry-run": "wrangler deploy --dry-run",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
-    "preview:cloudflare": "pnpm build && wrangler dev",
+    "preview:cloudflare": "bun run build && wrangler dev",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

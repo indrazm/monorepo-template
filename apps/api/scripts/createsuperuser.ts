@@ -39,10 +39,7 @@ try {
   if (existingUser) {
     const [user] = await db
       .update(userTable)
-      .set({
-        ...(name ? { name } : {}),
-        role: "admin",
-      })
+      .set(name ? { name, role: "admin" } : { role: "admin" })
       .where(eq(userTable.id, existingUser.id))
       .returning({ email: userTable.email });
 

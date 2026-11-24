@@ -1,0 +1,69 @@
+amends "package://github.com/jdx/hk/releases/download/v2.13.0/hk@2.13.0#/Config.pkl"
+
+default_branch = "main"
+
+local staged_checks = new Mapping<String, Step | Group> {
+  ["format"] = new Step {
+    glob = List(
+      "*.ts",
+      "*.tsx",
+      "*.js",
+      "*.mjs",
+      "*.cjs",
+      "*.json",
+      "*.md",
+      "*.yml",
+      "*.yaml",
+      "*.css",
+    )
+    exclude = List(
+      "apps/web/src/routeTree.gen.ts",
+      "packages/db/drizzle/**",
+      "flake.lock",
+    )
+    check = "./node_modules/.bin/oxfmt --check {{files}}"
+    fix = "./node_modules/.bin/oxfmt --write {{files}}"
+  }
+  ["lint"] = new Step {
+    glob = List("*.ts", "*.tsx", "*.js", "*.mjs", "*.cjs")
+    exclude = List("apps/web/src/routeTree.gen.ts")
+    check = "./node_modules/.bin/oxlint --deny-warnings {{files}}"
+    fix = "./node_modules/.bin/oxlint --fix --deny-warnings {{files}}"
+  }
+  ["terraform"] = new Step {
+    glob = List("infra/terraform/*.tf")
+    check = "terraform fmt -check {{files}}"
+    fix = "terraform fmt {{files}}"
+  }
+}
+
+local full_checks = new Mapping<String, Step | Group> {
+  ["repository"] = new Step {
+    check = "bun run check"
+  }
+  ["typecheck"] = new Step {
+    check = "bun run typecheck"
+  }
+  ["test"] = new Step {
+    check = "bun run test"
+  }
+}
+
+hooks = new {
+  ["pre-commit"] {
+    fix = true
+    stash = "git"
+    stage = true
+    steps = staged_checks
+  }
+  ["pre-push"] {
+    steps = full_checks
+  }
+  ["check"] {
+    steps = full_checks
+  }
+  ["fix"] {
+    fix = true
+    steps = staged_checks
+  }
+}

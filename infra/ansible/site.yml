@@ -1,0 +1,10 @@
+- name: Deploy monorepo-template to a single machine
+  hosts: all
+  become: true
+
+  roles:
+    - common
+    - runtime
+    - database
+    - app
+    - proxy

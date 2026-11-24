@@ -14,6 +14,7 @@ export function runWorker(config: ReturnType<typeof createWorkerConfig>) {
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.once(signal, () => {
       if (shuttingDown) return;
+
       shuttingDown = true;
       void worker.close().catch((err) => {
         console.error("Worker shutdown failed", err);

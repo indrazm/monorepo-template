@@ -18,10 +18,9 @@ export function createProfileService(db: Pick<Database, "update">) {
   ): Promise<ProfileResponse> {
     const [user] = await db
       .update(userTable)
-      .set({
-        ...(input.image !== undefined ? { image: input.image } : {}),
-        name: input.name,
-      })
+      .set(
+        input.image === undefined ? { name: input.name } : { image: input.image, name: input.name },
+      )
       .where(eq(userTable.id, userId))
       .returning({
         createdAt: userTable.createdAt,

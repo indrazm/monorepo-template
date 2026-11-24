@@ -4,11 +4,34 @@
   "categories": {
     "correctness": "error"
   },
+  "jsPlugins": ["./tooling/oxlint/repo-plugin.mjs"],
+  "rules": {
+    "repo/no-array-filter-map": "error",
+    "repo/no-atom-import": "error",
+    "repo/no-barrel-file": "error",
+    "repo/no-base-ui-outside-ui": "error",
+    "repo/no-chained-type-assertions": "error",
+    "repo/no-comments": "error",
+    "repo/no-conditional-spread": "error",
+    "repo/no-module-mocking": "error",
+    "repo/no-native-primitives": "error",
+    "repo/no-reduce-accumulator-copy": "error",
+    "repo/no-reflect-apply": "error",
+    "repo/no-reflect-get": "error",
+    "repo/no-unknown-type-aliases": "error",
+    "repo/padded-if": "error"
+  },
   "overrides": [
     {
       "files": ["packages/ui/src/hooks/use-mobile.ts"],
       "rules": {
         "react/set-state-in-effect": "off"
+      }
+    },
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.test.mjs", "**/testing/**"],
+      "rules": {
+        "repo/no-chained-type-assertions": "off"
       }
     }
   ],

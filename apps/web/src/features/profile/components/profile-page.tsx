@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@repo/ui/components/card";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@repo/ui/components/field";
+import { FormElement } from "@repo/ui/components/form-element";
 import { Input } from "@repo/ui/components/input";
 import { toast } from "@repo/ui/components/sonner";
 import { useQuery } from "@tanstack/react-query";
@@ -21,7 +22,9 @@ import { updateProfileSchema } from "@repo/contracts/profile";
 
 export function ProfilePage() {
   const user = useQuery(meQueryOptions);
+
   if (!user.data) return null;
+
   return <ProfileEditor key={user.data.id} currentUser={user.data} />;
 }
 
@@ -77,7 +80,7 @@ function ProfileEditor({ currentUser }: { currentUser: SessionUser }) {
 
         <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
           <Card>
-            <form onSubmit={handleSubmit}>
+            <FormElement onSubmit={handleSubmit}>
               <CardHeader>
                 <CardTitle>Edit profile</CardTitle>
                 <CardDescription>
@@ -123,7 +126,7 @@ function ProfileEditor({ currentUser }: { currentUser: SessionUser }) {
                   Cancel
                 </Button>
               </CardFooter>
-            </form>
+            </FormElement>
           </Card>
 
           <Card>
@@ -154,13 +157,17 @@ function ProfileEditor({ currentUser }: { currentUser: SessionUser }) {
 
 function validateProfile(name: string, image: string) {
   const result = updateProfileSchema.safeParse({ name, image });
+
   if (result.success) return null;
+
   const issue = result.error.issues[0];
+
   if (issue?.path[0] === "name") {
     return issue.code === "too_big"
       ? "Display name must be 100 characters or fewer."
       : "Display name is required.";
   }
+
   return "Enter a valid http or https image URL.";
 }
 

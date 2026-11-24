@@ -23,6 +23,7 @@ export function createProfileRouter(service: ReturnType<typeof createProfileServ
         return c.json(result, 200);
       } catch (error) {
         if (error instanceof ProfileNotFoundError) return c.json(apiError("user_not_found"), 404);
+
         throw error;
       }
     },

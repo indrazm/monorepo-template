@@ -22,6 +22,7 @@ export function startServer(config: ReturnType<typeof createApiConfig>) {
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.once(signal, () => {
       if (shuttingDown) return;
+
       shuttingDown = true;
       server.close(() => {
         void pool.end().catch((err) => {

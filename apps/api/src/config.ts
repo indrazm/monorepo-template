@@ -25,6 +25,7 @@ export const apiEnvSchema = z
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== "production") return;
+
     if (env.BETTER_AUTH_SECRET === defaultBetterAuthSecret) {
       context.addIssue({
         code: "custom",
@@ -32,6 +33,7 @@ export const apiEnvSchema = z
         path: ["BETTER_AUTH_SECRET"],
       });
     }
+
     if (env.BETTER_AUTH_SECRET.length < 32) {
       context.addIssue({
         code: "custom",

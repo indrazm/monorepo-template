@@ -3,14 +3,17 @@ import { relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "..");
-const projects = ["apps", "packages"].flatMap((group) =>
-  readdirSync(resolve(root, group), { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => ({
+const projects = [];
+for (const group of ["apps", "packages"]) {
+  for (const entry of readdirSync(resolve(root, group), { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+
+    projects.push({
       path: `${group}/${entry.name}`,
       manifest: JSON.parse(readFileSync(resolve(root, group, entry.name, "package.json"), "utf8")),
-    })),
-);
+    });
+  }
+}
 const browserPackages = new Set(["@repo/web", "@repo/api-client", "@repo/ui", "@repo/contracts"]);
 const serverPackages = new Set([
   "@repo/api",
@@ -28,6 +31,7 @@ function* sourceDirectories(path) {
       ["node_modules", "dist", "build", ".wrangler", ".tanstack", "drizzle"].includes(entry.name)
     )
       continue;
+
     yield* sourceDirectories(`${path}/${entry.name}`);
   }
 }
@@ -40,7 +44,9 @@ const overrides = projects.flatMap((project) => {
   };
   const forbidden = projects.filter((target) => {
     const name = target.manifest.name;
+
     if (owner === "@repo/api-client" && name === "@repo/api") return false;
+
     return (
       !(name in declared) ||
       target.path.startsWith("apps/") ||
@@ -110,11 +116,13 @@ try {
     }),
   );
   const result = spawnSync(
-    "pnpm",
-    ["exec", "oxlint", "--config", configPath, "--deny-warnings", "apps", "packages"],
+    resolve(root, "node_modules", ".bin", process.platform === "win32" ? "oxlint.cmd" : "oxlint"),
+    ["--config", configPath, "--deny-warnings", "apps", "packages"],
     { cwd: root, stdio: "inherit" },
   );
+
   if (result.error) throw result.error;
+
   process.exitCode = result.status ?? 1;
 } finally {
   unlinkSync(configPath);

@@ -1,0 +1,12 @@
+hcloud_token = "replace-with-a-hetzner-cloud-api-token"
+
+# The default server is an ARM instance in Falkenstein. Change both together
+# when you need a different size or region.
+server_type = "cax11"
+location    = "fsn1"
+image       = "ubuntu-24.04"
+
+ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+
+# Restrict SSH to the addresses you connect from.
+ssh_allowed_cidrs = ["203.0.113.10/32"]

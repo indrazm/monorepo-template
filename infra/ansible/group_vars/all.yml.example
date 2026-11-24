@@ -1,0 +1,20 @@
+app_name: monorepo-template
+app_repo: "https://github.com/example/monorepo-template.git"
+app_ref: main
+app_dir: /srv/monorepo-template
+app_user: deploy
+bun_bin: /home/deploy/.bun/bin/bun
+node_major: "24"
+
+api_port: 8000
+api_domain: api.example.com
+client_origins: "https://example.com"
+
+db_name: monorepo_template
+db_user: monorepo
+# Use a URL-safe password: it is embedded in DATABASE_URL.
+db_password: change-me
+redis_url: redis://127.0.0.1:6379
+
+# At least 32 characters. Generate with: openssl rand -base64 32
+better_auth_secret: change-me-change-me-change-me-32
